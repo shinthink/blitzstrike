@@ -1,0 +1,57 @@
+id: mixed-active-content
+
+info:
+  name: Mixed Active Content
+  author: Liwermor
+  severity: low
+  description: |
+    This check detects if there are any active content loaded over HTTP instead of HTTPS.
+  reference:
+    - https://developer.mozilla.org/en-US/docs/Web/Security/Mixed_content
+    - https://portswigger.net/kb/issues/01000400_mixed-content
+    - https://resources.infosecinstitute.com/topics/vulnerabilities/https-mixed-content-vulnerability/
+    - https://docs.gitlab.com/ee/user/application_security/dast/checks/319.1.html
+  metadata:
+    max-request: 1
+  tags: misconfig,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers-condition: and
+    max-redirects: 0
+    matchers:
+      - type: regex
+        part: body
+        negative: true
+        regex:
+          - "(?mi)<!--\\[if (lt|lte) IE [0-9]*\\]>\\s*<script[^>]*\\ssrc=\"http://"
+
+      - type: regex
+        part: body
+        negative: true
+        regex:
+          - "<!--\\s*<script"
+
+      - type: regex
+        part: body
+        regex:
+          - "<script[^>]*src=['\"]http://[^'\">]+['\"]"
+          - "<iframe[^>]*src=['\"]http://[^'\">]+['\"]"
+          - "<object[^>]*data=['\"]http://[^'\">]+['\"]"
+
+      - type: dsl
+        dsl:
+          - 'startswith(tostring(BaseURL), "https://")'
+
+    extractors:
+      - type: regex
+        group: 1
+        part: body
+        regex:
+          - "<script[^>]*src=['\"](http[^s'\">][^'\">]*)['\"]"
+          - "<iframe[^>]*src=['\"](http[^s'\">][^'\">]*)['\"]"
+          - "<object[^>]*data=['\"](http[^s'\">][^'\">]*)['\"]"
+# digest: 4b0a00483046022100e8e09dd785b1db0025a996fe261ca83383e6ed8262af4c00ee207bfa0320c1c102210096ef3a7e5f5c13df26f4ab4b117d301dc7e01e25fa2a67bb181db2c6db94e75e:922c64590222798bb761d5b6d8e72950

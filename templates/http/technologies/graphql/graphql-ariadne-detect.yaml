@@ -1,0 +1,46 @@
+id: graphql-ariadne-detect
+info:
+  name: Graphql Ariadne Detect
+  author: princechaddha
+  severity: info
+  reference:
+    - https://github.com/dolevf/graphw00f/blob/main/graphw00f/lib.py
+  tags: tech,graphql,ariadne,discovery
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/query"
+      - "{{BaseURL}}/"
+    body: '{"query":"query { __typename @abc }"}'
+    headers:
+      Content-Type: application/json
+    redirects: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        words:
+          - "Unknown directive '@abc'."
+        part: body
+
+      - type: word
+        words:
+          - 'Content-Type: text/html'
+        part: header
+        negative: true
+
+      - type: word
+        words:
+          - '<html'
+          - '<body'
+        part: body
+        condition: or
+        negative: true
+# digest: 4b0a00483046022100fb6e69c3f3fa20e1b73b943f1071db799732e7536da8dc64be85d91c5ebf3209022100f87e512ac5ac2347d8861506c2a179707a3a2150a010f1b7c5206d78342d592e:922c64590222798bb761d5b6d8e72950

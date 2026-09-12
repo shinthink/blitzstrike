@@ -1,0 +1,33 @@
+id: graphql-go-detect
+info:
+  name: Graphql Go Detect
+  author: princechaddha
+  severity: info
+  reference:
+    - https://github.com/dolevf/graphw00f/blob/main/graphw00f/lib.py
+  tags: tech,graphql,go,discovery
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/query"
+      - "{{BaseURL}}/"
+    body: '{"query":""}'
+    headers:
+      Content-Type: application/json
+    redirects: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 400
+
+      - type: word
+        words:
+          - 'Must provide an operation.'
+        part: body
+# digest: 4b0a00483046022100ec294a1b5cd757307364641a9a078c1c5e5da80ab24c2aeed4f1948eda93f1e2022100918ae2d267f1303b72346bcad36932d1030e21943e891763e7c3b054b57136f6:922c64590222798bb761d5b6d8e72950

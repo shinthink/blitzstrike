@@ -1,0 +1,46 @@
+name: Release
+
+# Publishes to npm via TRUSTED PUBLISHING (OIDC) — no token, no 2FA.
+# Requires a "trusted publisher" entry on npmjs.com:
+#   package blitzstrike -> Settings -> Publishing access -> Add trusted publisher
+#   Owner: shinthink · Repository: blitzstrike · Workflow: .github/workflows/release.yml
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write # required for npm provenance / OIDC
+  contents: read
+
+jobs:
+  publish:
+    name: Publish to npm (trusted publishing)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Version gate (skip if already published)
+        id: gate
+        run: |
+          LOCAL_VERSION=$(node -p "require('./package.json').version")
+          PUBLISHED_VERSION=$(npm view blitzstrike version 2>/dev/null || echo "0.0.0")
+          echo "local=$LOCAL_VERSION published=$PUBLISHED_VERSION"
+          if [ "$LOCAL_VERSION" = "$PUBLISHED_VERSION" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Already published ($LOCAL_VERSION) — nothing to do."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "Publishing $LOCAL_VERSION (registry has $PUBLISHED_VERSION)."
+          fi
+
+      - name: Publish to npm
+        if: steps.gate.outputs.skip != 'true'
+        run: npm publish --provenance --access public

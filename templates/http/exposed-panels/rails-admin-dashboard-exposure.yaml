@@ -1,0 +1,33 @@
+id: rails-admin-dashboard-exposure
+
+info:
+  name: RailsAdmin Dashboard Exposure
+  author: 0x_Akoko
+  severity: high
+  description: |
+    Detected RailsAdmin dashboard was exposed without proper authentication, allowing unauthorized access to data management interface.
+  reference:
+    - https://github.com/railsadminteam/rails_admin
+  metadata:
+    max-request: 2
+    verified: true
+    shodan-query: http.html:"RailsAdmin"
+    fofa-query: body="RailsAdmin"
+  tags: rails,admin,exposure,misconfig,panel,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/admin"
+      - "{{BaseURL}}/rails_admin"
+
+    stop-at-first-match: true
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'contains_all(body, "Settings</a>", "rails_admin_sidebar", "rails_admin_content")'
+          - '!contains_any(body, "Sign in", "Log in", "login_form", "devise")'
+        condition: and
+# digest: 4a0a00473045022100d4c89185e7016ca4ed319ef8b9b480950d76d2a32b70c46d0ee9cfcc52e5947e02202b336465d4f2750295216399458b2242556363c74f6387c5af2b8a5484c96e97:922c64590222798bb761d5b6d8e72950

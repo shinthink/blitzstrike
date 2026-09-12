@@ -1,0 +1,46 @@
+id: graphql-sangria-detect
+info:
+  name: Graphql Sangria Detect
+  author: princechaddha
+  severity: info
+  reference:
+    - https://github.com/dolevf/graphw00f/blob/main/graphw00f/lib.py
+  tags: tech,graphql,sangria,discovery
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/query"
+      - "{{BaseURL}}/"
+    body: '{"query":"queryy { __typename }"}'
+    headers:
+      Content-Type: application/json
+    redirects: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        words:
+          - 'Syntax error while parsing GraphQL query. Invalid input "queryy", expected ExecutableDefinition or TypeSystemDefinition'
+        part: body
+
+      - type: word
+        words:
+          - 'Content-Type: text/html'
+        part: header
+        negative: true
+
+      - type: word
+        words:
+          - '<html'
+          - '<body'
+        part: body
+        condition: or
+        negative: true
+# digest: 490a0046304402205c6ca8463c60cdb27f2e3b02a07630ae0d1e8f8c7a3d01dd677dc42968ccec2502201897bd4c0d5edfa1f17978cb3a0f170557ab5c261735ea25a39d095b19f9ee3e:922c64590222798bb761d5b6d8e72950

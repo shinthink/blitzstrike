@@ -1,0 +1,34 @@
+id: sharepoint-site-metadata-disclosure
+
+info:
+  name: Microsoft SharePoint - Site Metadata Disclosure
+  author: 0x_Akoko
+  severity: low
+  description: |
+    Detected exposed SharePoint site metadata endpoints.
+  reference:
+    - https://learn.microsoft.com/en-us/sharepoint/dev/sp-add-ins/get-to-know-the-sharepoint-rest-service
+    - https://medium.com/@ujmalhotra95/tales-of-sharepoint-api-misconfigurations-11073ad384fd
+  metadata:
+    max-request: 2
+    verified: true
+    shodan-query: http.title:"SharePoint"
+    fofa-query: title="SharePoint"
+  tags: sharepoint,microsoft,exposure,misconfig,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/_api/site"
+      - "{{BaseURL}}/_api/web"
+
+    headers:
+      Accept: "application/json;odata=verbose"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'contains_all(body, "__metadata","WelcomePage") || contains_all(body, "ServerRelativeUrl","Upgrading")'
+        condition: and
+# digest: 490a0046304402203aaf514f08ae171f188e6dd81171887aeaf0c779fd91a03c4174d8e4225dcfe90220125d164732a0d1d5ebeba3f9c0f671fef1d1f0bfc0c93ac8d11fc8fcf3f79aaa:922c64590222798bb761d5b6d8e72950

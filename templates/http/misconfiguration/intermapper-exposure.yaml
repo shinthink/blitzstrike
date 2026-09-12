@@ -1,0 +1,28 @@
+id: intermapper-exposure
+
+info:
+  name: InterMapper - Exposure
+  author: pussycat0x
+  severity: high
+  description: |
+    Detected unauthenticated InterMapper access, which could allow unauthorized users to view or interact with monitoring data without proper authentication.
+  metadata:
+    max-request: 1
+    verified: true
+    shodan-query: html:"InterMapper"
+  tags: exposure,intermapper,unauth,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    redirects: true
+    max-redirects: 2
+    matchers:
+      - type: dsl
+        dsl:
+          - "status_code == 200"
+          - "contains_all(body, 'Device List','Outages','Full','Statistics','InterMapper Server')"
+        condition: and
+# digest: 4a0a00473045022045f0f2b20b3a4b178d7c945ab7e2cbd22f901dcda5822c6971d602b5dd5ea16b022100953399b01df6df87cc419b81aea23ae41f21d96a496747419b708f6ee7b95cb7:922c64590222798bb761d5b6d8e72950

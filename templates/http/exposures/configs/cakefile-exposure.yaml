@@ -1,0 +1,60 @@
+id: cakefile-exposure
+
+info:
+  name: Cakefile - Exposure
+  author: 0x_Akoko
+  severity: info
+  description: |
+    Detected CoffeeScript Cakefile was exposing build tasks and project structure.
+  reference:
+    - https://coffeescript.org/v2/#cake
+  classification:
+    cwe-id: CWE-538
+  metadata:
+    verified: true
+    max-request: 7
+  tags: exposure,config,coffeescript,cakefile,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/Cakefile"
+      - "{{BaseURL}}/src/Cakefile"
+      - "{{BaseURL}}/app/Cakefile"
+      - "{{BaseURL}}/lib/Cakefile"
+      - "{{BaseURL}}/build/Cakefile"
+      - "{{BaseURL}}/node_modules/whet.extend/Cakefile"
+      - "{{BaseURL}}/node_modules/Cakefile"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "task "
+          - "require "
+          - "->"
+        condition: and
+
+      - type: word
+        words:
+          - "<!DOCTYPE"
+          - "<html"
+          - '{"props"'
+          - "<script"
+        negative: true
+
+      - type: word
+        words:
+          - "coffee"
+          - "spawn"
+          - "exec"
+          - "invoke"
+          - "fs.readFileSync"
+        condition: or
+
+      - type: status
+        status:
+          - 200
+# digest: 4a0a00473045022100a6b04ec50990444216b388cf5c5bab2eeefa6f407835743665d5b9a30d17a0a9022053470f5109a107e247f77124ab50d56effb514811c59e63bed3b4627157b97d0:922c64590222798bb761d5b6d8e72950

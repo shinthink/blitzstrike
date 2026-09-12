@@ -1,0 +1,15 @@
+{
+  "_comment": "OWASP Top 10 (2021) — the fundamental web risk taxonomy — mapped to CWE and Blitz Strike coverage.",
+  "risks": [
+    {"id": "A01", "name": "Broken Access Control", "cwe": ["CWE-200", "CWE-284", "CWE-285", "CWE-639", "CWE-862", "CWE-863"], "desc": "Missing/weak authorization on object, function, or property access.", "blitz": "technique_lookup(idor) + technique_lookup(mass_assignment) + route_scan"},
+    {"id": "A02", "name": "Cryptographic Failures", "cwe": ["CWE-259", "CWE-327", "CWE-328", "CWE-331"], "desc": "Weak/absent encryption, hardcoded keys, weak randomness.", "blitz": "hp-tls-transport + ap-client-side-crypto-forgery + technique_lookup(uuid_insecurities)"},
+    {"id": "A03", "name": "Injection", "cwe": ["CWE-79", "CWE-89", "CWE-94"], "desc": "SQL/NoSQL/OS/LDAP/XPath/XSS/SSI/XSLT/SSTI injection from unsanitized input.", "blitz": "source-audit (taint) + technique_lookup(sql_injection|xss|command_injection|ssti|ldap_injection|xpath_injection) + payload_lookup"},
+    {"id": "A04", "name": "Insecure Design", "cwe": ["CWE-209", "CWE-256", "CWE-501", "CWE-522"], "desc": "Design flaws (missing rate-limit, weak reset, flawed business logic).", "blitz": "hp-business-logic-fuzzing + technique_lookup(rate_limit_bypass|password_reset_bypass|bypass_payment)"},
+    {"id": "A05", "name": "Security Misconfiguration", "cwe": ["CWE-16", "CWE-611", "CWE-1004"], "desc": "Exposed debug/admin, verbose errors, missing headers, CORS, XXE-enabled parsers.", "blitz": "web-hunting (exposed config) + technique_lookup(cors|xxe) + live_recon"},
+    {"id": "A06", "name": "Vulnerable and Outdated Components", "cwe": ["CWE-1104"], "desc": "Known-vulnerable libraries/frameworks/components.", "blitz": "hp-dependency-audit + cve_correlation + nvd_lookup + framework_tricks"},
+    {"id": "A07", "name": "Identification and Authentication Failures", "cwe": ["CWE-287", "CWE-384", "CWE-798"], "desc": "Weak auth, session fixation, credential stuffing, weak JWT/OAuth.", "blitz": "technique_lookup(jwt|oauth|two_fa_bypass|account_takeover) + bypass_lookup(auth)"},
+    {"id": "A08", "name": "Software and Data Integrity Failures", "cwe": ["CWE-502", "CWE-494", "CWE-829"], "desc": "Insecure deserialization, unverified updates/plugins, CI/CD tampering.", "blitz": "technique_lookup(deserialization) + complex_scan + ap-gitea-ci-injection"},
+    {"id": "A09", "name": "Security Logging and Monitoring Failures", "cwe": ["CWE-778"], "desc": "Missing logging/detection (a monitoring gap, not an exploit).", "blitz": "report as a gap — note the absence of detection in the report"},
+    {"id": "A10", "name": "Server-Side Request Forgery", "cwe": ["CWE-918"], "desc": "The server fetches an attacker-influenced URL.", "blitz": "technique_lookup(ssrf) + ap-ssrf-cloud-metadata + bypass_lookup"}
+  ]
+}

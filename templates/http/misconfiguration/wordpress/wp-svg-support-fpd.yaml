@@ -1,0 +1,37 @@
+id: wp-svg-support-fpd
+
+info:
+  name: WordPress SVG Support - Full Path Disclosure
+  author: pussycat0x
+  severity: low
+  description: |
+    The WordPress SVG Support plugin was detected to have publicly accessible PHP files without ABSPATH protection, which exposed sensitive server path information. Direct access to vendor/composer files triggered PHP fatal errors that revealed the full WordPress filesystem path.
+  reference:
+    - https://wordpress.org/plugins/svg-support/
+  metadata:
+    max-request: 8
+    fofa-query: body="/wp-content/plugins/svg-support/"
+  tags: wordpress,fpd,disclosure,wp,wp-plugin,svg-support,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/svg-support/vendor/composer/InstalledVersions.php"
+      - "{{BaseURL}}/wp-content/plugins/svg-support/vendor/autoload.php"
+      - "{{BaseURL}}/wp-content/plugins/svg-support/vendor/composer/autoload_real.php"
+      - "{{BaseURL}}/wp-content/plugins/svg-support/vendor/composer/ClassLoader.php"
+      - "{{BaseURL}}/wp-content/plugins/svg-support/vendor/composer/autoload_static.php"
+      - "{{BaseURL}}/wp-content/plugins/svg-support/svg-support.php"
+      - "{{BaseURL}}/wp-content/plugins/svg-support/functions/mime-types.php"
+      - "{{BaseURL}}/wp-content/plugins/svg-support/includes/svg-tags.php"
+
+    stop-at-first-match: true
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_all(body, "Fatal error", "Uncaught Error:") || contains_all(body, "Warning:", "failed to open stream")'
+          - 'status_code == 200 || status_code == 500'
+          - 'contains(body, "svg-support")'
+        condition: and
+# digest: 4a0a0047304502205182f868a7bf7b2998ec8dd4773ecf625bde79b441c90029adabe3c5c2256fc00221009e8e64d116d450daafde51e5b67702933f7c624c7c19de8d63a8410cd72a9260:922c64590222798bb761d5b6d8e72950

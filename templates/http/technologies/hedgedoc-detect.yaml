@@ -1,0 +1,43 @@
+id: hedgedoc-detect
+
+info:
+  name: HedgeDoc Collaborative Editor - Detect
+  author: Rupendra0
+  severity: info
+  description: |
+    HedgeDoc is an open-source, collaborative markdown editor for teams to share and co-edit notes in real time. This template detects publicly reachable HedgeDoc instances by fingerprinting unique branding markers and the dedicated Hedgedoc-Version response header.
+  reference:
+    - https://hedgedoc.org
+    - https://github.com/hedgedoc/hedgedoc
+  metadata:
+    verified: true
+    max-request: 2
+    vendor: hedgedoc
+    product: hedgedoc
+    shodan-query: 'http.title:"HedgeDoc - Ideas grow better together"'
+    fofa-query: 'body="Powered by <a href=\"https://hedgedoc.org\">HedgeDoc"'
+  tags: tech,detect,hedgedoc,discovery
+
+http:
+  - method: GET
+    path:
+      - '{{BaseURL}}/'
+
+    host-redirects: true
+    stop-at-first-match: true
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains(tolower(header), "hedgedoc-version:")'
+          - 'contains_any(body, "HedgeDoc - Ideas", "Powered by <a href=\"https://hedgedoc.org\">HedgeDoc")'
+        condition: or
+
+    extractors:
+      - type: regex
+        name: version
+        part: header
+        group: 1
+        regex:
+          - '(?i)hedgedoc-version:\s*([0-9.]+)'
+# digest: 490a00463044022013a7286033ea8f1f9b8598796218426d7f819ef9cce65525d6fa471c3d29fcad02206b559e5a2433f3577026031463c69b13274e559174b11a14c3593f99c7e8c398:922c64590222798bb761d5b6d8e72950

@@ -1,0 +1,77 @@
+{
+  "_comment": "Structured failure recovery. When a step fails, returns empty, or is blocked, look up the failure mode and apply the concrete actions instead of giving up. Mirrors a delegate/retry-guidance pattern, adapted to Blitz Strike's deterministic tools.",
+  "modes": [
+    {
+      "id": "empty_output",
+      "signal": "a detector returns empty for a file/target that clearly contains a sink or entry point",
+      "actions": [
+        "reload the MCP server (/reload-mcp) — a stale server after an upgrade is a silent false negative, not a clean result",
+        "re-run the same detector once",
+        "escalate to a deeper detector: blitz_scan -> eagle_eye2 -> route_scan / complex_scan",
+        "check the argument name — source-analysis tools take `path`, not `target`"
+      ]
+    },
+    {
+      "id": "blocked",
+      "signal": "a live probe is blocked by a WAF, filter, or sanitizer",
+      "actions": [
+        "bypass_lookup(defense) for concrete techniques (encoding, case, comment insertion, chunked, null byte, double-encoding)",
+        "apply one technique at a time and re-probe",
+        "if still blocked, move the injection to another context (header, body, path, cookie)"
+      ]
+    },
+    {
+      "id": "sanitized",
+      "signal": "a sink appears neutralized by a sanitizer",
+      "actions": [
+        "challenge the sanitizer: loose == vs ===, missing EXTR_SKIP, int cast truncation, weak regex",
+        "test an evasion: double-encoding, unicode normalization, case mixing"
+      ]
+    },
+    {
+      "id": "subagent_failed",
+      "signal": "a delegated sub-agent returns empty, errors, or prose without evidence",
+      "actions": [
+        "re-delegate with a more specific goal + exact tool names + exact argument names (path vs target)",
+        "require deterministic output (file:line, sink, chain) — never prose",
+        "fall back to calling the tool yourself if the sub-agent cannot reach the MCP tools"
+      ]
+    },
+    {
+      "id": "model_failed",
+      "signal": "a sub-agent/model returns a rate-limit, quota, context-length, or model-unavailable error",
+      "actions": [
+        "model_fallback(signal) to classify the error and get the exact recovery — retryable? backoff? fall back / shrink scope / fix credentials / abort",
+        "do not fall back blindly: the class decides retry vs fallback vs shrink",
+        "run the step yourself with granular tools if the model cannot recover"
+      ]
+    },
+    {
+      "id": "unconfirmed",
+      "signal": "a hypothesis is not confirmed live",
+      "actions": [
+        "keep it as a hypothesis — do not drop it",
+        "try an alternate verification path",
+        "let adversarial review decide confirmed vs false_positive vs needs_more_evidence"
+      ]
+    },
+    {
+      "id": "low_severity",
+      "signal": "only a low-severity finding is found",
+      "actions": [
+        "list_chains + chain_links to see how it escalates",
+        "trace the full chain, not just the first sink"
+      ]
+    },
+    {
+      "id": "timeout",
+      "signal": "a live request or a full engagement times out on a slow/unresponsive target",
+      "actions": [
+        "split into lighter probes: live_recon or active_scan first (fewer requests) instead of the full run_engagement",
+        "re-run run_engagement with an explicit scope so it skips the scope-gate retry loop",
+        "target a single endpoint (e.g. /signup) rather than the whole host to cut request volume",
+        "free-tier PaaS (onrender/heroku/railway) cold-starts: retry once after a short wait"
+      ]
+    }
+  ]
+}

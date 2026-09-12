@@ -1,0 +1,90 @@
+{
+  "name": "blitzstrike",
+  "version": "2.4.4",
+  "description": "Blitz Strike — a universal MCP security-audit toolbelt. BLITZ sweeps the attack surface, EAGLE-EYE traces source-to-sink, STRIKE verifies live. 57 attack chains, 130-tool catalog, intelligence data layer. One server, every agent.",
+  "type": "module",
+  "bin": {
+    "blitzstrike": "dist/index.js"
+  },
+  "files": [
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "README.md",
+    "ROADMAP.md",
+    "SECURITY.md",
+    "THIRD-PARTY-NOTICES.md",
+    "bench",
+    "chains.json",
+    "dist",
+    "docs",
+    "intelligence",
+    "manuals",
+    "manuals-index.json",
+    "opencode-agents",
+    "skills",
+    "tools-catalog.json"
+  ],
+  "scripts": {
+    "build": "bun build src/index.ts --outdir dist --target node --format esm --external playwright-core",
+    "typecheck": "tsc --noEmit",
+    "serve": "bun run src/index.ts serve",
+    "doctor": "bun run src/index.ts doctor",
+    "compile": "bun build src/index.ts --compile --outfile dist/blitzstrike",
+    "test": "bun run test/verify.ts",
+    "test:browser": "bun run test/browser-verify.ts",
+    "prepublishOnly": "bun run typecheck && bun run build",
+    "bench": "bun run test/verify.ts"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "security",
+    "security-tools",
+    "pentest",
+    "bug-bounty",
+    "vulnerability-scanning",
+    "offensive-security",
+    "defensive-security",
+    "red-team",
+    "blue-team",
+    "reconnaissance",
+    "reverse-engineering",
+    "exploit",
+    "nuclei",
+    "payloads",
+    "cve",
+    "active-directory"
+  ],
+  "license": "MIT",
+  "author": "shinthink",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shinthink/blitzstrike.git"
+  },
+  "bugs": {
+    "url": "https://github.com/shinthink/blitzstrike/issues"
+  },
+  "homepage": "https://github.com/shinthink/blitzstrike",
+  "dependencies": {
+    "@babel/parser": "^8.0.5",
+    "@lezer/common": "^1.5.2",
+    "@lezer/python": "^1.1.19",
+    "@modelcontextprotocol/sdk": "^1.6.0",
+    "java-parser": "^3.0.1",
+    "php-parser": "^3.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.2",
+    "playwright-core": "1.61.0",
+    "typescript": "^5.5.0"
+  },
+  "peerDependencies": {
+    "playwright-core": ">=1.61.0"
+  },
+  "peerDependenciesMeta": {
+    "playwright-core": {
+      "optional": true
+    }
+  }
+}

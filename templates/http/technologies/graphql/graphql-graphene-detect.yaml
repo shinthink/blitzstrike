@@ -1,0 +1,46 @@
+id: graphql-graphene-detect
+info:
+  name: Graphql Graphene Detect
+  author: princechaddha
+  severity: info
+  reference:
+    - https://github.com/dolevf/graphw00f/blob/main/graphw00f/lib.py
+  tags: tech,graphql,graphene,discovery
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/query"
+      - "{{BaseURL}}/"
+    body: '{"query":"aaa"}'
+    headers:
+      Content-Type: application/json
+    redirects: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        words:
+          - 'Syntax Error GraphQL (1:1)'
+        part: body
+
+      - type: word
+        words:
+          - 'Content-Type: text/html'
+        part: header
+        negative: true
+
+      - type: word
+        words:
+          - '<html'
+          - '<body'
+        part: body
+        condition: or
+        negative: true
+# digest: 490a0046304402207de445a5c6ec1e03b8a4e71ba1c54d7affa2a2280f7ac1b17f9a3aa7354f8686022066418b1af8499a8c1ebd068e5c55b2cfe90012b14bada40ec571a035db48faee:922c64590222798bb761d5b6d8e72950

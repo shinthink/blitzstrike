@@ -1,0 +1,1781 @@
+{
+  "frameworks": [
+    {
+      "id": "laravel",
+      "name": "Laravel",
+      "language": "php",
+      "description": "PHP MVC framework: Eloquent ORM, Blade templating, middleware, form requests.",
+      "detect": [
+        "Illuminate",
+        "Request::",
+        "Route::",
+        "artisan",
+        "extends Controller",
+        "->middleware(",
+        "Auth::",
+        "DB::table("
+      ],
+      "sources": [
+        {
+          "pattern": "Request::input(",
+          "label": "Request::input()"
+        },
+        {
+          "pattern": "request()->input(",
+          "label": "request()->input()"
+        },
+        {
+          "pattern": "$request->input(",
+          "label": "$request->input()"
+        },
+        {
+          "pattern": "Request::all(",
+          "label": "Request::all()"
+        },
+        {
+          "pattern": "request()->all(",
+          "label": "request()->all()"
+        },
+        {
+          "pattern": "$request->all(",
+          "label": "$request->all()"
+        },
+        {
+          "pattern": "Request::query(",
+          "label": "Request::query()"
+        },
+        {
+          "pattern": "request()->query(",
+          "label": "request()->query()"
+        },
+        {
+          "pattern": "Request::file(",
+          "label": "Request::file()"
+        },
+        {
+          "pattern": "$request->file(",
+          "label": "$request->file()"
+        },
+        {
+          "pattern": "->input(",
+          "label": "request input"
+        }
+      ],
+      "sinks": [
+        {
+          "pattern": "->create(",
+          "label": "Eloquent mass assignment",
+          "cwe": "CWE-915"
+        },
+        {
+          "pattern": "::create(",
+          "label": "Eloquent mass assignment (static)",
+          "cwe": "CWE-915"
+        },
+        {
+          "pattern": "::update(",
+          "label": "Eloquent mass assignment (static)",
+          "cwe": "CWE-915"
+        },
+        {
+          "pattern": "::firstOrCreate(",
+          "label": "Eloquent mass assignment",
+          "cwe": "CWE-915"
+        },
+        {
+          "pattern": "::updateOrCreate(",
+          "label": "Eloquent mass assignment",
+          "cwe": "CWE-915"
+        },
+        {
+          "pattern": "->update(",
+          "label": "Eloquent mass assignment",
+          "cwe": "CWE-915"
+        },
+        {
+          "pattern": "->fill(",
+          "label": "Eloquent mass assignment",
+          "cwe": "CWE-915"
+        },
+        {
+          "pattern": "->forceFill(",
+          "label": "Eloquent mass assignment",
+          "cwe": "CWE-915"
+        },
+        {
+          "pattern": "DB::statement(",
+          "label": "raw SQL statement",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "DB::select(",
+          "label": "raw SQL select",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "DB::unprepared(",
+          "label": "raw SQL unprepared",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "->whereRaw(",
+          "label": "raw SQL where",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "->havingRaw(",
+          "label": "raw SQL having",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "->orderByRaw(",
+          "label": "raw SQL order",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "->groupByRaw(",
+          "label": "raw SQL group",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "{!!",
+          "label": "Blade unescaped output",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "->links(",
+          "label": "pagination raw output",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "unserialize(",
+          "label": "deserialization",
+          "cwe": "CWE-502"
+        },
+        {
+          "pattern": "unserialize(base64_decode(",
+          "label": "deserialization (base64)",
+          "cwe": "CWE-502"
+        },
+        {
+          "pattern": "->markdown(",
+          "label": "markdown raw render",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "->download(",
+          "label": "file download",
+          "cwe": "CWE-434"
+        },
+        {
+          "pattern": "->storeAs(",
+          "label": "file upload",
+          "cwe": "CWE-434"
+        }
+      ],
+      "sanitizers": [
+        {
+          "pattern": "e(",
+          "label": "Laravel e() helper"
+        },
+        {
+          "pattern": "->validate(",
+          "label": "Laravel validation"
+        },
+        {
+          "pattern": "->validated(",
+          "label": "Laravel validated"
+        },
+        {
+          "pattern": "filter_var(",
+          "label": "PHP filter_var"
+        },
+        {
+          "pattern": "htmlspecialchars(",
+          "label": "htmlspecialchars"
+        },
+        {
+          "pattern": "->safe(",
+          "label": "Laravel safe"
+        },
+        {
+          "pattern": "clean(",
+          "label": "input cleaning"
+        }
+      ],
+      "auth": [
+        {
+          "pattern": "->middleware('auth'",
+          "label": "auth middleware"
+        },
+        {
+          "pattern": "->middleware(\"auth\"",
+          "label": "auth middleware"
+        },
+        {
+          "pattern": "Auth::check(",
+          "label": "Auth::check()"
+        },
+        {
+          "pattern": "->authorize(",
+          "label": "Laravel authorize"
+        },
+        {
+          "pattern": "Gate::allows(",
+          "label": "Laravel Gate"
+        },
+        {
+          "pattern": "->can(",
+          "label": "policy check"
+        },
+        {
+          "pattern": "auth()->user(",
+          "label": "authenticated user"
+        },
+        {
+          "pattern": "->middleware('role:",
+          "label": "role middleware"
+        }
+      ],
+      "routing": [
+        {
+          "pattern": "Route::get(",
+          "label": "route GET"
+        },
+        {
+          "pattern": "Route::post(",
+          "label": "route POST"
+        },
+        {
+          "pattern": "Route::match(",
+          "label": "route match"
+        },
+        {
+          "pattern": "Route::resource(",
+          "label": "resource route"
+        },
+        {
+          "pattern": "Route::any(",
+          "label": "route any"
+        },
+        {
+          "pattern": "->group(",
+          "label": "route group"
+        }
+      ],
+      "orm": [
+        {
+          "pattern": "->where(",
+          "label": "Eloquent where"
+        },
+        {
+          "pattern": "DB::table(",
+          "label": "query builder table"
+        },
+        {
+          "pattern": "->join(",
+          "label": "Eloquent join"
+        },
+        {
+          "pattern": "->leftJoin(",
+          "label": "Eloquent left join"
+        },
+        {
+          "pattern": "->select(",
+          "label": "query select"
+        },
+        {
+          "pattern": "->insert(",
+          "label": "query insert"
+        },
+        {
+          "pattern": "->pluck(",
+          "label": "query pluck"
+        }
+      ],
+      "middleware": [
+        {
+          "pattern": "->middleware(",
+          "label": "middleware binding"
+        },
+        {
+          "pattern": "app/Http/Middleware",
+          "label": "middleware directory"
+        },
+        {
+          "pattern": "->withoutMiddleware(",
+          "label": "middleware bypass"
+        }
+      ]
+    },
+    {
+      "id": "wordpress",
+      "name": "WordPress",
+      "language": "php",
+      "description": "PHP CMS: hooks, $wpdb, WP_Query, nonces, capabilities, REST API.",
+      "detect": [
+        "ABSPATH",
+        "add_action(",
+        "add_filter(",
+        "$wpdb",
+        "WP_Query(",
+        "get_option(",
+        "plugin_basename",
+        "wp_"
+      ],
+      "sources": [
+        {
+          "pattern": "$_GET",
+          "label": "HTTP GET"
+        },
+        {
+          "pattern": "$_POST",
+          "label": "HTTP POST"
+        },
+        {
+          "pattern": "$_REQUEST",
+          "label": "HTTP request"
+        },
+        {
+          "pattern": "$_COOKIE",
+          "label": "HTTP cookie"
+        },
+        {
+          "pattern": "$_FILES",
+          "label": "uploaded file"
+        },
+        {
+          "pattern": "$_SERVER",
+          "label": "server/header"
+        },
+        {
+          "pattern": "get_query_var(",
+          "label": "query var"
+        },
+        {
+          "pattern": "get_option(",
+          "label": "stored option"
+        }
+      ],
+      "sinks": [
+        {
+          "pattern": "$wpdb->query(",
+          "label": "raw SQL query",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "$wpdb->get_var(",
+          "label": "raw SQL",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "$wpdb->get_results(",
+          "label": "raw SQL",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "->query(",
+          "label": "SQL query",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "echo ",
+          "label": "HTML output",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "print ",
+          "label": "HTML output",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "wp_redirect(",
+          "label": "open redirect",
+          "cwe": "CWE-601"
+        },
+        {
+          "pattern": "header(",
+          "label": "redirect",
+          "cwe": "CWE-601"
+        },
+        {
+          "pattern": "include(",
+          "label": "file inclusion",
+          "cwe": "CWE-98"
+        },
+        {
+          "pattern": "require(",
+          "label": "file inclusion",
+          "cwe": "CWE-98"
+        },
+        {
+          "pattern": "unserialize(",
+          "label": "deserialization",
+          "cwe": "CWE-502"
+        },
+        {
+          "pattern": "maybe_unserialize(",
+          "label": "deserialization",
+          "cwe": "CWE-502"
+        },
+        {
+          "pattern": "wp_remote_get(",
+          "label": "SSRF",
+          "cwe": "CWE-918"
+        },
+        {
+          "pattern": "wp_remote_post(",
+          "label": "SSRF",
+          "cwe": "CWE-918"
+        },
+        {
+          "pattern": "file_get_contents(",
+          "label": "file read / SSRF",
+          "cwe": "CWE-918"
+        },
+        {
+          "pattern": "->extractTo(",
+          "label": "zip extraction",
+          "cwe": "CWE-22"
+        }
+      ],
+      "sanitizers": [
+        {
+          "pattern": "esc_html(",
+          "label": "esc_html"
+        },
+        {
+          "pattern": "esc_attr(",
+          "label": "esc_attr"
+        },
+        {
+          "pattern": "esc_url(",
+          "label": "esc_url"
+        },
+        {
+          "pattern": "esc_js(",
+          "label": "esc_js"
+        },
+        {
+          "pattern": "sanitize_text_field(",
+          "label": "sanitize_text_field"
+        },
+        {
+          "pattern": "absint(",
+          "label": "absint"
+        },
+        {
+          "pattern": "intval(",
+          "label": "intval"
+        },
+        {
+          "pattern": "wp_kses(",
+          "label": "wp_kses"
+        },
+        {
+          "pattern": "esc_sql(",
+          "label": "esc_sql"
+        },
+        {
+          "pattern": "$wpdb->prepare(",
+          "label": "prepared statement"
+        },
+        {
+          "pattern": "wp_verify_nonce(",
+          "label": "nonce verification"
+        },
+        {
+          "pattern": "check_ajax_referer(",
+          "label": "nonce check"
+        }
+      ],
+      "auth": [
+        {
+          "pattern": "current_user_can(",
+          "label": "capability check"
+        },
+        {
+          "pattern": "check_ajax_referer(",
+          "label": "AJAX nonce check"
+        },
+        {
+          "pattern": "wp_verify_nonce(",
+          "label": "nonce verification"
+        },
+        {
+          "pattern": "is_user_logged_in(",
+          "label": "logged-in check"
+        },
+        {
+          "pattern": "check_admin_referer(",
+          "label": "admin nonce check"
+        },
+        {
+          "pattern": "user_can(",
+          "label": "user capability"
+        }
+      ],
+      "routing": [
+        {
+          "pattern": "add_action(",
+          "label": "hook registration"
+        },
+        {
+          "pattern": "add_filter(",
+          "label": "filter registration"
+        },
+        {
+          "pattern": "register_rest_route(",
+          "label": "REST route"
+        },
+        {
+          "pattern": "wp_ajax_",
+          "label": "AJAX action"
+        },
+        {
+          "pattern": "admin_post_",
+          "label": "admin post action"
+        }
+      ],
+      "orm": [
+        {
+          "pattern": "WP_Query(",
+          "label": "WP_Query"
+        },
+        {
+          "pattern": "get_posts(",
+          "label": "get_posts"
+        },
+        {
+          "pattern": "$wpdb->get_row(",
+          "label": "raw row query"
+        },
+        {
+          "pattern": "$wpdb->insert(",
+          "label": "raw insert"
+        },
+        {
+          "pattern": "$wpdb->update(",
+          "label": "raw update"
+        }
+      ],
+      "middleware": [
+        {
+          "pattern": "add_action(",
+          "label": "action hook"
+        },
+        {
+          "pattern": "add_filter(",
+          "label": "filter hook"
+        },
+        {
+          "pattern": "register_rest_route(",
+          "label": "REST middleware"
+        },
+        {
+          "pattern": "plugins_loaded",
+          "label": "plugin lifecycle"
+        }
+      ]
+    },
+    {
+      "id": "express",
+      "name": "Express",
+      "language": "javascript",
+      "description": "Node.js web framework: middleware, routing, res/reply, body parsing.",
+      "detect": [
+        "express()",
+        "require(\"express\")",
+        "require('express')",
+        "app.get(",
+        "app.use(",
+        "app.post(",
+        "router.get(",
+        "res.send(",
+        "res.json("
+      ],
+      "sources": [
+        {
+          "pattern": "req.query",
+          "label": "req.query"
+        },
+        {
+          "pattern": "req.body",
+          "label": "req.body"
+        },
+        {
+          "pattern": "req.params",
+          "label": "req.params"
+        },
+        {
+          "pattern": "req.headers",
+          "label": "req.headers"
+        },
+        {
+          "pattern": "req.cookies",
+          "label": "req.cookies"
+        },
+        {
+          "pattern": "req.files",
+          "label": "req.files"
+        }
+      ],
+      "sinks": [
+        {
+          "pattern": "res.send(",
+          "label": "response send",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "res.json(",
+          "label": "response json",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "res.render(",
+          "label": "template render",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "res.redirect(",
+          "label": "redirect",
+          "cwe": "CWE-601"
+        },
+        {
+          "pattern": "res.write(",
+          "label": "response write",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "eval(",
+          "label": "eval",
+          "cwe": "CWE-94"
+        },
+        {
+          "pattern": "exec(",
+          "label": "command exec",
+          "cwe": "CWE-78"
+        },
+        {
+          "pattern": "execSync(",
+          "label": "command exec",
+          "cwe": "CWE-78"
+        },
+        {
+          "pattern": "spawn(",
+          "label": "command spawn",
+          "cwe": "CWE-78"
+        },
+        {
+          "pattern": "child_process",
+          "label": "child process",
+          "cwe": "CWE-78"
+        },
+        {
+          "pattern": "db.query(",
+          "label": "SQL query",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": ".query(",
+          "label": "SQL query",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "fs.readFile(",
+          "label": "path traversal",
+          "cwe": "CWE-22"
+        },
+        {
+          "pattern": "fs.writeFile(",
+          "label": "file write",
+          "cwe": "CWE-434"
+        },
+        {
+          "pattern": "fs.readFileSync(",
+          "label": "path traversal",
+          "cwe": "CWE-22"
+        }
+      ],
+      "sanitizers": [
+        {
+          "pattern": "escapeHtml(",
+          "label": "escapeHtml"
+        },
+        {
+          "pattern": "sanitizeHtml(",
+          "label": "sanitizeHtml"
+        },
+        {
+          "pattern": "escape(",
+          "label": "escape"
+        },
+        {
+          "pattern": "encodeURIComponent(",
+          "label": "encodeURIComponent"
+        },
+        {
+          "pattern": "Number(",
+          "label": "Number cast"
+        },
+        {
+          "pattern": "parseInt(",
+          "label": "parseInt"
+        },
+        {
+          "pattern": "parameterize(",
+          "label": "parameterized query"
+        }
+      ],
+      "auth": [
+        {
+          "pattern": "passport.authenticate(",
+          "label": "passport auth"
+        },
+        {
+          "pattern": "req.isAuthenticated(",
+          "label": "session auth"
+        },
+        {
+          "pattern": "jwt.verify(",
+          "label": "JWT verify"
+        },
+        {
+          "pattern": "verifyToken(",
+          "label": "token verify"
+        },
+        {
+          "pattern": "authMiddleware(",
+          "label": "auth middleware"
+        },
+        {
+          "pattern": "isAdmin(",
+          "label": "admin check"
+        },
+        {
+          "pattern": "app.use(auth",
+          "label": "auth middleware"
+        }
+      ],
+      "routing": [
+        {
+          "pattern": "app.get(",
+          "label": "GET route"
+        },
+        {
+          "pattern": "app.post(",
+          "label": "POST route"
+        },
+        {
+          "pattern": "app.put(",
+          "label": "PUT route"
+        },
+        {
+          "pattern": "app.delete(",
+          "label": "DELETE route"
+        },
+        {
+          "pattern": "router.get(",
+          "label": "router GET"
+        },
+        {
+          "pattern": "router.post(",
+          "label": "router POST"
+        }
+      ],
+      "orm": [
+        {
+          "pattern": ".findOne(",
+          "label": "ORM findOne"
+        },
+        {
+          "pattern": ".find(",
+          "label": "ORM find"
+        },
+        {
+          "pattern": ".create(",
+          "label": "ORM create"
+        },
+        {
+          "pattern": ".updateOne(",
+          "label": "ORM update"
+        },
+        {
+          "pattern": ".insertOne(",
+          "label": "ORM insert"
+        },
+        {
+          "pattern": ".exec(",
+          "label": "ORM exec"
+        }
+      ],
+      "middleware": [
+        {
+          "pattern": "app.use(",
+          "label": "app middleware"
+        },
+        {
+          "pattern": "router.use(",
+          "label": "router middleware"
+        },
+        {
+          "pattern": "next(",
+          "label": "middleware next"
+        },
+        {
+          "pattern": "bodyParser(",
+          "label": "body parser"
+        }
+      ]
+    },
+    {
+      "id": "nextjs",
+      "name": "Next.js",
+      "language": "javascript",
+      "description": "React framework: API routes, getServerSideProps, server components, middleware.",
+      "detect": [
+        "getServerSideProps",
+        "getStaticProps",
+        "next/router",
+        "pages/api",
+        "app/api",
+        "NextRequest",
+        "route.ts"
+      ],
+      "sources": [
+        {
+          "pattern": "req.query",
+          "label": "req.query"
+        },
+        {
+          "pattern": "req.body",
+          "label": "req.body"
+        },
+        {
+          "pattern": "params",
+          "label": "route params"
+        },
+        {
+          "pattern": "searchParams",
+          "label": "search params"
+        },
+        {
+          "pattern": "req.json(",
+          "label": "request JSON"
+        },
+        {
+          "pattern": "request.json(",
+          "label": "request JSON"
+        },
+        {
+          "pattern": "req.formData(",
+          "label": "request form data"
+        },
+        {
+          "pattern": "request.formData(",
+          "label": "request form data"
+        }
+      ],
+      "sinks": [
+        {
+          "pattern": "res.json(",
+          "label": "response json",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "res.send(",
+          "label": "response send",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "res.write(",
+          "label": "response write",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "dangerouslySetInnerHTML",
+          "label": "raw HTML",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "eval(",
+          "label": "eval",
+          "cwe": "CWE-94"
+        },
+        {
+          "pattern": "exec(",
+          "label": "command exec",
+          "cwe": "CWE-78"
+        },
+        {
+          "pattern": "execSync(",
+          "label": "command exec",
+          "cwe": "CWE-78"
+        },
+        {
+          "pattern": "db.query(",
+          "label": "SQL query",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": ".query(",
+          "label": "SQL query",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "->redirect(",
+          "label": "redirect",
+          "cwe": "CWE-601"
+        },
+        {
+          "pattern": "NextResponse.redirect(",
+          "label": "redirect",
+          "cwe": "CWE-601"
+        }
+      ],
+      "sanitizers": [
+        {
+          "pattern": "escapeHtml(",
+          "label": "escapeHtml"
+        },
+        {
+          "pattern": "sanitizeHtml(",
+          "label": "sanitizeHtml"
+        },
+        {
+          "pattern": "encodeURIComponent(",
+          "label": "encodeURIComponent"
+        },
+        {
+          "pattern": "escape(",
+          "label": "escape"
+        },
+        {
+          "pattern": "Number(",
+          "label": "Number cast"
+        },
+        {
+          "pattern": "parseInt(",
+          "label": "parseInt"
+        }
+      ],
+      "auth": [
+        {
+          "pattern": "getServerSession(",
+          "label": "NextAuth session"
+        },
+        {
+          "pattern": "withAuth(",
+          "label": "auth HOC"
+        },
+        {
+          "pattern": "auth(",
+          "label": "auth helper"
+        },
+        {
+          "pattern": "requireAuth(",
+          "label": "require auth"
+        },
+        {
+          "pattern": "middleware.ts",
+          "label": "edge middleware"
+        },
+        {
+          "pattern": "getSession(",
+          "label": "session"
+        }
+      ],
+      "routing": [
+        {
+          "pattern": "pages/api",
+          "label": "API route"
+        },
+        {
+          "pattern": "app/api",
+          "label": "API route"
+        },
+        {
+          "pattern": "route.ts",
+          "label": "route handler"
+        },
+        {
+          "pattern": "router.get(",
+          "label": "router GET"
+        },
+        {
+          "pattern": "router.post(",
+          "label": "router POST"
+        }
+      ],
+      "orm": [
+        {
+          "pattern": ".findMany(",
+          "label": "Prisma findMany"
+        },
+        {
+          "pattern": ".findUnique(",
+          "label": "Prisma findUnique"
+        },
+        {
+          "pattern": ".create(",
+          "label": "Prisma create"
+        },
+        {
+          "pattern": ".update(",
+          "label": "Prisma update"
+        },
+        {
+          "pattern": ".delete(",
+          "label": "Prisma delete"
+        },
+        {
+          "pattern": ".upsert(",
+          "label": "Prisma upsert"
+        },
+        {
+          "pattern": ".queryRaw(",
+          "label": "Prisma raw query"
+        }
+      ],
+      "middleware": [
+        {
+          "pattern": "middleware.ts",
+          "label": "edge middleware"
+        },
+        {
+          "pattern": "NextResponse.redirect(",
+          "label": "redirect middleware"
+        },
+        {
+          "pattern": "withAuth(",
+          "label": "auth middleware"
+        }
+      ]
+    },
+    {
+      "id": "django",
+      "name": "Django",
+      "language": "python",
+      "description": "Python web framework: ORM, views, templates, middleware, CSRF.",
+      "detect": [
+        "from django",
+        "import django",
+        "Model.objects",
+        "request.GET",
+        "request.POST",
+        "render(",
+        "@login_required",
+        "urlpatterns"
+      ],
+      "sources": [
+        {
+          "pattern": "request.GET",
+          "label": "request.GET"
+        },
+        {
+          "pattern": "request.POST",
+          "label": "request.POST"
+        },
+        {
+          "pattern": "request.FILES",
+          "label": "request.FILES"
+        },
+        {
+          "pattern": "request.COOKIES",
+          "label": "request.COOKIES"
+        },
+        {
+          "pattern": "request.META",
+          "label": "request.META"
+        },
+        {
+          "pattern": "request.GET.get(",
+          "label": "request GET"
+        },
+        {
+          "pattern": "request.POST.get(",
+          "label": "request POST"
+        }
+      ],
+      "sinks": [
+        {
+          "pattern": "Model.objects.raw(",
+          "label": "raw SQL",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": ".raw(",
+          "label": "raw SQL",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "cursor.execute(",
+          "label": "raw SQL",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "connection.cursor(",
+          "label": "raw SQL",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "render(",
+          "label": "template render",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "HttpResponse(",
+          "label": "response",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "redirect(",
+          "label": "redirect",
+          "cwe": "CWE-601"
+        },
+        {
+          "pattern": "eval(",
+          "label": "eval",
+          "cwe": "CWE-94"
+        },
+        {
+          "pattern": "exec(",
+          "label": "exec",
+          "cwe": "CWE-94"
+        },
+        {
+          "pattern": "os.system(",
+          "label": "command exec",
+          "cwe": "CWE-78"
+        },
+        {
+          "pattern": "subprocess",
+          "label": "subprocess",
+          "cwe": "CWE-78"
+        },
+        {
+          "pattern": "pickle.loads(",
+          "label": "deserialization",
+          "cwe": "CWE-502"
+        },
+        {
+          "pattern": "yaml.load(",
+          "label": "deserialization",
+          "cwe": "CWE-502"
+        },
+        {
+          "pattern": "open(",
+          "label": "file operations",
+          "cwe": "CWE-22"
+        },
+        {
+          "pattern": "|safe",
+          "label": "Django safe filter (XSS)",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "mark_safe(",
+          "label": "mark_safe (XSS)",
+          "cwe": "CWE-79"
+        }
+      ],
+      "sanitizers": [
+        {
+          "pattern": "escape(",
+          "label": "escape"
+        },
+        {
+          "pattern": "html.escape(",
+          "label": "html.escape"
+        },
+        {
+          "pattern": "bleach(",
+          "label": "bleach"
+        },
+        {
+          "pattern": "strip_tags(",
+          "label": "strip_tags"
+        },
+        {
+          "pattern": "int(",
+          "label": "int cast"
+        },
+        {
+          "pattern": "float(",
+          "label": "float cast"
+        },
+        {
+          "pattern": "shlex.quote(",
+          "label": "shlex.quote"
+        },
+        {
+          "pattern": "conditional_escape(",
+          "label": "conditional_escape"
+        }
+      ],
+      "auth": [
+        {
+          "pattern": "@login_required",
+          "label": "login required"
+        },
+        {
+          "pattern": "@permission_required",
+          "label": "permission required"
+        },
+        {
+          "pattern": "user.is_authenticated",
+          "label": "authenticated check"
+        },
+        {
+          "pattern": "request.user",
+          "label": "request user"
+        },
+        {
+          "pattern": "@csrf_protect",
+          "label": "CSRF protect"
+        },
+        {
+          "pattern": "has_perm(",
+          "label": "permission check"
+        }
+      ],
+      "routing": [
+        {
+          "pattern": "urlpatterns",
+          "label": "URL patterns"
+        },
+        {
+          "pattern": "path(",
+          "label": "path route"
+        },
+        {
+          "pattern": "url(",
+          "label": "url route"
+        },
+        {
+          "pattern": "re_path(",
+          "label": "regex route"
+        }
+      ],
+      "orm": [
+        {
+          "pattern": "Model.objects",
+          "label": "Django ORM"
+        },
+        {
+          "pattern": ".filter(",
+          "label": "ORM filter"
+        },
+        {
+          "pattern": ".get(",
+          "label": "ORM get"
+        },
+        {
+          "pattern": ".exclude(",
+          "label": "ORM exclude"
+        },
+        {
+          "pattern": ".raw(",
+          "label": "ORM raw"
+        },
+        {
+          "pattern": ".values(",
+          "label": "ORM values"
+        },
+        {
+          "pattern": ".extra(",
+          "label": "ORM extra (raw)"
+        }
+      ],
+      "middleware": [
+        {
+          "pattern": "MIDDLEWARE",
+          "label": "middleware settings"
+        },
+        {
+          "pattern": "process_request(",
+          "label": "process_request"
+        },
+        {
+          "pattern": "process_view(",
+          "label": "process_view"
+        },
+        {
+          "pattern": "@csrf_exempt",
+          "label": "CSRF exempt (dangerous)"
+        }
+      ]
+    },
+    {
+      "id": "fastapi",
+      "name": "FastAPI",
+      "language": "python",
+      "description": "Python async framework: dependency injection, pydantic, OpenAPI.",
+      "detect": [
+        "fastapi",
+        "APIRouter",
+        "Depends(",
+        "@app.get(",
+        "@app.post(",
+        "Query(",
+        "Body(",
+        "Form(",
+        "File("
+      ],
+      "sources": [
+        {
+          "pattern": "Query(",
+          "label": "Query param"
+        },
+        {
+          "pattern": "Body(",
+          "label": "request body"
+        },
+        {
+          "pattern": "Form(",
+          "label": "form field"
+        },
+        {
+          "pattern": "File(",
+          "label": "uploaded file"
+        },
+        {
+          "pattern": "Header(",
+          "label": "header"
+        },
+        {
+          "pattern": "Cookie(",
+          "label": "cookie"
+        },
+        {
+          "pattern": "Request(",
+          "label": "request object"
+        },
+        {
+          "pattern": "request.query_params",
+          "label": "query params"
+        },
+        {
+          "pattern": "request.json(",
+          "label": "request JSON"
+        }
+      ],
+      "sinks": [
+        {
+          "pattern": "eval(",
+          "label": "eval",
+          "cwe": "CWE-94"
+        },
+        {
+          "pattern": "exec(",
+          "label": "exec",
+          "cwe": "CWE-94"
+        },
+        {
+          "pattern": "os.system(",
+          "label": "command exec",
+          "cwe": "CWE-78"
+        },
+        {
+          "pattern": "subprocess",
+          "label": "subprocess",
+          "cwe": "CWE-78"
+        },
+        {
+          "pattern": "cursor.execute(",
+          "label": "raw SQL",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": ".execute(",
+          "label": "raw SQL",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "pickle.loads(",
+          "label": "deserialization",
+          "cwe": "CWE-502"
+        },
+        {
+          "pattern": "yaml.load(",
+          "label": "deserialization",
+          "cwe": "CWE-502"
+        },
+        {
+          "pattern": "open(",
+          "label": "file operations",
+          "cwe": "CWE-22"
+        },
+        {
+          "pattern": "redirect(",
+          "label": "redirect",
+          "cwe": "CWE-601"
+        },
+        {
+          "pattern": "HTMLResponse(",
+          "label": "raw HTML",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "render(",
+          "label": "template render",
+          "cwe": "CWE-79"
+        }
+      ],
+      "sanitizers": [
+        {
+          "pattern": "escape(",
+          "label": "escape"
+        },
+        {
+          "pattern": "html.escape(",
+          "label": "html.escape"
+        },
+        {
+          "pattern": "bleach(",
+          "label": "bleach"
+        },
+        {
+          "pattern": "shlex.quote(",
+          "label": "shlex.quote"
+        },
+        {
+          "pattern": "int(",
+          "label": "int cast"
+        },
+        {
+          "pattern": "float(",
+          "label": "float cast"
+        }
+      ],
+      "auth": [
+        {
+          "pattern": "Depends(",
+          "label": "dependency"
+        },
+        {
+          "pattern": "OAuth2PasswordBearer(",
+          "label": "OAuth2 bearer"
+        },
+        {
+          "pattern": "HTTPBearer(",
+          "label": "HTTP bearer"
+        },
+        {
+          "pattern": "Security(",
+          "label": "security dependency"
+        },
+        {
+          "pattern": "current_user",
+          "label": "current user"
+        },
+        {
+          "pattern": "get_current_user(",
+          "label": "current user"
+        }
+      ],
+      "routing": [
+        {
+          "pattern": "@app.get(",
+          "label": "GET route"
+        },
+        {
+          "pattern": "@app.post(",
+          "label": "POST route"
+        },
+        {
+          "pattern": "@router.get(",
+          "label": "router GET"
+        },
+        {
+          "pattern": "@router.post(",
+          "label": "router POST"
+        },
+        {
+          "pattern": "APIRouter(",
+          "label": "API router"
+        }
+      ],
+      "orm": [
+        {
+          "pattern": ".execute(",
+          "label": "SQL execute"
+        },
+        {
+          "pattern": ".filter(",
+          "label": "ORM filter"
+        },
+        {
+          "pattern": ".all(",
+          "label": "ORM all"
+        },
+        {
+          "pattern": "SQLAlchemy",
+          "label": "SQLAlchemy"
+        },
+        {
+          "pattern": ".query(",
+          "label": "ORM query"
+        }
+      ],
+      "middleware": [
+        {
+          "pattern": "@app.middleware(",
+          "label": "app middleware"
+        },
+        {
+          "pattern": "Depends(",
+          "label": "dependency injection"
+        },
+        {
+          "pattern": "Middleware(",
+          "label": "middleware"
+        }
+      ]
+    },
+    {
+      "id": "spring",
+      "name": "Spring",
+      "language": "java",
+      "description": "Java framework: controllers, JPA, security, actuator, REST mappings.",
+      "detect": [
+        "@RestController",
+        "@RequestMapping",
+        "@Autowired",
+        "@RequestParam",
+        "@RequestBody",
+        "@PathVariable",
+        "SpringBootApplication",
+        "org.springframework"
+      ],
+      "sources": [
+        {
+          "pattern": "@RequestParam",
+          "label": "request param"
+        },
+        {
+          "pattern": "@PathVariable",
+          "label": "path variable"
+        },
+        {
+          "pattern": "@RequestBody",
+          "label": "request body"
+        },
+        {
+          "pattern": "request.getParameter(",
+          "label": "getParameter"
+        },
+        {
+          "pattern": "request.getHeader(",
+          "label": "getHeader"
+        },
+        {
+          "pattern": "@RequestHeader",
+          "label": "request header"
+        },
+        {
+          "pattern": "@CookieValue",
+          "label": "cookie value"
+        }
+      ],
+      "sinks": [
+        {
+          "pattern": "Runtime.getRuntime().exec(",
+          "label": "command exec",
+          "cwe": "CWE-78"
+        },
+        {
+          "pattern": "ProcessBuilder(",
+          "label": "process builder",
+          "cwe": "CWE-78"
+        },
+        {
+          "pattern": ".executeQuery(",
+          "label": "SQL query",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": ".execute(",
+          "label": "SQL execute",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "createStatement(",
+          "label": "raw statement",
+          "cwe": "CWE-89"
+        },
+        {
+          "pattern": "ObjectInputStream",
+          "label": "deserialization",
+          "cwe": "CWE-502"
+        },
+        {
+          "pattern": "readObject(",
+          "label": "deserialization",
+          "cwe": "CWE-502"
+        },
+        {
+          "pattern": ".write(",
+          "label": "response write",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": ".println(",
+          "label": "response print",
+          "cwe": "CWE-79"
+        },
+        {
+          "pattern": "sendRedirect(",
+          "label": "redirect",
+          "cwe": "CWE-601"
+        },
+        {
+          "pattern": ".forward(",
+          "label": "forward",
+          "cwe": "CWE-601"
+        },
+        {
+          "pattern": "new File(",
+          "label": "file operations",
+          "cwe": "CWE-434"
+        },
+        {
+          "pattern": "DocumentBuilder",
+          "label": "XXE",
+          "cwe": "CWE-611"
+        },
+        {
+          "pattern": ".parse(",
+          "label": "XXE parse",
+          "cwe": "CWE-611"
+        }
+      ],
+      "sanitizers": [
+        {
+          "pattern": "HtmlUtils.htmlEscape(",
+          "label": "htmlEscape"
+        },
+        {
+          "pattern": "StringEscapeUtils.escapeHtml(",
+          "label": "escapeHtml"
+        },
+        {
+          "pattern": "PreparedStatement",
+          "label": "prepared statement"
+        },
+        {
+          "pattern": ".setString(",
+          "label": "parameter binding"
+        },
+        {
+          "pattern": "Integer.parseInt(",
+          "label": "int parse"
+        },
+        {
+          "pattern": "Long.parseLong(",
+          "label": "long parse"
+        }
+      ],
+      "auth": [
+        {
+          "pattern": "@PreAuthorize(",
+          "label": "pre-authorize"
+        },
+        {
+          "pattern": "@Secured(",
+          "label": "secured"
+        },
+        {
+          "pattern": "SecurityContextHolder",
+          "label": "security context"
+        },
+        {
+          "pattern": "@EnableWebSecurity",
+          "label": "web security"
+        },
+        {
+          "pattern": "isAuthenticated(",
+          "label": "auth check"
+        },
+        {
+          "pattern": "hasRole(",
+          "label": "role check"
+        },
+        {
+          "pattern": "hasAuthority(",
+          "label": "authority check"
+        }
+      ],
+      "routing": [
+        {
+          "pattern": "@RequestMapping",
+          "label": "request mapping"
+        },
+        {
+          "pattern": "@GetMapping",
+          "label": "GET mapping"
+        },
+        {
+          "pattern": "@PostMapping",
+          "label": "POST mapping"
+        },
+        {
+          "pattern": "@PutMapping",
+          "label": "PUT mapping"
+        },
+        {
+          "pattern": "@DeleteMapping",
+          "label": "DELETE mapping"
+        },
+        {
+          "pattern": "@PatchMapping",
+          "label": "PATCH mapping"
+        }
+      ],
+      "orm": [
+        {
+          "pattern": "JdbcTemplate",
+          "label": "JdbcTemplate"
+        },
+        {
+          "pattern": "@Query(",
+          "label": "JPA query"
+        },
+        {
+          "pattern": "EntityManager",
+          "label": "EntityManager"
+        },
+        {
+          "pattern": ".createQuery(",
+          "label": "JPA query"
+        },
+        {
+          "pattern": ".createNativeQuery(",
+          "label": "native query"
+        },
+        {
+          "pattern": "JpaRepository",
+          "label": "JPA repository"
+        }
+      ],
+      "middleware": [
+        {
+          "pattern": "OncePerRequestFilter",
+          "label": "filter"
+        },
+        {
+          "pattern": "HandlerInterceptor",
+          "label": "interceptor"
+        },
+        {
+          "pattern": "@PreAuthorize(",
+          "label": "method security"
+        },
+        {
+          "pattern": "FilterChain",
+          "label": "filter chain"
+        }
+      ]
+    }
+  ]
+}

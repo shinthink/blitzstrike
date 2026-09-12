@@ -1,0 +1,28 @@
+{
+  "task_id": "t-mu17wrne",
+  "objective": "audit auth",
+  "plan": [
+    "recon",
+    "analyze",
+    "verify",
+    "report"
+  ],
+  "current_step": "analyze",
+  "status": "failed",
+  "checkpoints": [
+    {
+      "step": "recon",
+      "status": "done",
+      "note": "mapped endpoints",
+      "ts": 1789388832507
+    },
+    {
+      "step": "analyze",
+      "status": "failed",
+      "note": "subagent died",
+      "ts": 1789388832507
+    }
+  ],
+  "created_ts": 1789388832506,
+  "updated_ts": 1789388832507
+}

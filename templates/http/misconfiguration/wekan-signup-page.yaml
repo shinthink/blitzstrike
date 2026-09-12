@@ -1,0 +1,35 @@
+id: wekan-signup-page
+
+info:
+  name: Wekan Sign Up Page - Exposure
+  author: DhiyaneshDK
+  severity: medium
+  description: |
+    Detected exposed Wekan sign-up functionality, indicating that unauthenticated users could access the registration page and potentially create new accounts.
+  reference:
+    - https://wekan.fi/
+  metadata:
+    verified: true
+    max-request: 1
+    shodan-query: html:"Wekan"
+  tags: wekan,sign-up,register,exposure,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/sign-up"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "__meteor_runtime_config__"
+          - "Wekan"
+        condition: and
+
+      - type: regex
+        part: body
+        regex:
+          - "<link rel=\"stylesheet\".*meteor_css_resource=true"
+# digest: 4a0a0047304502202c007421141eff0ac70f1d480b86dbc3a7bf1ec6feb8a2ae3fa3b6fcc391e33a022100c1f80867d71f0ccb92b359971adbc75a33b612288a57a03fb05d4a71964e4524:922c64590222798bb761d5b6d8e72950

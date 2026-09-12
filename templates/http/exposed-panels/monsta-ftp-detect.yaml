@@ -1,0 +1,43 @@
+id: monsta-ftp-detect
+
+info:
+  name: Monsta FTP - Detect
+  author: rxerium
+  severity: info
+  description: |
+    Detects Monsta FTP web-based file manager interface.
+  reference:
+    - https://www.monstaftp.com/
+  metadata:
+    verified: true
+    max-request: 1
+    shodan-query: http.title:"Monsta FTP"
+  tags: tech,monsta,ftp,detect,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    host-redirects: true
+    max-redirects: 2
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - 'ng-app="MonstaFTP"'
+          - '<title>Monsta FTP'
+        condition: and
+
+      - type: status
+        status:
+          - 200
+
+    extractors:
+      - type: regex
+        name: version
+        group: 1
+        regex:
+          - 'monsta-min-([0-9.]+)\.js'
+# digest: 4a0a0047304502206078af19c1af1d1424fe7b273b4f902062f4f1de854e4127325b19be468a2bde0221009b3f1bb9381e62b739915bd5ea487c4d9bf5b4bf6f251a4532bddd63983eb610:922c64590222798bb761d5b6d8e72950

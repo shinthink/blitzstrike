@@ -1,0 +1,35 @@
+id: xspeeder-login
+
+info:
+  name: XSpeeder Login - Detect
+  author: rxerium
+  severity: info
+  description: |
+    Detects the presence of XSpeeder router login panels.
+  reference:
+    - https://www.xspeeder.com/
+  metadata:
+    verified: true
+    max-request: 1
+    vendor: Changsha Tongxun Computer Technology Co., Ltd
+    product: xspeeder_router
+    shodan-query: http.title:"神行者路由"
+    fofa-query: title="神行者路由"
+  tags: panel,xspeeder,router,login,detect,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/login/?nLang=1"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "<title>神行者路由"
+
+      - type: status
+        status:
+          - 200
+# digest: 4b0a004830460221008765f1370506bf473ba3c0d5ac52096651e8ab3e6322388195f6075234119d16022100afbe4e880c58e265553e7f5c8a522439db617611c32aac926a67b2341446bc22:922c64590222798bb761d5b6d8e72950

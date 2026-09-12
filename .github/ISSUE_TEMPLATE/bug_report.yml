@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a bug in BlitzStrike
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal, self-contained steps.
+      placeholder: |
+        1. Run `blitzstrike doctor`
+        2. Call tool X with args Y
+        3. See error Z
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: e.g. 1.0.0
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: e.g. Linux x86_64, Bun 1.4.2

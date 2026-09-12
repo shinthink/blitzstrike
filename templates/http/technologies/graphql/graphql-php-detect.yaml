@@ -1,0 +1,33 @@
+id: graphql-php-detect
+info:
+  name: Graphql PHP Detect
+  author: princechaddha
+  severity: info
+  reference:
+    - https://github.com/dolevf/graphw00f/blob/main/graphw00f/lib.py
+  tags: tech,graphql,php,discovery
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/query"
+      - "{{BaseURL}}/"
+    body: '{"query":"query ! {__typename}"}'
+    headers:
+      Content-Type: application/json
+    redirects: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 400
+
+      - type: word
+        words:
+          - 'Syntax Error: Cannot parse the unexpected character "!".'
+        part: body
+# digest: 4b0a0048304602210094a5ca07dfa7e34f272e9d128902166228288a9c615e4e26320c036654ab64d302210085dec5828df3a962bb8b8a08efd3215993b37526b4c1fe4e6f267a87849676ae:922c64590222798bb761d5b6d8e72950

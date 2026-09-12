@@ -1,0 +1,35 @@
+id: ccm-detect
+
+info:
+  name: Clear-Com Core Configuration Manager Panel - Detect
+  author: failOpen
+  severity: low
+  description: Clear-Com Core Configuration Manager panel was detected.
+  reference:
+    - https://www.clearcom.com/DownloadCenter/manuals/FreeSpeakII_Online_Manual/UserGuide/Content/Base/CCM/CCM.htm
+  classification:
+    cvss-metrics: CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 3.7
+    cwe-id: CWE-200
+  metadata:
+    verified: true
+    max-request: 1
+    shodan-query: http.html:"CCM - Authentication Failure"
+  tags: panel,clearcom,ccm,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "CCM - Authentication Failure"
+
+      - type: status
+        status:
+          - 401
+# digest: 4b0a00483046022100a9b07938f6b79598927aa5b6297f1c8b4086f52b7e96c9785155de699f96cfb2022100c5d693ef61bf0e7bb87922b8adfc9faaefcb0795659d8bcd06db3f640c73f8e3:922c64590222798bb761d5b6d8e72950

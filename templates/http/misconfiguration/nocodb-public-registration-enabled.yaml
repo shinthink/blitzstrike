@@ -1,0 +1,46 @@
+id: nocodb-public-registration-enabled
+
+info:
+  name: NocoDB Public Registration Enabled
+  author: pussycat0x
+  severity: medium
+  description: |
+    Detected NocoDB instances that allow public user registration without requiring an invitation. This misconfiguration allows anyone to create an account on the NocoDB instance, potentially leading to unauthorized access to databases and sensitive information.
+  reference:
+    - https://docs.nocodb.com/getting-started/self-hosted/environment-variables/
+    - https://nocodb.com/docs/product-docs/account-settings/oss-specific-details
+  metadata:
+    max-request: 1
+    verified: true
+    shodan-query: http.title:"NocoDB"
+    fofa-query: title="NocoDB"
+    product: nocodb
+    vendor: nocodb
+  tags: nocodb,misconfig,exposure,intrusive,vuln
+
+variables:
+  email: "{{randstr}}@{{rand_base(5)}}.com"
+  password: "{{rand_base(8)}}"
+
+http:
+  - raw:
+      - |
+        POST /api/v1/auth/user/signup HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+
+        {"email":"{{email}}","password":"{{password}}"}
+
+    matchers:
+      - type: dsl
+        dsl:
+          - contains(body, "token\":\"ey")
+          - contains(header, 'application/json')
+          - "status_code == 200"
+        condition: and
+
+    extractors:
+      - type: dsl
+        dsl:
+          - '"Email: " + email + ". Password: "+ password'
+# digest: 4b0a00483046022100a7de49c94b5771484ad8894bc2b2ffe1ea701880e8f3f7d3a60d2a719d60fc83022100faa2b68471830c1264a96b4bad3b437a355788c1d120bc824bfd57491c0131c5:922c64590222798bb761d5b6d8e72950

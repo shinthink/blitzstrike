@@ -1,0 +1,31 @@
+id: php-prober-exposure
+
+info:
+  name: PHP Prober - Exposure
+  author: ritikchaddha
+  severity: medium
+  description: PHP Prober Server exposure was detected.
+  metadata:
+    max-request: 1
+    verified: true
+    shodan-query: http.component:"php"
+  tags: exposure,php,prober,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/prober.php"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - 'Server Parameters'
+          - 'PHP Prober'
+          - 'Real-time Data'
+        condition: and
+
+      - type: status
+        status:
+          - 200
+# digest: 490a00463044022026dd338b80b11f179f488563268acb2616b088eda5f6a074f5d37df1229ecf53022031068216cd2ef571008c4d50c93af296dd2915513ca94874b40d71b1db0adb51:922c64590222798bb761d5b6d8e72950

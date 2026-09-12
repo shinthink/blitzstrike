@@ -1,0 +1,19 @@
+{
+  "_comment": "OWASP ASVS (Application Security Verification Standard) — the 14 verification areas, condensed. Each maps to what Blitz Strike verifies for it.",
+  "chapters": [
+    {"id": "V1", "name": "Architecture, Design and Threat Modeling", "focus": "Design + threat model", "blitz": "blitz_scan (attack surface) + list_attack_vectors"},
+    {"id": "V2", "name": "Authentication", "focus": "Password, MFA, credential, OAuth/JWT", "blitz": "technique_lookup(jwt|oauth|two_fa_bypass|account_takeover)"},
+    {"id": "V3", "name": "Session Management", "focus": "Session tokens, cookies, logout, fixation", "blitz": "technique_lookup(cookie_hacking) + hp-auth-session"},
+    {"id": "V4", "name": "Access Control", "focus": "IDOR, forced browsing, privilege escalation", "blitz": "technique_lookup(idor) + route_scan + technique_lookup(mass_assignment)"},
+    {"id": "V5", "name": "Validation, Sanitization and Encoding", "focus": "Injection + XSS + encoding", "blitz": "source-audit (taint) + technique_lookup(sql_injection|xss|command_injection|ssti)"},
+    {"id": "V6", "name": "Stored Cryptography", "focus": "Password storage, key management", "blitz": "hp-tls-transport + ap-client-side-crypto-forgery"},
+    {"id": "V7", "name": "Error Handling and Logging", "focus": "Verbose errors, stack traces", "blitz": "web-hunting (info leak) + technique_lookup(ssi_injection)"},
+    {"id": "V8", "name": "Data Protection", "focus": "PII exposure, cache, client-side storage", "blitz": "technique_lookup(xssi) + technique_lookup(cache_poisoning) + hp-secrets-scan"},
+    {"id": "V9", "name": "Communications", "focus": "TLS, HSTS, downgrade", "blitz": "hp-tls-transport"},
+    {"id": "V10", "name": "Malicious Code", "focus": "CI/CD, dependency integrity", "blitz": "hp-dependency-audit + ap-gitea-ci-injection"},
+    {"id": "V11", "name": "Business Logic", "focus": "Workflow abuse, limits, races", "blitz": "hp-business-logic-fuzzing + technique_lookup(race_condition|bypass_payment)"},
+    {"id": "V12", "name": "Files and Resources", "focus": "Upload, path traversal, LFI", "blitz": "technique_lookup(file_upload|path_traversal_lfi) + complex_scan"},
+    {"id": "V13", "name": "API and Web Service", "focus": "REST/GraphQL/WebSocket security", "blitz": "technique_lookup(graphql|websocket) + taxonomy(api) + hp-api-security"},
+    {"id": "V14", "name": "Configuration", "focus": "Headers, CORS, CSP, cloud", "blitz": "technique_lookup(cors) + web-hunting (config) + hp-iac-cloud-posture"}
+  ]
+}

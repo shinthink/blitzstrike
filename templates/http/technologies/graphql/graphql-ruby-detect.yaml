@@ -1,0 +1,33 @@
+id: graphql-ruby-detect
+info:
+  name: Graphql Ruby Detect
+  author: princechaddha
+  severity: info
+  reference:
+    - https://github.com/dolevf/graphw00f/blob/main/graphw00f/lib.py
+  tags: tech,graphql,ruby,discovery
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/query"
+      - "{{BaseURL}}/"
+    body: '{"query":"query @skip {__typename}"}'
+    headers:
+      Content-Type: application/json
+    redirects: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 400
+
+      - type: word
+        words:
+          - "'@skip' can't be applied to queries (allowed: fields, fragment spreads, inline fragments)"
+        part: body
+# digest: 4a0a00473045022100c72570400501fba76a9aed864a3cbdda91829471060e841eb4a673b51614f33802202dea91876f1aa9f9f8a322e18d7ee4d3cd0836710c9119fcf68a9daf4c934f66:922c64590222798bb761d5b6d8e72950

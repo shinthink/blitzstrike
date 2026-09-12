@@ -1,0 +1,64 @@
+{
+  "_comment": "The interconnected doctrine map. The orchestrator follows the phases; each phase loads its skill, uses its tools, and reaches for cross-cutting data at the right moment. WSTG = the official OWASP testing categories this phase maps to.",
+  "phases": [
+    {
+      "phase": "scope",
+      "skill": "scope-gate",
+      "wstg": null,
+      "goal": "record the target + scope (no authorization gate — the disclaimer owns responsibility)",
+      "tools": ["scope_check"],
+      "data": []
+    },
+    {
+      "phase": "recon",
+      "skill": "web-hunting (live) / source-audit (source) / attack-surface-recon",
+      "wstg": "WSTG-INFO",
+      "goal": "map the full attack surface (JS maps, endpoints, params, config, WAF, ports)",
+      "tools": ["live_recon", "blitz_scan", "blitz_file", "detect_framework", "list_attack_vectors"],
+      "data": ["attack_vectors", "port_correlations", "tech_correlations", "waf_signatures"]
+    },
+    {
+      "phase": "analyze",
+      "skill": "source-audit (taint) / web-hunting (advanced injection)",
+      "wstg": "WSTG-INPV, WSTG-CONF, WSTG-CRYP",
+      "goal": "trace source→sink reachability + advanced classes (smuggling, cache, SSRF, SSTI, deserialization)",
+      "tools": ["eagle_eye2", "taint_file", "taint_scan", "trace_data_flow", "active_scan"],
+      "data": ["chains", "chain_links", "bypass_techniques", "payloads", "frameworks"]
+    },
+    {
+      "phase": "deep",
+      "skill": "source-audit (complex-bugs)",
+      "wstg": "WSTG-BUSL, WSTG-INPV",
+      "goal": "hunt classes taint misses (POP chains, type juggling, mass assignment, prototype pollution, CRLF, path confusion)",
+      "tools": ["complex_scan", "route_scan", "diff_analyze", "incremental_scan"],
+      "data": ["chains", "chain_links"]
+    },
+    {
+      "phase": "verify",
+      "skill": "verify-finding",
+      "wstg": null,
+      "goal": "confirm each hypothesis live (marker + negative control + baseline)",
+      "tools": ["strike_verify", "strike_resolve", "browser_validate", "finding_create", "finding_transition", "finding_attach_evidence"],
+      "data": ["bypass_techniques", "payloads"]
+    },
+    {
+      "phase": "report",
+      "skill": "write-report + adversarial-review",
+      "wstg": null,
+      "goal": "deduplicate, review, and emit submission-ready findings",
+      "tools": ["dedup_findings", "cvss_score", "generate_report", "confidence_score"],
+      "data": []
+    }
+  ],
+  "cross_cutting": [
+    {"moment": "blocked by WAF/filter/sanitizer", "reach": ["bypass_lookup"]},
+    {"moment": "found a finding — what does it escalate into?", "reach": ["list_chains", "chain_links"]},
+    {"moment": "crafting a probe", "reach": ["payload_lookup", "read_payload"]},
+    {"moment": "model/sub-agent failed", "reach": ["model_fallback", "retry_guidance"]},
+    {"moment": "am I done?", "reach": ["engagement_status"]},
+    {"moment": "need to run an external exploit tool", "reach": ["tool_lookup", "ensure_tool", "read_tool_manual"]},
+    {"moment": "need the campaign plan for this target type", "reach": ["read_playbook"]},
+    {"moment": "map a finding to a standard ID for the report", "reach": ["taxonomy"]},
+    {"moment": "need domain-specific tools beyond Blitz's own data", "reach": ["resource_lookup"]}
+  ]
+}

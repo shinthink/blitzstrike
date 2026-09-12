@@ -1,0 +1,29 @@
+id: seafile-public-registration
+
+info:
+  name: Seafile - Public Registration Enabled
+  author: theamanrawat
+  severity: info
+  description: |
+    Detected public user registration is enabled on a Seafile instance.
+  reference:
+    - https://forum.seafile.com/t/seafile-disable-email-registration-for-users/4957
+  metadata:
+    verified: true
+    max-requests: 1
+    shodan-query: http.title:"Seafile"
+    fofa-query: title="Seafile"
+  tags: misconfig,seafile,registration,exposure,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/accounts/register/"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'contains_all(body, "id_email", "id_password1", "csrfmiddlewaretoken", "seafile-ui.css", "SEAFILE_GLOBAL")'
+        condition: and
+# digest: 4a0a00473045022100c2ee5379686bcd6bdcdad8ba220d7d9d802ed1dadc149d73e9901c10d24dd04c02206281d0bf812d8a0d541b86971f77d974213397b97ef0d7ef3875cde91086469c:922c64590222798bb761d5b6d8e72950

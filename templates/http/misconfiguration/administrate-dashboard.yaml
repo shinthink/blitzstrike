@@ -1,0 +1,35 @@
+id: administrate-dashboard
+
+info:
+  name: Administrate Dashboard Exposure
+  author: DhiyaneshDk
+  severity: high
+  description: |
+    Administrate Dashboard was exposed.
+  reference:
+    - https://github.com/thoughtbot/administrate
+  metadata:
+    verified: true
+    max-request: 1
+    fofa-query: body="Administrate"
+  tags: exposure,administrate,misconfig,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/admin"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - 'Search Customers'
+          - 'Administrate'
+          - 'New customer</a>'
+        condition: and
+
+      - type: status
+        status:
+          - 200
+# digest: 4a0a00473045022022eb557407589833bf924a687deba928b03704df2b695ef598456abbab715b5102210087983a2da52c41cd1a812995293bfd6a07d0c632c8945f69f112a0b9f2c128f1:922c64590222798bb761d5b6d8e72950

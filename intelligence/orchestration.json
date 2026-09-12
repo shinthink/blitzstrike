@@ -1,0 +1,115 @@
+{
+  "_comment": "The Blitz Strike orchestration framework. The driving LLM loads this at engagement start and follows the lifecycle phase by phase, fanning out the team in parallel where phases are independent.",
+  "lifecycle": [
+    {
+      "phase": "scope",
+      "name": "Scope & gate",
+      "goal": "confirm target, scope, and authorization before touching anything",
+      "entry": "engagement start",
+      "exit": "target classified (URL vs source), scope_check passed",
+      "tools": ["scope_check"],
+      "parallel": false
+    },
+    {
+      "phase": "recon",
+      "name": "Recon (BLITZ)",
+      "goal": "map the full attack surface — entry points, sinks, framework, tech",
+      "entry": "scope confirmed",
+      "exit": "entry points + sinks + framework enumerated (no surface left unmapped)",
+      "tools": ["blitz_scan", "blitz_file", "live_recon", "detect_framework", "list_attack_vectors"],
+      "parallel": true
+    },
+    {
+      "phase": "analyze",
+      "name": "Analyze (EAGLE-EYE)",
+      "goal": "trace source→sink reachability for every candidate sink",
+      "entry": "surface mapped",
+      "exit": "each sink classified reachable / unreachable / sanitized, with a source→sink trace",
+      "tools": ["eagle_eye2", "taint_file", "taint_scan", "trace_data_flow"],
+      "parallel": true
+    },
+    {
+      "phase": "deep",
+      "name": "Deep (complex bugs)",
+      "goal": "hunt complex-bug classes breadth detectors miss",
+      "entry": "taint analysis complete",
+      "exit": "POP chains, type juggling, mass assignment, route confusion candidates enumerated + linked to escalation chains",
+      "tools": ["complex_scan", "route_scan", "list_chains", "chain_links"],
+      "parallel": true
+    },
+    {
+      "phase": "verify",
+      "name": "Verify (STRIKE)",
+      "goal": "confirm each hypothesis live with deterministic evidence",
+      "entry": "hypotheses exist",
+      "exit": "every hypothesis confirmed or rejected (marker + negative control)",
+      "tools": ["strike_verify", "strike_resolve", "finding_create", "finding_transition", "finding_attach_evidence"],
+      "parallel": true
+    },
+    {
+      "phase": "report",
+      "name": "Report",
+      "goal": "emit submission-ready, deduplicated findings",
+      "entry": "verification complete",
+      "exit": "report emitted (markdown/JSON/SARIF) with SHA-256 integrity hash",
+      "tools": ["dedup_findings", "generate_report"],
+      "parallel": false
+    }
+  ],
+  "team": [
+    {
+      "id": "recon",
+      "name": "Recon agent (BLITZ tier)",
+      "responsibility": "map the exposed attack surface",
+      "tools": ["blitz_scan", "blitz_file", "live_recon", "detect_framework", "list_attack_vectors"],
+      "returns": "enumerated entry points + sinks + framework/tech, each with file:line or URL"
+    },
+    {
+      "id": "taint",
+      "name": "Taint agent (EAGLE-EYE tier)",
+      "responsibility": "trace source→sink reachability",
+      "tools": ["eagle_eye2", "taint_file", "taint_scan", "trace_data_flow"],
+      "returns": "reachable sinks with a source→sink trace and a reachability verdict"
+    },
+    {
+      "id": "deep",
+      "name": "Deep agent (complex bugs)",
+      "responsibility": "hunt complex-bug classes taint misses",
+      "tools": ["complex_scan", "route_scan", "list_chains", "chain_links"],
+      "returns": "POP chain / type juggling / mass assignment / route confusion candidates, linked to escalation chains"
+    },
+    {
+      "id": "verify",
+      "name": "Verify agent (STRIKE tier)",
+      "responsibility": "confirm live with evidence",
+      "tools": ["strike_verify", "strike_resolve", "finding_create", "finding_transition", "finding_attach_evidence"],
+      "returns": "confirmed or rejected findings, each with marker + negative control + evidence"
+    }
+  ],
+  "handoff": {
+    "delegate_contract": [
+      "a specific, self-contained goal",
+      "the exact tool names to use",
+      "the exact argument names (source-analysis tools take `path`, only `run_engagement` takes `target`)",
+      "what deterministic output is required back"
+    ],
+    "result_contract": [
+      "deterministic evidence (file:line, sink, trace, marker reflection) — never prose",
+      "a verdict per finding: confirmed / hypothesis / rejected",
+      "no fabricated results — empty is reported as empty, not filled in"
+    ]
+  },
+  "termination": {
+    "done_when": [
+      "every reachable sink has been traced",
+      "every hypothesis is confirmed or rejected",
+      "findings are deduplicated and the report is emitted",
+      "no pending hypotheses remain"
+    ],
+    "not_done_when": [
+      "a scan surfaced few sinks but the target surface is wider",
+      "hypotheses remain unverified",
+      "a low-severity finding has not been checked for escalation (chain_links)"
+    ]
+  }
+}

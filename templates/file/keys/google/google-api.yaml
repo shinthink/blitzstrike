@@ -1,0 +1,16 @@
+id: google-api-key-file
+
+info:
+  name: Google API key
+  author: gaurang
+  severity: low
+  tags: keys,file,token,google
+file:
+  - extensions:
+      - all
+
+    extractors:
+      - type: regex
+        regex:
+          - "AIza[0-9A-Za-z\\-_]{35}"
+# digest: 490a0046304402206e1deb97f53b9067248c619b27909b7e88b8d7e532ca0d6570cd26fa2a696203022031e69bf2927e541197ba0628f43751e94a65c9bd5f3371f2dcd08d4b8bcc5425:922c64590222798bb761d5b6d8e72950

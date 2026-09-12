@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    name: Verify + package validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Unit + benchmark + regression tests
+        run: bun run test
+
+      - name: Build
+        run: bun run build
+
+      - name: Package validation (npm pack dry-run)
+        run: npm pack --dry-run
+
+      - name: Release metadata consistency
+        run: bun -e 'import { validateRelease } from "./src/release.ts"; const r = validateRelease(); if (!r.consistent) { console.error(JSON.stringify(r.checks)); process.exit(1); } console.log("release metadata consistent:", r.version);'
+
+      - name: Dependency surface check
+        run: bun -e 'import { checkDependencies } from "./src/dependency.ts"; const d = checkDependencies(); if (!d.safe) { console.error(JSON.stringify(d)); process.exit(1); } console.log("dependency surface safe:", d.total_dependencies, "deps");'

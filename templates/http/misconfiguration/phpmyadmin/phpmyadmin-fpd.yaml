@@ -1,0 +1,62 @@
+id: phpmyadmin-fpd
+
+info:
+  name: phpMyAdmin - Full Path Disclosure
+  author: DhiyaneshDk
+  severity: low
+  description: |
+    Detected potential Full Path Disclosure (FPD) via directly accessible phpMyAdmin files that may throw PHP errors revealing filesystem paths when error display is enabled.
+  metadata:
+    verified: true
+    max-request: 1
+    shodan-query: html:"phpmyadmin"
+  tags: exposure,fpd,phpmyadmin,php,vuln
+
+flow: http(1) && http(2)
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}{{paths}}"
+
+    payloads:
+      paths:
+        - ""
+        - "/phpmyadmin/"
+        - "/admin/phpmyadmin/"
+        - "/_phpmyadmin/"
+        - "/administrator/components/com_joommyadmin/phpmyadmin/"
+        - "/apache-default/phpmyadmin/"
+        - "/blog/phpmyadmin/"
+        - "/forum/phpmyadmin/"
+        - "/php/phpmyadmin/"
+        - "/typo3/phpmyadmin/"
+        - "/web/phpmyadmin/"
+        - "/xampp/phpmyadmin/"
+        - "/phpMyAdmin/"
+        - "/phpma/"
+        - "/phpMyAdmin/index.php"
+
+    stop-at-first-match: true
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_any(tolower(body), "alt=\"phpMyAdmin", "name=\"pma_username", "/pmahomme/")'
+        internal: true
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/phpmyadmin/libraries/advisory_rules_generic.php"
+      - "{{BaseURL}}/phpmyadmin/libraries/phpseclib/Crypt/AES.php"
+      - "{{BaseURL}}/phpmyadmin/libraries/phpseclib/Crypt/Rijndael.php"
+
+    stop-at-first-match: true
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200 || status_code == 500'
+          - 'contains(body, "phpmyadmin")'
+          - 'contains_any(body, "Fatal error", "require_once", "Error")'
+        condition: and
+# digest: 490a00463044021f7546920c5d33ff859eb23cc1f0ac51056f316c959edd72fcd839540edd825a0221009a25cf7d39e8c67da61a746cecf8bae3db1fba4917473def538aea3143450f31:922c64590222798bb761d5b6d8e72950

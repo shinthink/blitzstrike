@@ -1,0 +1,28 @@
+{
+  "task_id": "t-mu132ylo",
+  "objective": "audit auth",
+  "plan": [
+    "recon",
+    "analyze",
+    "verify",
+    "report"
+  ],
+  "current_step": "analyze",
+  "status": "failed",
+  "checkpoints": [
+    {
+      "step": "recon",
+      "status": "done",
+      "note": "mapped endpoints",
+      "ts": 1789380723372
+    },
+    {
+      "step": "analyze",
+      "status": "failed",
+      "note": "subagent died",
+      "ts": 1789380723372
+    }
+  ],
+  "created_ts": 1789380723372,
+  "updated_ts": 1789380723372
+}

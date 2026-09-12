@@ -1,0 +1,41 @@
+id: redis-commander-default-login
+
+info:
+  name: Redis Commander - Default Login
+  author: DhiyaneshDK
+  severity: high
+  description: |
+    Redis Commander Default Login credentials were discovered.
+  metadata:
+    verified: true
+    max-request: 1
+    shodan-query: title:"Redis Commander"
+  tags: default-login,redis,vuln
+
+variables:
+  username: admin
+  password: admin
+
+http:
+  - raw:
+      - |
+        POST /signin HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/x-www-form-urlencoded
+
+        username={{username}}&password={{password}}
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - '"bearerToken":'
+          - '"queryToken":'
+          - '"ok":true'
+        condition: and
+
+      - type: status
+        status:
+          - 200
+# digest: 4a0a00473045022100c0a9d85c73b51abe39d6c7fdf0dfad854f3351144096d1f7e9b4a447a50db0f702200ab860701e95f2ed0f8d6edb64e1d50e330b66f5a4ba5bb71938b58de6505a98:922c64590222798bb761d5b6d8e72950

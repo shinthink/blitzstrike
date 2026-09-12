@@ -1,0 +1,187 @@
+{
+  "_comment": "WAF detection signatures for waf_detector.py. header_signatures use presence_only=true (pattern='') or substring match. body_signatures use Python regex. Confidence is additive across independent signals, capped at 1.0.",
+  "header_signatures": [
+    {"header": "cf-ray",                 "pattern": "",            "waf": "Cloudflare",           "confidence": 0.90},
+    {"header": "server",                 "pattern": "cloudflare",  "waf": "Cloudflare",           "confidence": 0.80},
+    {"header": "cf-cache-status",        "pattern": "",            "waf": "Cloudflare",           "confidence": 0.55},
+    {"header": "cf-connecting-ip",       "pattern": "",            "waf": "Cloudflare",           "confidence": 0.50},
+    {"header": "cf-ipcountry",           "pattern": "",            "waf": "Cloudflare",           "confidence": 0.45},
+    {"header": "cf-mitigated",           "pattern": "",            "waf": "Cloudflare",           "confidence": 0.85},
+    {"header": "set-cookie",             "pattern": "__cfduid",    "waf": "Cloudflare",           "confidence": 0.70},
+    {"header": "set-cookie",             "pattern": "cf_clearance","waf": "Cloudflare",           "confidence": 0.85},
+    {"header": "x-cdn",                  "pattern": "cloudflare",  "waf": "Cloudflare",           "confidence": 0.80},
+
+    {"header": "x-amzn-waf-action",      "pattern": "",            "waf": "AWS WAF",              "confidence": 0.95},
+    {"header": "x-amz-cf-id",            "pattern": "",            "waf": "AWS CloudFront",       "confidence": 0.65},
+    {"header": "server",                 "pattern": "awselb",      "waf": "AWS ALB WAF",          "confidence": 0.70},
+    {"header": "server",                 "pattern": "awsalb",      "waf": "AWS ALB WAF",          "confidence": 0.70},
+    {"header": "x-cache",                "pattern": "error from cloudfront", "waf": "AWS CloudFront", "confidence": 0.65},
+    {"header": "x-amzn-requestid",       "pattern": "",            "waf": "AWS WAF",              "confidence": 0.30},
+
+    {"header": "x-akamai-transformed",   "pattern": "",            "waf": "Akamai",               "confidence": 0.90},
+    {"header": "x-akamai-request-id",    "pattern": "",            "waf": "Akamai",               "confidence": 0.85},
+    {"header": "akamai-origin-hop",      "pattern": "",            "waf": "Akamai",               "confidence": 0.85},
+    {"header": "x-check-cacheable",      "pattern": "",            "waf": "Akamai",               "confidence": 0.60},
+    {"header": "x-true-cache-key",       "pattern": "",            "waf": "Akamai",               "confidence": 0.55},
+    {"header": "server",                 "pattern": "akamaighost", "waf": "Akamai",               "confidence": 0.85},
+    {"header": "x-akamai-edgescape",     "pattern": "",            "waf": "Akamai",               "confidence": 0.80},
+
+    {"header": "x-iinfo",                "pattern": "",            "waf": "Imperva Incapsula",    "confidence": 0.90},
+    {"header": "x-cdn",                  "pattern": "imperva",     "waf": "Imperva Incapsula",    "confidence": 0.90},
+    {"header": "x-imperva-id",           "pattern": "",            "waf": "Imperva Incapsula",    "confidence": 0.90},
+    {"header": "set-cookie",             "pattern": "visid_incap", "waf": "Imperva Incapsula",    "confidence": 0.90},
+    {"header": "set-cookie",             "pattern": "incap_ses",   "waf": "Imperva Incapsula",    "confidence": 0.90},
+    {"header": "set-cookie",             "pattern": "nlbi_",       "waf": "Imperva Incapsula",    "confidence": 0.85},
+    {"header": "x-cdn",                  "pattern": "incapsula",   "waf": "Imperva Incapsula",    "confidence": 0.90},
+
+    {"header": "x-sucuri-id",            "pattern": "",            "waf": "Sucuri",               "confidence": 0.90},
+    {"header": "x-sucuri-cache",         "pattern": "",            "waf": "Sucuri",               "confidence": 0.85},
+    {"header": "x-protected-by",         "pattern": "sucuri",      "waf": "Sucuri",               "confidence": 0.85},
+    {"header": "server",                 "pattern": "sucuri",      "waf": "Sucuri",               "confidence": 0.80},
+    {"header": "x-cdn",                  "pattern": "sucuri",      "waf": "Sucuri",               "confidence": 0.85},
+
+    {"header": "x-modsec",              "pattern": "",            "waf": "ModSecurity",           "confidence": 0.95},
+    {"header": "server",                "pattern": "mod_security","waf": "ModSecurity",           "confidence": 0.80},
+    {"header": "server",                "pattern": "modsecurity", "waf": "ModSecurity",           "confidence": 0.80},
+    {"header": "x-modsec-intercepted",  "pattern": "",            "waf": "ModSecurity",           "confidence": 0.95},
+
+    {"header": "f5-request-id",          "pattern": "",            "waf": "F5 BIG-IP ASM",        "confidence": 0.90},
+    {"header": "x-wa-info",             "pattern": "",            "waf": "F5 BIG-IP ASM",        "confidence": 0.85},
+    {"header": "x-cnection",            "pattern": "",            "waf": "F5 BIG-IP ASM",        "confidence": 0.55},
+    {"header": "server",                "pattern": "bigip",       "waf": "F5 BIG-IP ASM",        "confidence": 0.80},
+    {"header": "set-cookie",            "pattern": "bigipserver", "waf": "F5 BIG-IP ASM",        "confidence": 0.85},
+    {"header": "set-cookie",            "pattern": "ts0",         "waf": "F5 BIG-IP ASM",        "confidence": 0.55},
+    {"header": "x-forwarded-for",       "pattern": "bigip",       "waf": "F5 BIG-IP ASM",        "confidence": 0.50},
+
+    {"header": "x-fw-hash",             "pattern": "",            "waf": "Fortinet FortiWeb",    "confidence": 0.90},
+    {"header": "x-fw-server",           "pattern": "",            "waf": "Fortinet FortiWeb",    "confidence": 0.90},
+    {"header": "server",                "pattern": "fortiweb",    "waf": "Fortinet FortiWeb",    "confidence": 0.85},
+    {"header": "set-cookie",            "pattern": "fortiwafsid", "waf": "Fortinet FortiWeb",    "confidence": 0.90},
+    {"header": "x-fw-connection",       "pattern": "",            "waf": "Fortinet FortiWeb",    "confidence": 0.80},
+
+    {"header": "server",                "pattern": "barracuda",   "waf": "Barracuda WAF",        "confidence": 0.80},
+    {"header": "set-cookie",            "pattern": "barra_counter_session", "waf": "Barracuda WAF", "confidence": 0.90},
+    {"header": "set-cookie",            "pattern": "barracuda_",  "waf": "Barracuda WAF",        "confidence": 0.85},
+    {"header": "x-barracuda-url",       "pattern": "",            "waf": "Barracuda WAF",        "confidence": 0.90},
+
+    {"header": "server",                "pattern": "netscaler",   "waf": "Citrix NetScaler",     "confidence": 0.80},
+    {"header": "x-ns-clientip",         "pattern": "",            "waf": "Citrix NetScaler",     "confidence": 0.85},
+    {"header": "ns-cache-hits",         "pattern": "",            "waf": "Citrix NetScaler",     "confidence": 0.75},
+    {"header": "via",                   "pattern": "netscaler",   "waf": "Citrix NetScaler",     "confidence": 0.70},
+    {"header": "x-citrix-via",          "pattern": "",            "waf": "Citrix NetScaler",     "confidence": 0.90},
+
+    {"header": "x-azure-ref",           "pattern": "",            "waf": "Azure Front Door",     "confidence": 0.80},
+    {"header": "x-fd-healthprobe",      "pattern": "",            "waf": "Azure Front Door",     "confidence": 0.70},
+    {"header": "x-msedge-ref",          "pattern": "",            "waf": "Azure WAF",            "confidence": 0.75},
+    {"header": "x-azure-requestid",     "pattern": "",            "waf": "Azure Front Door",     "confidence": 0.65},
+    {"header": "x-ms-request-id",       "pattern": "",            "waf": "Azure WAF",            "confidence": 0.45},
+
+    {"header": "x-fastly-request-id",   "pattern": "",            "waf": "Fastly",               "confidence": 0.80},
+    {"header": "fastly-restarts",        "pattern": "",            "waf": "Fastly",               "confidence": 0.75},
+    {"header": "x-served-by",           "pattern": "cache-",      "waf": "Fastly",               "confidence": 0.50},
+    {"header": "x-timer",               "pattern": "S",           "waf": "Fastly",               "confidence": 0.35},
+
+    {"header": "x-wallarm-node",        "pattern": "",            "waf": "Wallarm",              "confidence": 0.95},
+    {"header": "x-wallarm-waf",         "pattern": "",            "waf": "Wallarm",              "confidence": 0.95},
+
+    {"header": "x-reblaze-protection",  "pattern": "",            "waf": "Reblaze",              "confidence": 0.95},
+    {"header": "server",                "pattern": "reblaze",     "waf": "Reblaze",              "confidence": 0.85},
+    {"header": "rbzid",                 "pattern": "",            "waf": "Reblaze",              "confidence": 0.85},
+
+    {"header": "x-sqreen-response",     "pattern": "",            "waf": "Sqreen",               "confidence": 0.90},
+    {"header": "x-protected-by",        "pattern": "sqreen",      "waf": "Sqreen",               "confidence": 0.90},
+
+    {"header": "x-sl-compstate",        "pattern": "",            "waf": "Radware AppWall",      "confidence": 0.75},
+    {"header": "x-rdwr-request-id",     "pattern": "",            "waf": "Radware AppWall",      "confidence": 0.85},
+    {"header": "server",                "pattern": "appwall",     "waf": "Radware AppWall",      "confidence": 0.80},
+
+    {"header": "x-cwaf",                "pattern": "",            "waf": "Comodo WAF",           "confidence": 0.95},
+    {"header": "server",                "pattern": "comodo",      "waf": "Comodo WAF",           "confidence": 0.70},
+
+    {"header": "x-denyall",             "pattern": "",            "waf": "DenyAll rWeb",         "confidence": 0.90},
+    {"header": "server",                "pattern": "denyall",     "waf": "DenyAll rWeb",         "confidence": 0.80},
+
+    {"header": "server",                "pattern": "safedog",     "waf": "SafeDog",              "confidence": 0.80},
+    {"header": "x-powered-by-safedog",  "pattern": "",            "waf": "SafeDog",              "confidence": 0.90},
+
+    {"header": "server",                "pattern": "yunsuo",      "waf": "Yunsuo WAF",           "confidence": 0.80},
+    {"header": "yd-page-id",            "pattern": "",            "waf": "Yunsuo WAF",           "confidence": 0.85},
+
+    {"header": "x-protected-by",        "pattern": "armor",       "waf": "Armor Defense",        "confidence": 0.80},
+    {"header": "x-armor-tag",           "pattern": "",            "waf": "Armor Defense",        "confidence": 0.90},
+
+    {"header": "server",                "pattern": "pepperminty", "waf": "Palo Alto Prisma",     "confidence": 0.70},
+    {"header": "x-pan-waf",             "pattern": "",            "waf": "Palo Alto Prisma",     "confidence": 0.95},
+
+    {"header": "x-hw",                  "pattern": "",            "waf": "StackPath",            "confidence": 0.60},
+    {"header": "x-hw-health",           "pattern": "",            "waf": "StackPath",            "confidence": 0.75},
+
+    {"header": "x-waf-event-info",      "pattern": "",            "waf": "Generic WAF",          "confidence": 0.65},
+    {"header": "x-denied-reason",       "pattern": "",            "waf": "Generic WAF",          "confidence": 0.65},
+    {"header": "x-denied-by",           "pattern": "",            "waf": "Generic WAF",          "confidence": 0.65},
+    {"header": "x-security-threat",     "pattern": "",            "waf": "Generic WAF",          "confidence": 0.70},
+    {"header": "x-blocked-by",          "pattern": "waf",         "waf": "Generic WAF",          "confidence": 0.75},
+    {"header": "x-block-reason",        "pattern": "",            "waf": "Generic WAF",          "confidence": 0.65},
+    {"header": "x-rejected-by",         "pattern": "",            "waf": "Generic WAF",          "confidence": 0.60},
+    {"header": "x-request-blocked",     "pattern": "",            "waf": "Generic WAF",          "confidence": 0.70}
+  ],
+
+  "body_signatures": [
+    {"pattern": "ray id:\\s*[0-9a-f]{16}",                                      "waf": "Cloudflare",        "confidence": 0.90},
+    {"pattern": "error\\s+1[0-9]{3}\\s+ray\\s+id",                             "waf": "Cloudflare",        "confidence": 0.90},
+    {"pattern": "attention required!\\s*\\|\\s*cloudflare",                     "waf": "Cloudflare",        "confidence": 0.90},
+    {"pattern": "cloudflare",                                                    "waf": "Cloudflare",        "confidence": 0.45},
+
+    {"pattern": "incapsula incident id",                                         "waf": "Imperva Incapsula", "confidence": 0.95},
+    {"pattern": "_Incapsula_Resource_",                                          "waf": "Imperva Incapsula", "confidence": 0.90},
+    {"pattern": "incapsula\\.com",                                               "waf": "Imperva Incapsula", "confidence": 0.75},
+
+    {"pattern": "sucuri\\s+website\\s+firewall",                                "waf": "Sucuri",            "confidence": 0.95},
+    {"pattern": "sucuri\\.net/privacy/",                                        "waf": "Sucuri",            "confidence": 0.85},
+
+    {"pattern": "request blocked by barracuda",                                  "waf": "Barracuda WAF",     "confidence": 0.95},
+    {"pattern": "barracuda\\s+networks",                                         "waf": "Barracuda WAF",     "confidence": 0.70},
+
+    {"pattern": "this error was generated by mod_security",                      "waf": "ModSecurity",       "confidence": 0.95},
+    {"pattern": "modsecurity",                                                   "waf": "ModSecurity",       "confidence": 0.85},
+    {"pattern": "not acceptable!.*modsec",                                       "waf": "ModSecurity",       "confidence": 0.90},
+
+    {"pattern": "NAXSI_FMT",                                                     "waf": "NAXSI",             "confidence": 0.99},
+
+    {"pattern": "akamai.*?reference",                                            "waf": "Akamai",            "confidence": 0.70},
+    {"pattern": "reference #\\d+\\.\\d+\\.\\d+\\.\\d+",                         "waf": "Akamai",            "confidence": 0.80},
+    {"pattern": "you don't have permission to access.*akamai",                   "waf": "Akamai",            "confidence": 0.75},
+
+    {"pattern": "aws\\s*waf",                                                    "waf": "AWS WAF",           "confidence": 0.85},
+
+    {"pattern": "generated by wordfence",                                        "waf": "Wordfence",         "confidence": 0.99},
+    {"pattern": "your access to this site has been limited.*wordfence",          "waf": "Wordfence",         "confidence": 0.95},
+    {"pattern": "blocked by wordfence",                                          "waf": "Wordfence",         "confidence": 0.95},
+
+    {"pattern": "microsoft azure application gateway",                           "waf": "Azure WAF",         "confidence": 0.85},
+    {"pattern": "the request is blocked\\.",                                     "waf": "Azure WAF",         "confidence": 0.45},
+
+    {"pattern": "the requested url was rejected.*please consult with your administrator", "waf": "F5 BIG-IP ASM", "confidence": 0.85},
+    {"pattern": "your support id is:\\s*[0-9]{10,}",                            "waf": "F5 BIG-IP ASM",    "confidence": 0.80},
+
+    {"pattern": "reblaze\\.com",                                                 "waf": "Reblaze",           "confidence": 0.75},
+    {"pattern": "this connection was blocked by reblaze",                        "waf": "Reblaze",           "confidence": 0.95},
+
+    {"pattern": "comodo\\s+web\\s+application\\s+firewall",                     "waf": "Comodo WAF",        "confidence": 0.90},
+
+    {"pattern": "radware.*?appwall",                                             "waf": "Radware AppWall",   "confidence": 0.90},
+    {"pattern": "blocked by radware",                                            "waf": "Radware AppWall",   "confidence": 0.90},
+
+    {"pattern": "dotnetsecurityexception",                                       "waf": "Generic WAF",       "confidence": 0.55},
+    {"pattern": "<title>access\\s+denied</title>",                              "waf": "Generic WAF",       "confidence": 0.40},
+    {"pattern": "this request has been blocked for security",                    "waf": "Generic WAF",       "confidence": 0.65},
+    {"pattern": "request\\s+rejected\\s+by\\s+\\w+\\s+waf",                    "waf": "Generic WAF",       "confidence": 0.75},
+    {"pattern": "blocked\\s+by\\s+(security|firewall|waf|protection)",          "waf": "Generic WAF",       "confidence": 0.55},
+    {"pattern": "your request has been blocked due to a potential threat",       "waf": "Generic WAF",       "confidence": 0.65},
+    {"pattern": "security violation detected",                                   "waf": "Generic WAF",       "confidence": 0.60},
+    {"pattern": "attack signature detected",                                     "waf": "Generic WAF",       "confidence": 0.65}
+  ],
+
+  "block_status_codes": [403, 406, 412, 429, 501, 999],
+  "status_code_confidence": 0.15
+}

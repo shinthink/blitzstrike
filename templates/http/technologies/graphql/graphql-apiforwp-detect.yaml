@@ -1,0 +1,33 @@
+id: graphql-apiforwp-detect
+info:
+  name: Graphql apiforwp Detect
+  author: princechaddha
+  severity: info
+  reference:
+    - https://github.com/dolevf/graphw00f/blob/main/graphw00f/lib.py
+  tags: tech,graphql,wordpress,discovery
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/query"
+      - "{{BaseURL}}/"
+    body: '{"query":"query aa#aa { __typename }"}'
+    headers:
+      Content-Type: application/json
+    redirects: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 400
+
+      - type: word
+        words:
+          - "Unexpected token \"END\""
+        part: body
+# digest: 4a0a0047304502202bb8dc1dd574d9d34c81efa597619bfd73aca3f9f2fc2824ae4798f2f360f3b502210087d6286632f7178effeba86433e52d785297f01984bddc1610ca8fee139ede88:922c64590222798bb761d5b6d8e72950

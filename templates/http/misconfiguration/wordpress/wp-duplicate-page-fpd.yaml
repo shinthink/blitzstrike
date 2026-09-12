@@ -1,0 +1,29 @@
+id: wp-duplicate-page-fpd
+
+info:
+  name: WordPress Duplicate Page - Full Path Disclosure
+  author: DhiyaneshDk
+  severity: low
+  description: |
+    WordPress Plugin Duplicate Page files are publicly accessible without ABSPATH protection, exposing sensitive server path information through PHP error messages when accessed directly.
+  reference:
+    - https://wordpress.org/plugins/duplicate-page/
+  metadata:
+    verified: true
+    max-request: 1
+    publicwww-query: "/plugins/duplicate-page"
+  tags: wp,wordpress,wp-plugin,fpd,duplicate-page,misconfig,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/duplicate-page/duplicatepage.php"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_all(body, "Fatal error", "Uncaught Error") || contains_all(body, "Warning:", "failed to open stream")'
+          - 'status_code == 200 || status_code == 500'
+          - 'contains(body, "duplicate-page")'
+        condition: and
+# digest: 4a0a00473045022100aa67282a6cc74209fcc75ead5acc0eed7f66c189d62cb86c784f3fb92b7939a4022014953c93d6e268adeab0f36595feeb29771584161926086ef587f64ceba339af:922c64590222798bb761d5b6d8e72950

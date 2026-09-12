@@ -1,0 +1,33 @@
+id: graphql-java-detect
+info:
+  name: Graphql Java Detect
+  author: princechaddha
+  severity: info
+  reference:
+    - https://github.com/dolevf/graphw00f/blob/main/graphw00f/lib.py
+  tags: tech,graphql,java,discovery
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/query"
+      - "{{BaseURL}}/"
+    body: '{"query":"queryy { __typename }"}'
+    headers:
+      Content-Type: application/json
+    redirects: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 400
+
+      - type: word
+        words:
+          - "Invalid Syntax : offending token 'queryy'"
+        part: body
+# digest: 4a0a0047304502210093295a8fc11619e1a686b2bfd71af904364d941f0425d230fbbf45a8c3c128dd02200a8034f5f95c3838e8ac0bb1b60328d43b8fa6deb63a977e3564df9c7408403e:922c64590222798bb761d5b6d8e72950

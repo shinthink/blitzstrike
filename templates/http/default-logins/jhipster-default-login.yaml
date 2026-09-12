@@ -1,0 +1,53 @@
+id: jhipster-default-login
+
+info:
+  name: JHipster Platform - Default Login
+  author: ritikchaddha
+  severity: high
+  description: |
+    Detects the presence of JHipster application dashboard or API endpoints that allow authentication using default credentials. JHipster applications by default are often configured with the username "admin" and password "admin", potentially exposing application management interfaces or sensitive APIs if not changed after deployment.
+  reference:
+    - https://www.jhipster.tech/security/
+  metadata:
+    verified: true
+    max-request: 2
+    shodan-query: title:"JHipster"
+    fofa-query: title="JHipster"
+  tags: jhipster,default-login,exposure,misconfig,vuln
+
+http:
+  - raw:
+      - |
+        POST /api/authenticate HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+
+        {"username":"{{username}}","password":"{{password}}","rememberMe":false}
+
+    payloads:
+      username:
+        - "admin"
+        - "user"
+      password:
+        - "admin"
+        - "user"
+    attack: pitchfork
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - '{"id_token":"ey'
+
+      - type: word
+        part: header
+        words:
+          - "application/json"
+          - "Authorization: Bearer"
+        condition: and
+
+      - type: status
+        status:
+          - 200
+# digest: 4a0a00473045022100ef16f463b6a570534cbab913dd16b5532b7eae42c53c651d63bcf570dd9f2375022072445ab7efc9684805ab7f12cd99ec3c60b07b3088cd9e50e45fd4af8f1045a9:922c64590222798bb761d5b6d8e72950

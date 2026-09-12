@@ -1,0 +1,86 @@
+{
+  "_comment": "Model failure classification + recovery. More mature than a naive 'fall back on any error': each error class decides whether to retry (with exponential backoff), fall back, shrink scope, fix credentials, or abort — and the fallback chain forbids downgrading to a model that cannot do the task.",
+  "error_classes": [
+    {
+      "id": "rate_limit",
+      "signals": ["rate limit", "429", "too many requests", "rate limited"],
+      "retryable": true,
+      "backoff": true,
+      "action": "exponential backoff (wait base * factor^n before the n-th retry) on the SAME model; if it persists past max_retries, fall back to the next model"
+    },
+    {
+      "id": "quota_exceeded",
+      "signals": ["quota", "insufficient credits", "billing", "exceeded your current quota", "free usage limit"],
+      "retryable": false,
+      "backoff": false,
+      "action": "switch provider or model — never retry the same model, it will not succeed"
+    },
+    {
+      "id": "context_length",
+      "signals": ["context length", "too many tokens", "maximum context", "token limit", "context window"],
+      "retryable": false,
+      "backoff": false,
+      "action": "shrink the scope (one file, one sink class) or fall back to a longer-context model — retrying the same prompt will fail again"
+    },
+    {
+      "id": "timeout",
+      "signals": ["timeout", "timed out", "took too long"],
+      "retryable": true,
+      "backoff": true,
+      "action": "retry once with a smaller scope; if it persists, fall back to the next model"
+    },
+    {
+      "id": "model_unavailable",
+      "signals": ["model not found", "unavailable", "overloaded", "not available", "model down"],
+      "retryable": true,
+      "backoff": true,
+      "action": "retry with backoff, then fall back to the next model in the chain"
+    },
+    {
+      "id": "auth_error",
+      "signals": ["401", "unauthorized", "invalid api key", "authentication", "invalid key"],
+      "retryable": false,
+      "backoff": false,
+      "action": "fix the credentials — neither retry nor fall back will help"
+    },
+    {
+      "id": "connection_error",
+      "signals": ["connection", "network", "ECONNREFUSED", "ENOTFOUND", "ETIMEDOUT", "socket"],
+      "retryable": true,
+      "backoff": true,
+      "action": "retry with backoff; if persistent, fall back to the next model"
+    },
+    {
+      "id": "server_error",
+      "signals": ["500", "502", "503", "504", "internal server error", "server error", "bad gateway"],
+      "retryable": true,
+      "backoff": true,
+      "action": "retry with backoff; if persistent, fall back to the next model"
+    },
+    {
+      "id": "permission_denied",
+      "signals": ["permission", "forbidden", "403", "not allowed"],
+      "retryable": false,
+      "backoff": false,
+      "action": "fix the permission or scope — neither retry nor fall back will help"
+    },
+    {
+      "id": "message_aborted",
+      "signals": ["aborted", "cancelled", "interrupted", "abort"],
+      "retryable": true,
+      "backoff": false,
+      "action": "retry immediately — the abort is likely a transient signal, not a model failure"
+    }
+  ],
+  "fallback_chain": [
+    "prefer the same provider's fallback model first (e.g. deepseek-v4-pro -> deepseek-v4-flash)",
+    "then a different provider with the same capability",
+    "never fall back to a model that cannot do the task (do not send deep reasoning to a small model)"
+  ],
+  "backoff": {
+    "base_seconds": 2,
+    "factor": 2,
+    "max_retries": 3,
+    "note": "wait base * factor^n seconds before the n-th retry; give up (or fall back) after max_retries"
+  }
+}

@@ -1,0 +1,36 @@
+id: traggo-default-login
+
+info:
+  name: Traggo - Default Login
+  author: 0x_Akoko
+  severity: high
+  description: |
+    Detected Traggo time tracking application was found using default admin credentials.
+  reference:
+    - https://traggo.net/first-login/
+  metadata:
+    max-request: 1
+    verified: true
+  tags: traggo,default-login,time-tracking,vuln
+
+variables:
+  username: "admin"
+  password: "admin"
+
+http:
+  - raw:
+      - |
+        POST /graphql HTTP/1.1
+        Host: {{Hostname}}
+        Content-Type: application/json
+
+        {"operationName":"Login","variables":{"name":"{{username}}","pass":"{{password}}","deviceType":"ShortExpiry"},"query":"mutation Login($name: String!, $pass: String!, $deviceType: DeviceType!) {\n  login(username: $name, pass: $pass, deviceName: \"web ui\", type: $deviceType, cookie: true) {\n    user {\n      id\n      name\n      admin\n      __typename\n    }\n    __typename\n  }\n}\n"}
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'contains(set_cookie, "traggo=")'
+          - 'contains_all(body, "name\":\"admin", "admin\":true")'
+        condition: and
+# digest: 4b0a00483046022100a7cca5fa8455a264b22479840ac321208d205649a2bfb84a6dad9846c34d7c7a022100ead680475cb06614eb26c65f52ca90362068ff805021563564ce810002355d62:922c64590222798bb761d5b6d8e72950

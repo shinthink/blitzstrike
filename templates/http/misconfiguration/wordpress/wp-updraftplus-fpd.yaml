@@ -1,0 +1,35 @@
+id: wp-updraftplus-fpd
+
+info:
+  name: WordPress UpdraftPlus - Full Path Disclosure
+  author: DhiyaneshDk
+  severity: low
+  description: |
+    WordPress Plugin UpdraftPlus files are publicly accessible without ABSPATH protection, exposing sensitive server path information through PHP error messages when accessed directly.
+  reference:
+    - https://wordpress.org/plugins/updraftplus/
+  metadata:
+    verified: true
+    max-request: 1
+    fofa-query: body="/wp-content/plugins/updraftplus"
+  tags: wp,wordpress,wp-plugin,fpd,updraftplus,misconfig,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/updraftplus/admin.php"
+      - "{{BaseURL}}/wp-content/plugins/updraftplus/class-updraftplus.php"
+      - "{{BaseURL}}/wp-content/plugins/updraftplus/restorer.php"
+      - "{{BaseURL}}/wp-content/plugins/updraftplus/backup.php"
+      - "{{BaseURL}}/wp-content/plugins/updraftplus/includes/class-commands.php"
+
+    stop-at-first-match: true
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_all(body, "Fatal error", "Uncaught Error") || contains_all(body, "Warning:", "failed to open stream")'
+          - 'status_code == 200 || status_code == 500'
+          - 'contains(body, "updraftplus")'
+        condition: and
+# digest: 4a0a004730450220682ce8ff70a09ee197529726833cb7e6808747bc7cfdffd75763ef148260633b022100c65d333e5a22106ee7a7012ea41b58ab42048f5ebb7bd4d02de0d32722891643:922c64590222798bb761d5b6d8e72950

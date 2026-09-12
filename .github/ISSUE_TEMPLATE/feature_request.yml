@@ -1,0 +1,17 @@
+name: Feature request
+description: Suggest a feature for BlitzStrike
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What should BlitzStrike do?
+    validations:
+      required: true
+  - type: textarea
+    id: usecase
+    attributes:
+      label: Use case
+      description: Why is this valuable, and where does it fit in the flow?

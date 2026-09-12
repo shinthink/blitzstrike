@@ -1,0 +1,1478 @@
+{
+  "21": {
+    "service": "FTP",
+    "vulns": [
+      "FTP anonymous access (ftp:anonymous)",
+      "FTP cleartext credentials exposure",
+      "CVE-2021-41773 - Apache path traversal (ProFTPD)",
+      "CVE-2020-9951 - Pure-FTPd stack buffer overflow",
+      "FTP bounce attack (PORT cmd to scan internal ports)",
+      "CVE-2011-1546 - gFTP arbitrary file overwrite"
+    ],
+    "tools": [
+      "nmap --script ftp* -p 21",
+      "hydra -t 4 -V -u -L users.txt -P passwords.txt ftp://target",
+      "dirbftp ftp://target",
+      "ftp -A target (anonymous login)",
+      "exploit/multi/ftp/proftpd_modcopy_rce"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Use PORT command to scan internal services via bounce attack"
+  },
+  "22": {
+    "service": "SSH",
+    "vulns": [
+      "SSH weak keys (RSA < 2048, DSA)",
+      "CVE-2024-3094 - xz backdoor (liblzma)",
+      "SSH brute force (user enumeration via timing)",
+      "SSH key disclosure via misconfigured permissions",
+      "CVE-2016-6210 - SSH slowloris (authentication timing)",
+      "SSH version detection for known vulnerabilities",
+      "CVE-2015-5600 - libssh authentication bypass"
+    ],
+    "tools": [
+      "ssh-audit target 22",
+      "ncrack -p 22 -U users.txt -P passwords.txt --delay 1s",
+      "hydra -t 4 -V ssh://target",
+      "medusa -h target -u admin -P passwords.txt -M ssh",
+      "nmap --script ssh2-enum-algos -p 22 target"
+    ],
+    "severity": "HIGH",
+    "notes": "Check for version strings exposing vulnerable implementations"
+  },
+  "23": {
+    "service": "Telnet",
+    "vulns": [
+      "Telnet cleartext credentials",
+      "Telnet anonymous login",
+      "CVE-2013-2223 - Ciscotelnet password disclosure",
+      "Telnet echo mode information disclosure"
+    ],
+    "tools": [
+      "nmap --script telnet* -p 23",
+      "hydra -p telnet target",
+      "tnftp target",
+      "msfconsole -x 'use auxiliary/scanner/telnet/telnet_login; set RHOSTS target; run'"
+    ],
+    "severity": "HIGH",
+    "notes": "Rarely used - indicates outdated/legacy systems"
+  },
+  "25": {
+    "service": "SMTP",
+    "vulns": [
+      "SMTP relay (open relay)",
+      "SMTP user enumeration (VRFY/EXPN commands)",
+      "CVE-2020-28017 - Exim RCE (Callout daemon)",
+      "CVE-2019-15845 - Rspamd RCE",
+      "Email header injection",
+      "SMTP bounce attack"
+    ],
+    "tools": [
+      "nmap --script smtp* -p 25",
+      "smtp-user-enum -M VRFY -U users.txt -t target",
+      "hydra -L users.txt -P passwords.txt smtp://target",
+      "swaks --to postmaster@target --from admin@target --server target"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Open relay allows spam abuse - critical for mail servers"
+  },
+  "53": {
+    "service": "DNS",
+    "vulns": [
+      "DNS zone transfer (AXFR)",
+      "DNS cache poisoning (CVE-2008-1447)",
+      "DNSSEC issues (NSEC walker, NSEC3 rainbow table)",
+      "DNS tunneling for C2",
+      "DNS放大攻击 (amplification)",
+      "Subdomain enumeration via AXFR"
+    ],
+    "tools": [
+      "dig axfr @target domain.com",
+      "fierce -dns domain.com -dnsserver target",
+      "dnsrecon -d domain.com -n target -t axfr,brute",
+      "nmap --script dns-zone-transfer -p 53 target",
+      "sublist3r -d domain.com"
+    ],
+    "severity": "MEDIUM",
+    "notes": "AXFR should be restricted to authorized servers only"
+  },
+  "69": {
+    "service": "TFTP",
+    "vulns": [
+      "TFTP anonymous read access",
+      "TFTP write access (file overwrite)",
+      "TFTP buffer overflow",
+      "Network device firmware extraction"
+    ],
+    "tools": [
+      "nmap --script tftp* -p 69",
+      "wget tftp://target/firmware.bin",
+      "tftp -i target get config.txt",
+      "medusa -h target -U users.txt -P passwords.txt -M tftp"
+    ],
+    "severity": "HIGH",
+    "notes": "Common on network devices - firmware exposure risk"
+  },
+  "67": {
+    "service": "DHCP",
+    "vulns": [
+      "DHCP starvation (exhaust IP pool)",
+      "DHCP rogue server",
+      "DHCP options injection"
+    ],
+    "tools": [
+      "dhcpig -i eth0 -d target -v",
+      "nmap --script dhcp-discover -p 67 target"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Layer 2 attack - requires network access"
+  },
+  "68": {
+    "service": "BOOTP",
+    "vulns": [
+      "BOOTP client enumeration",
+      "BOOTP rogue server"
+    ],
+    "tools": [],
+    "severity": "LOW",
+    "notes": "Legacy protocol - often alongside DHCP"
+  },
+  "80": {
+    "service": "HTTP",
+    "vulns": [
+      "HTTP methods (PUT, DELETE, TRACE, CONNECT)",
+      "Directory listing enabled",
+      "HTTP/2 stream confusion",
+      "HTTP request smuggling (CL.TE, TE.CL)",
+      "HTTP parameter pollution",
+      "HTTP/2 rapid reset (CVE-2023-44487)"
+    ],
+    "tools": [
+      "nmap --script http* -p 80",
+      "gobuster dir -u http://target -w words.txt",
+      " eyewitness -d -u http://target --headless",
+      "wfuzz -c -w words.txt http://target/FUZZ",
+      "nuclei -u http://target -t cves/"
+    ],
+    "severity": "LOW",
+    "notes": "Standard web - combine with full web app scan"
+  },
+  "110": {
+    "service": "POP3",
+    "vulns": [
+      "POP3 cleartext credentials",
+      "POP3 login brute force",
+      "POP3 STLS downgrade attack"
+    ],
+    "tools": [
+      "nmap --script pop3* -p 110",
+      "hydra -L users.txt -P passwords.txt pop3://target",
+      "msfconsole -x 'use auxiliary/scanner/pop3/pop3_login; run'"
+    ],
+    "severity": "LOW",
+    "notes": "Insecure protocol - prefer POP3S (995)"
+  },
+  "111": {
+    "service": "RPCBind",
+    "vulns": [
+      "RPC service enumeration",
+      "NFS share enumeration",
+      "RPC method disclosure",
+      "CVE-2017-8779 - RPCB remote code execution"
+    ],
+    "tools": [
+      "rpcinfo -p target",
+      "nmap --script rpcbind -p 111",
+      "showmount -e target",
+      "nmap --script rpc-grind -p 111"
+    ],
+    "severity": "HIGH",
+    "notes": "Find NFS, NIS, and other RPC services"
+  },
+  "113": {
+    "service": "IDENT",
+    "vulns": [
+      "IDENT username enumeration",
+      "IDENT protocol information disclosure"
+    ],
+    "tools": [
+      "nmap --script identd -p 113",
+      "echo '113,22' | nc target 113"
+    ],
+    "severity": "LOW",
+    "notes": "Often returns dummy data - low value"
+  },
+  "123": {
+    "service": "NTP",
+    "vulns": [
+      "NTP monlist amplification (CVE-2013-5211)",
+      "NTP Kiss-o'-Death",
+      "NTP version disclosure"
+    ],
+    "tools": [
+      "ntpdc -c monlist target",
+      "nmap --script ntp-info -p 123",
+      "autodetect -p ntp target"
+    ],
+    "severity": "LOW",
+    "notes": "Amplification attack vector for DDoS"
+  },
+  "135": {
+    "service": "MS-RPC",
+    "vulns": [
+      "MS-RPC endpointmapper enumeration",
+      "MS-SMBLoris RCE (CVE-2017-0144)",
+      "MS-RPC DCOM abuse",
+      "MS-RPC endpoint exposure"
+    ],
+    "tools": [
+      "nmap --script msrpc-enum -p 135",
+      "impacket-rpcclient -U '' target",
+      "crackmapexec rpcclient -u '' -p '' target"
+    ],
+    "severity": "HIGH",
+    "notes": "Windows-specific - gateway to SMB/DCOM attacks"
+  },
+  "137": {
+    "service": "NetBIOS-NS",
+    "vulns": [
+      "NetBIOS name enumeration",
+      "NetBIOS workstation info disclosure",
+      "NetBIOS host name extraction"
+    ],
+    "tools": [
+      "nmap --script nbstat -p 137",
+      "nbtscan target",
+      "hydra -L users.txt -P passwords.txt -p 137 target"
+    ],
+    "severity": "LOW",
+    "notes": "Windows-specific - part of SMB stack"
+  },
+  "138": {
+    "service": "NetBIOS-DGM",
+    "vulns": [
+      "NetBIOS datagram service disclosure"
+    ],
+    "tools": [],
+    "severity": "LOW",
+    "notes": "Rarely used"
+  },
+  "139": {
+    "service": "NetBIOS-SSN",
+    "vulns": [
+      "SMB version enumeration",
+      "SMB login brute force",
+      "SMB NULL session",
+      "EternalBlue (CVE-2017-0144)",
+      "SMB reflection attack (CVE-2020-1379)",
+      "SMB signing bypass"
+    ],
+    "tools": [
+      "nmap --script smb* -p 139",
+      "crackmapexec smb target -u '' -p ''",
+      "impacket-smbclient -U '' target",
+      "smbclient -L target -N"
+    ],
+    "severity": "HIGH",
+    "notes": "Windows file sharing - critical for lateral movement"
+  },
+  "143": {
+    "service": "IMAP",
+    "vulns": [
+      "IMAP cleartext credentials",
+      "IMAP login brute force",
+      "IMAP IDLE command abuse",
+      "IMAP literal+ response overflow"
+    ],
+    "tools": [
+      "nmap --script imap* -p 143",
+      "hydra -L users.txt -P passwords.txt imap://target",
+      "msfconsole -x 'use auxiliary/scanner/imap/imap_login; run'"
+    ],
+    "severity": "LOW",
+    "notes": "Insecure protocol - prefer IMAPS (993)"
+  },
+  "161": {
+    "service": "SNMP",
+    "vulns": [
+      "SNMP v1/v2c community strings (public/private)",
+      "SNMP v3 authentication bypass",
+      "CVE-2021-43297 - SNMP RCE (cisco snmpd)",
+      "SNMP info disclosure (sysDescr, sysName)",
+      "MIB tree walking",
+      "SNMP write access"
+    ],
+    "tools": [
+      "onesixtyone -c /usr/share/doc/snmp-tools/examples/common/snmp_conf.txt target",
+      "snmpwalk -v2c -c public target",
+      "snmpbulkwalk -v2c -c public target 1.3.6.1.2.1.25.4.2.1.2",
+      "medusa -h target -u '' -P communities.txt -M snmp"
+    ],
+    "severity": "HIGH",
+    "notes": "SNMPv3 with auth+priv is secure"
+  },
+  "162": {
+    "service": "SNMP Trap",
+    "vulns": [
+      "SNMP trap injection",
+      "Trap receiver info disclosure"
+    ],
+    "tools": [],
+    "severity": "LOW",
+    "notes": "通常监听 trap - not a service"
+  },
+  "389": {
+    "service": "LDAP",
+    "vulns": [
+      "LDAP anonymous bind",
+      "LDAP enumeration (users, groups, GPOs)",
+      "LDAP injection",
+      "CVE-2020-14651 - Apache.directory LDAP RCE",
+      "Password spray via LDAP bindings",
+      "LDAP NTLM relay"
+    ],
+    "tools": [
+      "nmap --script ldap* -p 389",
+      "ldapsearch -h target -p 389 -x -b \"dc=target,dc=com\" \"(objectClass=*)\"",
+      "crackmapexec ldap target -u '' -p '' --users",
+      "impacket-ldapsearch -u '' -p '' -dc-ip target target"
+    ],
+    "severity": "HIGH",
+    "notes": "AD LM/NTLM hashes often exposed"
+  },
+  "443": {
+    "service": "HTTPS",
+    "vulns": [
+      "TLS version weakness (SSLv3, TLS 1.0/1.1)",
+      "CVE-2021-44228 - Log4Shell (if Java backend)",
+      "Heartbleed (CVE-2014-0160)",
+      "BEAST (CVE-2011-3389)",
+      "POODLE (CVE-2014-3566)",
+      "CRIME (CVE-2012-4929)",
+      "DROWN (CVE-2016-0800)",
+      "SWEET32 (CVE-2016-2183)",
+      "FREAK (CVE-2015-4000)",
+      "Logjam (CVE-2015-4000)",
+      "Certificate issues (self-signed, expired, mismatched)",
+      "HTTP Strict Transport Security (HSTS) missing",
+      "TLS downgrade attack",
+      "CVE-2023-44487 - HTTP/2 rapid reset"
+    ],
+    "tools": [
+      "nmap --script ssl* -p 443",
+      "testssl.sh --ricardonian target",
+      "sslscan target:443",
+      " Nikto -h https://target",
+      " Burp Suite + Active Scan"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Always scan with SSL/TLS tools"
+  },
+  "445": {
+    "service": "SMB",
+    "vulns": [
+      "SMB version enumeration",
+      "SMB NULL session",
+      "EternalBlue (CVE-2017-0144)",
+      "EternalRomance (CVE-2017-0144系列)",
+      "SMB reflection attack (CVE-2020-1379)",
+      "MS08-067 (CVE-2008-4250)",
+      "SMB signing requirements bypass",
+      "SMB share enumeration"
+    ],
+    "tools": [
+      "nmap --script smb* -p 445",
+      "crackmapexec smb target -u '' -p ''",
+      "impacket-smbclient -U '' target",
+      "smbclient -L target -N",
+      "msfconsole -x 'use auxiliary/scanner/smb/smb_version; run'"
+    ],
+    "severity": "HIGH",
+    "notes": "Windows file sharing - critical for lateral movement"
+  },
+  "512": {
+    "service": "Rexec",
+    "vulns": [
+      "Rexec cleartext credentials",
+      "Rexec command execution"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "notes": "Rarely used - legacy remote execution"
+  },
+  "513": {
+    "service": "Rlogin",
+    "vulns": [
+      "RloginWithout password access",
+      "Rlogin authentication bypass"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "notes": "Deprecated - use SSH instead"
+  },
+  "514": {
+    "service": "Rsh",
+    "vulns": [
+      "Rsh remote command execution",
+      "Rsh .rhosts authentication bypass"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "notes": "Deprecated - use SSH instead"
+  },
+  "515": {
+    "service": "LPD",
+    "vulns": [
+      "LPD remote print queue access",
+      "LPD job injection"
+    ],
+    "tools": [
+      "nmap --script lpd* -p 515"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Print service - often misconfigured"
+  },
+  "593": {
+    "service": "HTTP-RPC",
+    "vulns": [
+      "RPC over HTTP endpoint disclosure",
+      "DCOM over HTTP abuse"
+    ],
+    "tools": [
+      "nmap --script http-rpc-enum -p 593"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Windows RPC over HTTP"
+  },
+  "636": {
+    "service": "LDAPS",
+    "vulns": [
+      "LDAPS certificate issues",
+      "LDAP enumeration over TLS",
+      "LDAPS version downgrade"
+    ],
+    "tools": [
+      "nmap --script ldap* -p 636",
+      "ldapsearch -H ldaps://target -x -b \"dc=target,dc=com\" \"(objectClass=*)\""
+    ],
+    "severity": "HIGH",
+    "notes": "Secure LDAP - verify certificate validity"
+  },
+  "993": {
+    "service": "IMAPS",
+    "vulns": [
+      "IMAPS certificate issues",
+      "IMAPS login brute force"
+    ],
+    "tools": [
+      "nmap --script ssl-imap -p 993",
+      "hydra -L users.txt -P passwords.txt imaps://target"
+    ],
+    "severity": "LOW",
+    "notes": "Secure IMAP - better than plaintext IMAP"
+  },
+  "995": {
+    "service": "POP3S",
+    "vulns": [
+      "POP3S certificate issues",
+      "POP3S login brute force"
+    ],
+    "tools": [
+      "nmap --script ssl-pop3 -p 995",
+      "hydra -L users.txt -P passwords.txt pop3s://target"
+    ],
+    "severity": "LOW",
+    "notes": "Secure POP3 - better than plaintext POP3"
+  },
+  "1098": {
+    "service": "TSDS",
+    "vulns": [
+      "TSDS service enumeration",
+      "TSDS authentication bypass"
+    ],
+    "tools": [],
+    "severity": "LOW",
+    "notes": "RMI naming service"
+  },
+  "1099": {
+    "service": "RMI Registry",
+    "vulns": [
+      "RMI registry listing",
+      "RMI class loading",
+      "CVE-2016-3427 - RMI registry code execution",
+      "RMI endpoint exposure"
+    ],
+    "tools": [
+      "nmap --script rmi-enum -p 1099",
+      "ysoserial -p RMIRegistryReadAll -c 'whoami' target 1099"
+    ],
+    "severity": "HIGH",
+    "notes": "Java RMI - often exposes dangerous endpoints"
+  },
+  "1433": {
+    "service": "MSSQL",
+    "vulns": [
+      "MSSQL xp_cmdshell RCE",
+      "MSSQL authentication bypass",
+      "CVE-2020-0618 - MSSQL RCE (SQL Agent)",
+      "MSSQL linked server abuse",
+      "MSSQL TDS protocol issues",
+      "SQL injection in TDS interface",
+      "Weak MSSQL credentials"
+    ],
+    "tools": [
+      "nmap --script ms-sql* -p 1433",
+      "crackmapexec mssql target -u sa -p 'password'",
+      "impacket-mssqlclient -u sa -p 'password' target",
+      "sqlmap -u 'mssql://target' --risk=3 --level=5"
+    ],
+    "severity": "CRITICAL",
+    "notes": "SQL Server - xp_cmdshell is RCE gold"
+  },
+  "1494": {
+    "service": "ICA/Citrix",
+    "vulns": [
+      "ICA protocol enumeration",
+      "Citrix XenApp/XenDesktop access"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "notes": "Citrix presentation server"
+  },
+  "1521": {
+    "service": "Oracle",
+    "vulns": [
+      "Oracle TNS listener poisoning",
+      "Oracle default credentials (sys/system)",
+      "Oracle SQL injection",
+      "CVE-2020-14644 - Oracle WebLogic RCE",
+      "CVE-2012-3137 - Oracle TNS listener buffer overflow",
+      "Oracle TNS listener information disclosure",
+      "Oracle database enumeration"
+    ],
+    "tools": [
+      "nmap --script oracle* -p 1521",
+      "oscanner -S target -p 1521",
+      "tnscmd10g version -h target",
+      "tnscmd10g status -h target"
+    ],
+    "severity": "HIGH",
+    "notes": "Oracle TNS listener is attack surface"
+  },
+  "1723": {
+    "service": "PPTP",
+    "vulns": [
+      "PPTP authentication bypass (CVE-2012-1886)",
+      "PPTP MPPE key recovery",
+      "PPTP MS-CHAPv2 vulnerabilities"
+    ],
+    "tools": [
+      "nmap --script pptp* -p 1723"
+    ],
+    "severity": "HIGH",
+    "notes": "Deprecated - use IPsec/L2TP instead"
+  },
+  "1755": {
+    "service": "MS RDP",
+    "vulns": [
+      "RDP authentication bypass (CVE-2019-0708 BlueKeep)",
+      "RDP credential stuffing",
+      "RDP man-in-the-middle",
+      "RDP session hijacking"
+    ],
+    "tools": [
+      "nmap --script rdpeve -p 1755",
+      "ncrack -p 1755 -U users.txt -P passwords.txt",
+      "crackmapexec rdp target -u users.txt -p passwords.txt"
+    ],
+    "severity": "HIGH",
+    "notes": "Windows remote desktop - BlueKeep critical"
+  },
+  "1900": {
+    "service": "SSDP",
+    "vulns": [
+      "SSDP amplification (CVE-2013-5211)",
+      "SSDP device enumeration",
+      "UPnP service discovery"
+    ],
+    "tools": [
+      "nmap --script ssdp* -p 1900",
+      "ssdpdiscovery target",
+      "medusa -h target -p SSDP -L devices.txt"
+    ],
+    "severity": "MEDIUM",
+    "notes": "UPnP often exposes internal services"
+  },
+  "2049": {
+    "service": "NFS",
+    "vulns": [
+      "NFS share enumeration",
+      "NFS anonymous access",
+      "NFS export abuse",
+      "CVE-2019-17508 - NFSv4 ACL bypass"
+    ],
+    "tools": [
+      "showmount -e target",
+      "nmap --script nfs* -p 2049",
+      "rpcinfo -p target",
+      "mount -t nfs target:/exports /mnt"
+    ],
+    "severity": "HIGH",
+    "notes": "Linux/Unix file sharing - often overly permissive"
+  },
+  "2181": {
+    "service": "ZooKeeper",
+    "vulns": [
+      "ZooKeeper unauthenticated access",
+      "ZooKeeper ACL bypass",
+      "ZooKeeper data exposure"
+    ],
+    "tools": [
+      "nmap --script zookeeper* -p 2181",
+      "zkCli.sh -server target:2181",
+      "echo stat | nc target 2181"
+    ],
+    "severity": "HIGH",
+    "notes": "Distributed coordination - sensitive config often stored here"
+  },
+  "2375": {
+    "service": "Docker",
+    "vulns": [
+      "Docker daemon exposed (unauthenticated)",
+      "Docker container escape",
+      "CVE-2019-5736 - RunC container escape",
+      "Docker API abuse (container creation)",
+      "Docker socket exposure"
+    ],
+    "tools": [
+      "docker -H tcp://target:2375 ps",
+      "docker -H tcp://target:2375 images",
+      "docker -H tcp://target:2375 run -v /:/host alpine chroot /host sh"
+    ],
+    "severity": "CRITICAL",
+    "notes": "FULL HOST ACCESS - critical vulnerability"
+  },
+  "2376": {
+    "service": "Docker-TLS",
+    "vulns": [
+      "Docker TLS API exposed (mutual TLS)",
+      "Docker certificate theft",
+      "Docker TLS misconfiguration"
+    ],
+    "tools": [
+      "docker -H tcp://target:2376 info",
+      "docker --tlsverify --tlscert=... --tlskey=... -H target:2376 ps"
+    ],
+    "severity": "HIGH",
+    "notes": "TLS-protected but misconfigured certs are common"
+  },
+  "3306": {
+    "service": "MySQL",
+    "vulns": [
+      "CVE-2021-27928 - MySQL arbitrary file read",
+      "CVE-2021-27927 - MySQL command injection",
+      "MySQL UDF command execution",
+      "MySQL authentication bypass (CVE-2012-2122)",
+      "SQL injection in MySQL interface",
+      "Weak MySQL credentials",
+      "MySQL root default credentials",
+      "MySQL old_passwords downgrade"
+    ],
+    "tools": [
+      "nmap --script mysql* -p 3306",
+      "hydra -M mysql target",
+      "mysql -h target -u root -p",
+      "sqlmap -u mysql://target:3306"
+    ],
+    "severity": "CRITICAL",
+    "notes": "UDF injection can lead to RCE"
+  },
+  "3389": {
+    "service": "RDP",
+    "vulns": [
+      "BlueKeep (CVE-2019-0708)",
+      "GreyKeep (CVE-2019-1181)",
+      "BlueKeep 2 (CVE-2019-1182)",
+      "RDP brute force",
+      "RDP NLA bypass",
+      "RDP man-in-the-middle"
+    ],
+    "tools": [
+      "ncrack -p 3389 -U users.txt -P passwords.txt",
+      "crackmapexec rdp target -u users.txt -p passwords.txt",
+      "FreeRDP /v:target /u:admin /p:password"
+    ],
+    "severity": "HIGH",
+    "notes": "Windows remote desktop - multiple CVEs"
+  },
+  "3632": {
+    "service": "Distcc",
+    "vulns": [
+      "Distcc command execution",
+      "CVE-2004-2687 - Distcc remote code execution"
+    ],
+    "tools": [
+      "nmap --script distcc* -p 3632",
+      "dcc --version --target=target:3632"
+    ],
+    "severity": "HIGH",
+    "notes": "Distributed C/C++ compilation - often misconfigured"
+  },
+  "3690": {
+    "service": "SVN",
+    "vulns": [
+      "SVN repository enumeration",
+      "SVN .svn exposure",
+      "Source code disclosure"
+    ],
+    "tools": [
+      "nmap --script svn* -p 3690",
+      "svn checkout svn://target/repo",
+      "raop svn://target ."
+    ],
+    "severity": "HIGH",
+    "notes": "Source code exposure - sensitive data leak"
+  },
+  "5432": {
+    "service": "PostgreSQL",
+    "vulns": [
+      "CVE-2024-1597 - pgSQL injection",
+      "CVE-2023-1596 - PostgreSQL RCE (COPY TO/WRITE_FILE)",
+      "PostgreSQL UDF command execution",
+      "PostgreSQL authentication bypass",
+      "COPY command RCE (postgres_fdw)",
+      "pg_hba.conf misconfiguration",
+      "Postgres superuser enumeration"
+    ],
+    "tools": [
+      "nmap --script pgsql* -p 5432",
+      "hydra -M postgres target",
+      "psql -h target -U postgres",
+      "sqlmap -u postgresql://target:5432"
+    ],
+    "severity": "CRITICAL",
+    "notes": "COPY TO FILE can write webshell to filesystem"
+  },
+  "5601": {
+    "service": "Kibana",
+    "vulns": [
+      "CVE-2019-7609 - Kibana RCE (graphExplore)",
+      "Kibana unauthenticated access",
+      "Kibana dev_tools console",
+      "Kibana query injection"
+    ],
+    "tools": [
+      "nmap --script http-kibana* -p 5601",
+      "curl -s http://target:5601/api/status | jq .",
+      "curl -s http://target:5601/api/console/api_server/es_code_transpiler -X POST -d '{}'"
+    ],
+    "severity": "HIGH",
+    "notes": "Dev tools → arbitrary code execution"
+  },
+  "5672": {
+    "service": "AMQP",
+    "vulns": [
+      "AMQP authentication bypass",
+      "RabbitMQ management API access"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "notes": "Message queue - often exposes management"
+  },
+  "5900": {
+    "service": "VNC",
+    "vulns": [
+      "VNC authentication bypass (null password)",
+      "VNC weak passwords",
+      "VNC authentication bypass (CVE-2018-20845)",
+      "VNC screen capture",
+      "VNC clipboard theft"
+    ],
+    "tools": [
+      "nmap --script vnc* -p 5900",
+      "hydra -P passwords.txt vnc://target",
+      "vncviewer target:5900",
+      "crackmapexec vnc target -u '' -p ''"
+    ],
+    "severity": "HIGH",
+    "notes": "VNC server exposed - full desktop access"
+  },
+  "5984": {
+    "service": "CouchDB",
+    "vulns": [
+      "CouchDB unauthenticated access",
+      "CVE-2017-12636 - CouchDB RCE ( Erlang VM)",
+      "CVE-2017-12635 - CouchDB admin bypass ( ._users)",
+      "CouchDB replication abuse",
+      "CouchDB design document abuse"
+    ],
+    "tools": [
+      "nmap --script couchdb* -p 5984",
+      "curl http://target:5984/_all_dbs",
+      "curl -X PUT http://target:5984/_config/admins/admin -d '\"password\"'",
+      "couchpotato -u admin:password -t target"
+    ],
+    "severity": "HIGH",
+    "notes": "Erlang VM RCE - extremely dangerous"
+  },
+  "6379": {
+    "service": "Redis",
+    "vulns": [
+      "Redis unauthenticated access (default: no password)",
+      "Redis write crontab for RCE",
+      "Redis Lua sandbox escape (CVE-2022-24736)",
+      "Redis module loading RCE",
+      "Redis INFO disclosure",
+      "Redis mass assignment"
+    ],
+    "tools": [
+      "redis-cli -h target",
+      "nmap --script redis* -p 6379",
+      "echo -e '\\x2a1\\x244\\x2aping\\x240\\x24\\r\\n' | nc target 6379",
+      "redis-rdb-tools -c memory"
+    ],
+    "severity": "CRITICAL",
+    "notes": "Write webshell to /var/www or cron for RCE"
+  },
+  "6443": {
+    "service": "Kubernetes API",
+    "vulns": [
+      "Kubernetes API unauthenticated",
+      "Kubernetes pod exec/attach",
+      "K8s service account tokens exposure",
+      "CVE-2018-1002105 - K8s privilege escalation",
+      "Kubernetes RBAC abuse",
+      "Kubernetes secrets extraction"
+    ],
+    "tools": [
+      "kubectl --server=https://target:6443 --insecure-skip-tls-verify get nodes",
+      "curl -k https://target:6443/api/v1/nodes",
+      "kubescape scan --host https://target:6443"
+    ],
+    "severity": "CRITICAL",
+    "notes": "Full cluster compromise if unauthenticated"
+  },
+  "7001": {
+    "service": "WebLogic",
+    "vulns": [
+      "CVE-2020-14644 - WebLogic RCE",
+      "CVE-2020-14883 - WebLogic SSRF + RCE",
+      "CVE-2019-2725 - WebLogic RCE",
+      "CVE-2018-2894 - WebLogic SSRF",
+      "WebLogic T3 protocol abuse",
+      "WebLogic Console exposure"
+    ],
+    "tools": [
+      "nmap --script weblogic* -p 7001",
+      "ysoserial -p RCE-WebLogic -c 'whoami'",
+      "webexploit --url http://target:7001 --payload RCE"
+    ],
+    "severity": "CRITICAL",
+    "notes": "Java deserialization + T3 protocol exploitation"
+  },
+  "7002": {
+    "service": "WebLogic-TLS",
+    "vulns": [
+      "WebLogic T3S protocol abuse",
+      "WebLogic SSL issues"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "notes": "Encrypted WebLogic traffic"
+  },
+  "8000": {
+    "service": "Virtuoso",
+    "vulns": [
+      "Virtuoso unauthenticated access",
+      "Virtuoso SQL injection",
+      "Virtuoso stored procedure RCE"
+    ],
+    "tools": [
+      "nmap --script ldap* -p 8000",
+      "curl http://target:8000/sparql"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Ontology/semantic web database"
+  },
+  "8009": {
+    "service": "Apache JServ",
+    "vulns": [
+      "CVE-2020-1938 - Ghostcat (AJP)",
+      "Tomcat AJP injection",
+      "AJP file read/download",
+      "AJP include directive abuse"
+    ],
+    "tools": [
+      "nmap -p 8009 --script ajp*",
+      "ajpshooter.py -t target -p 8009 -f /WEB-INF/web.xml",
+      "java -jar AJP-Fuzzer.jar -u ajp://target:8009"
+    ],
+    "severity": "HIGH",
+    "notes": "AJP connector - read/modify Tomcat config"
+  },
+  "8080": {
+    "service": "HTTP-Alt",
+    "vulns": [
+      "HTTP Proxy unauthenticated access",
+      "Open proxy for internal scanning",
+      "CVE-2020-1938 - Tomcat AJP (if misconfigured)",
+      "Directory traversal",
+      "XXE injection",
+      "XXE via file upload"
+    ],
+    "tools": [
+      "nmap --script http* -p 8080",
+      "gobuster dir -u http://target:8080 -w words.txt",
+      "wfuzz -c -w words.txt http://target:8080/FUZZ"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Common alternative HTTP port - full web scan"
+  },
+  "8089": {
+    "service": "Splunk",
+    "vulns": [
+      "Splunk enterprise RCE (CVE-2023-42505)",
+      "Splunk unauthenticated access",
+      "Splunk search injection"
+    ],
+    "tools": [
+      "nmap --script http-splunk* -p 8089",
+      "curl -k https://target:8089/servicesNS/-/-/data/indexes"
+    ],
+    "severity": "HIGH",
+    "notes": "Splunkd management API - often unauthenticated"
+  },
+  "8090": {
+    "service": "Obsidian",
+    "vulns": [
+      "Obsidian remote access exposure",
+      "Obsidian file disclosure"
+    ],
+    "tools": [],
+    "severity": "LOW",
+    "notes": "Knowledge base - often misconfigured"
+  },
+  "8443": {
+    "service": "Alt-HTTPS",
+    "vulns": [
+      "HTTPS on alternative port",
+      "TLS version weakness",
+      "Certificate issues",
+      "Self-signed certificates"
+    ],
+    "tools": [
+      "testssl.sh target:8443",
+      "nmap --script ssl* -p 8443",
+      "nikto -h https://target:8443"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Same as 443 but on alternate port"
+  },
+  "8888": {
+    "service": "HTTP-Alt2",
+    "vulns": [
+      "Jupyter Notebook exposed",
+      "Jupyter authentication bypass",
+      "HTTP alternative service"
+    ],
+    "tools": [
+      "curl http://target:8888/tree",
+      "nmap --script http* -p 8888"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Jupyter often has no auth"
+  },
+  "9000": {
+    "service": "PHP-FPM",
+    "vulns": [
+      "PHP-FPM socket exposure",
+      "CVE-2019-11043 - PHP-FPM RCE (FastCGI)",
+      "FastCGI request smuggling",
+      "PHP-FPM stacktrace exposure"
+    ],
+    "tools": [
+      "nmap --script fcgi* -p 9000",
+      "php-fpm-exploit target 9000 'whoami'",
+      "fastcgi-exploit.py -t target -p 9000 -c 'phpinfo();'"
+    ],
+    "severity": "HIGH",
+    "notes": "PHP-FPM + Nginx misconfiguration = RCE"
+  },
+  "9001": {
+    "service": "Portainer/Docker",
+    "vulns": [
+      "Portainer unauthenticated (CVE-2022-29178)",
+      "Portainer container escape",
+      "Docker management UI exposure"
+    ],
+    "tools": [
+      "curl http://target:9000/api/settings -X GET",
+      "curl http://target:9000/api/endpoints -X GET"
+    ],
+    "severity": "HIGH",
+    "notes": "CVE-2022-29178 allows bypassed auth"
+  },
+  "9042": {
+    "service": "Cassandra",
+    "vulns": [
+      "Cassandra CQL unauthenticated access",
+      "Cassandra cluster information disclosure",
+      "Cassandra authentication bypass"
+    ],
+    "tools": [
+      "cqlsh target 9042",
+      "nmap --script cassandra* -p 9042"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Apache Cassandra - no auth by default"
+  },
+  "9092": {
+    "service": "Kafka",
+    "vulns": [
+      "Kafka unauthenticated access",
+      "Kafka topic enumeration",
+      "Kafka message injection"
+    ],
+    "tools": [
+      "kafka-topics.sh --bootstrap-server target:9092 --list",
+      "nmap --script kafka* -p 9092"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Apache Kafka - often exposed without auth"
+  },
+  "9200": {
+    "service": "Elasticsearch",
+    "vulns": [
+      "CVE-2021-44228 - Log4Shell (if Java backend)",
+      "Elasticsearch unauthenticated access",
+      "Elasticsearch query injection",
+      "CVE-2015-1427 - Groovy RCE",
+      "CVE-2014-3120 - Elasticsearch RCE",
+      "Elasticsearch data exfiltration"
+    ],
+    "tools": [
+      "nmap --script elasticsearch* -p 9200",
+      "curl http://target:9200/_cluster/health?pretty",
+      "curl http://target:9200/_cat/indices?v",
+      "elastic-lookup -u http://target:9200"
+    ],
+    "severity": "HIGH",
+    "notes": "Log4Shell critical if Java < 8u191"
+  },
+  "9300": {
+    "service": "Elasticsearch-Transport",
+    "vulns": [
+      "Elasticsearch cluster transport exposure",
+      "Elasticsearch node communication abuse"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "notes": "Node-to-node communication port"
+  },
+  "9999": {
+    "service": "HTTP-Alt3",
+    "vulns": [
+      "HTTP service alternative port",
+      "Proxy exposure",
+      "Development server exposure"
+    ],
+    "tools": [],
+    "severity": "LOW",
+    "notes": "Varies by service"
+  },
+  "10000": {
+    "service": "Webmin",
+    "vulns": [
+      "Webmin RCE (CVE-2019-15107)",
+      "Webmin unauthenticated (pre-1.910)",
+      "Webmin directory traversal (CVE-2019-15648)",
+      "Webmin login brute force"
+    ],
+    "tools": [
+      "nmap --script webmin* -p 10000",
+      "crackmapexec webmin target -u users.txt -p passwords.txt",
+      "metasploit -x 'use unix/webapp/webmin_unauthenticated_rce; run'"
+    ],
+    "severity": "CRITICAL",
+    "notes": "CVE-2019-15107 is critical unauthenticated RCE"
+  },
+  "10250": {
+    "service": "Kubernetes Kubelet",
+    "vulns": [
+      "Kubelet unauthenticated API",
+      "Kubelet read-only port exposure",
+      "Container escape via kubelet",
+      "Kubelet secrets exposure"
+    ],
+    "tools": [
+      "curl -sk https://target:10250/pods",
+      "curl -sk https://target:10250/logs",
+      "nmap -p 10250 --script kubelet*"
+    ],
+    "severity": "CRITICAL",
+    "notes": "Full node access - container escape possible"
+  },
+  "10248": {
+    "service": "Kubernetes Healthz",
+    "vulns": [
+      "Kubernetes health endpoint exposure",
+      "Kubernetes control Plane info disclosure"
+    ],
+    "tools": [],
+    "severity": "LOW",
+    "notes": "Kubernetes health checks - informational"
+  },
+  "10249": {
+    "service": "Kubernetes Controller",
+    "vulns": [
+      "Kubernetes controller manager exposure"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "notes": "K8s control plane component"
+  },
+  "10256": {
+    "service": "Kubernetes Node Authorizer",
+    "vulns": [
+      "Kubernetes node authorizer misconfiguration"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "notes": "K8s authorization component"
+  },
+  "11211": {
+    "service": "Memcached",
+    "vulns": [
+      "Memcached amplification attack (CVE-2018-10562)",
+      "Memcached unauthenticated access",
+      "Memcached keys exposure",
+      "Memcached version disclosure"
+    ],
+    "tools": [
+      "nmap --script memcached* -p 11211",
+      "memcrashed.py target 11211",
+      "echo stats | nc target 11211"
+    ],
+    "severity": "MEDIUM",
+    "notes": "DDoS amplification vector"
+  },
+  "11371": {
+    "service": "OpenPGP",
+    "vulns": [
+      "OpenPGP keyserver exposure",
+      "PGP key enumeration"
+    ],
+    "tools": [
+      "gpg --keyserver hkp://target:11371 --search-keys user"
+    ],
+    "severity": "LOW",
+    "notes": "PGP keyserver -key exposure"
+  },
+  "16369": {
+    "service": "Virtuoso-AD",
+    "vulns": [
+      "Virtuoso Admin Interface",
+      "Virtuoso authentication bypass"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "notes": "Virtuoso admin interface"
+  },
+  "1883": {
+    "service": "MQTT",
+    "vulns": [
+      "MQTT unauthenticated access",
+      "MQTT topic enumeration",
+      "MQTT message injection",
+      "MQTT brute force"
+    ],
+    "tools": [
+      "mosquitto_sub -h target -p 1883 -t '#'",
+      "nmap --script mqtt* -p 1883",
+      "python3 mqtt-sniff.py -i eth0 -f 'host target'"
+    ],
+    "severity": "MEDIUM",
+    "notes": "IoT messaging - often no auth"
+  },
+  "27017": {
+    "service": "MongoDB",
+    "vulns": [
+      "MongoDB NoSQL injection",
+      "MongoDB authentication bypass",
+      "MongoDB admin access without auth",
+      "CVE-2020-7102 - MongoDB RCE (wal)",
+      "MongoDB replica set takeover",
+      "MongoDB credentials in configuration"
+    ],
+    "tools": [
+      "nmap --script mongodb* -p 27017",
+      "mongosh --host target --port 27017",
+      "mongo --host target --port 27017 --eval 'db.adminCommand(\"listDatabases\")'",
+      "cme mongodb target -u '' -p ''"
+    ],
+    "severity": "HIGH",
+    "notes": "No auth by default - critical exposure"
+  },
+  "27018": {
+    "service": "MongoDB Shard",
+    "vulns": [
+      "MongoDB sharded cluster issues",
+      "Shard key exposure",
+      "Chunk migration abuse"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "notes": "Shard config server port"
+  },
+  "28017": {
+    "service": "MongoDB-HTTP",
+    "vulns": [
+      "MongoDB stats page exposure",
+      "NoSQL database info disclosure"
+    ],
+    "tools": [
+      "curl http://target:28017/"
+    ],
+    "severity": "LOW",
+    "notes": "HTTP interface to MongoDB - deprecated after 3.2"
+  },
+  "31337": {
+    "service": "BackOrifice",
+    "vulns": [
+      "BackOrifice backdoor access",
+      "BackOrifice remote command execution"
+    ],
+    "tools": [],
+    "severity": "CRITICAL",
+    "notes": "Malware backdoor port - compromise indicator"
+  },
+  "47001": {
+    "service": "WinRM",
+    "vulns": [
+      "WinRM brute force",
+      "WinRM credential stuffing",
+      "CVE-2019-0547 - WinRM EOP",
+      "WinRM SPN Spoofing"
+    ],
+    "tools": [
+      "crackmapexec winrm target -u users.txt -p passwords.txt",
+      " evil-winrm -i target -u admin -p 'password'",
+      "nmap --script winrm-brute -p 5985"
+    ],
+    "severity": "HIGH",
+    "notes": "Windows Remote Management - PowerShell access"
+  },
+  "5000": {
+    "service": "Docker Registry",
+    "vulns": [
+      "Docker Registry unauthenticated",
+      "Image exposure (private images)",
+      "Docker registry API abuse"
+    ],
+    "tools": [
+      "curl http://target:5000/v2/_catalog",
+      "docker login http://target:5000",
+      "skopeo inspect docker://target:5000/image:tag"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Docker image registry - sensitive images exposed"
+  },
+  "50070": {
+    "service": "Hadoop",
+    "vulns": [
+      "Hadoop unauthenticated access",
+      "Hadoop command execution",
+      "Hadoop web UI exposure",
+      "YARN ResourceManager RCE (CVE-2022-26612)"
+    ],
+    "tools": [
+      "nmap --script hadoop* -p 50070",
+      "curl http://target:50070/dfshealth.html",
+      "mapred jobs -D mapreduce.framework.name=yarn -D mapreduce.job.hdfs-servers= target"
+    ],
+    "severity": "HIGH",
+    "notes": "YARN RCE allows container escape"
+  },
+  "50030": {
+    "service": "Hadoop JobTracker",
+    "vulns": [
+      "Hadoop JobTracker exposure",
+      "MapReduce job manipulation"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "notes": "Legacy Hadoop component"
+  },
+  "50075": {
+    "service": "Hadoop TaskTracker",
+    "vulns": [
+      "Hadoop TaskTracker exposure",
+      "MapReduce task manipulation"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "notes": "Legacy Hadoop component"
+  },
+  "50090": {
+    "service": "Hadoop NameNode Secondary",
+    "vulns": [
+      "Hadoop Secondary NameNode exposure"
+    ],
+    "tools": [],
+    "severity": "LOW",
+    "notes": "Hadoop checkpoint node"
+  },
+  "8020": {
+    "service": "Hadoop NameNode",
+    "vulns": [
+      "Hadoop NameNode web UI",
+      "HDFS metadata exposure"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "notes": "Hadoop filesystem metadata"
+  },
+  "8042": {
+    "service": "YARN NodeManager",
+    "vulns": [
+      "YARN NodeManager unauthenticated",
+      "Container info disclosure"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "notes": "YARN compute node"
+  },
+  "8088": {
+    "service": "YARN ResourceManager",
+    "vulns": [
+      "YARN ResourceManager RCE (CVE-2022-26612)",
+      "YARN job submission",
+      "Application manager abuse"
+    ],
+    "tools": [
+      "curl http://target:8088/ws/v1/cluster/info",
+      "curl http://target:8088/ws/v1/cluster/apps/new-app",
+      "ysoserial -p YARN -c 'whoami'"
+    ],
+    "severity": "HIGH",
+    "notes": "CVE-2022-26612 is critical YARN RCE"
+  },
+  "8188": {
+    "service": "Druid",
+    "vulns": [
+      "Apache Druid unauthenticated",
+      "Apache Druid RCE (CVE-2021-36749)",
+      "Druid ingestion job abuse"
+    ],
+    "tools": [
+      "curl http://target:8188/druid/coordinator/v1/leader",
+      "curl http://target:8188/druid/indexer/v1/schemas",
+      "ysoserial -p Druid -c 'whoami'"
+    ],
+    "severity": "HIGH",
+    "notes": "CVE-2021-36749 is Druid RCE via ingestion"
+  },
+  "9998": {
+    "service": "Druid-Router",
+    "vulns": [
+      "Druid router exposure",
+      "SQL injection in Druid queries"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "notes": "Druid query router"
+  },
+  "10001": {
+    "service": "Riak",
+    "vulns": [
+      "Riak unauthenticated access",
+      "Riak bucket enumeration",
+      "Riak MapReduce abuse"
+    ],
+    "tools": [
+      "curl http://target:10001/keys?keys=actual",
+      "nmap --script riak* -p 10001"
+    ],
+    "severity": "MEDIUM",
+    "notes": "Distributed database - often misconfigured"
+  },
+  "10002": {
+    "service": "Riak-MS",
+    "vulns": [
+      "Riak MapReduce exposure",
+      "Riak Search exposure"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "notes": "Riak MapReduce/Search interface"
+  },
+  "20000": {
+    "service": "D-Link",
+    "vulns": [
+      "D-Link backdoor access",
+      "D-Link authentication bypass"
+    ],
+    "tools": [],
+    "severity": "CRITICAL",
+    "notes": "D-Link router backdoor port"
+  },
+  "32768": {
+    "service": "HFR-HTTP",
+    "vulns": [
+      "Huawei Router HTTP backdoor",
+      "Huawei authentication bypass (CVE-2017-17215)"
+    ],
+    "tools": [],
+    "severity": "CRITICAL",
+    "notes": "Huawei router backdoor"
+  },
+  "32769": {
+    "service": "GigASET",
+    "vulns": [
+      "Gigaset HTTP backdoor"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "notes": "Gigaset VoIP devices"
+  },
+  "49152": {
+    "service": "UPS",
+    "vulns": [
+      "UPS web interface",
+      "Uninterruptible Power Supply management"
+    ],
+    "tools": [],
+    "notes": "UPS web interface - often on 49152"
+  },
+  "55555": {
+    "service": "Plex",
+    "vulns": [
+      "Plex Media Server unauthenticated",
+      "PlexRemote authenticated RCE",
+      "Plex library enumeration"
+    ],
+    "tools": [
+      "curl http://target:32400",
+      "curl http://target:32400/system/library/reminders"
+    ],
+    "notes": "Plex Media Server - 32400 is primary"
+  },
+  "55556": {
+    "service": "VxWorks",
+    "vulns": [
+      "VxWorks debug port",
+      "VxWorks command execution"
+    ],
+    "tools": [],
+    "notes": "Embedded RTOS debug port"
+  },
+  "60000": {
+    "service": "Radmin",
+    "vulns": [
+      "Radmin Panel exposure",
+      "Windows admin panel brute force"
+    ],
+    "tools": [],
+    "notes": "Radmin Panel - remote admin tool"
+  }
+}

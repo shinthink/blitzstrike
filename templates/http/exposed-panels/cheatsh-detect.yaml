@@ -1,0 +1,46 @@
+id: cheatsh-detect
+
+info:
+  name: cheat.sh Instance - Detection
+  author: ritikchaddha
+  severity: info
+  description: |
+    Detects exposed cheat.sh instances. cheat.sh is a community-driven cheat sheet service that provides quick command-line reference for programming languages and Unix commands. While designed to be public, self-hosted instances may expose internal documentation.
+  reference:
+    - https://github.com/chubin/cheat.sh
+    - https://cheat.sh/
+  metadata:
+    verified: true
+    max-request: 1
+    product: cheat.sh
+    vendor: chubin
+    fofa-query: title="cheat.sh"
+    shodan-query: title:"cheat.sh"
+  tags: tech,cheatsh,detection,devtools,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "cheat.sh"
+          - "curl cheat.sh"
+        condition: or
+
+      - type: word
+        part: body
+        words:
+          - ":firstpage"
+          - "cht.sh"
+          - "/files/style.css"
+        condition: or
+
+      - type: status
+        status:
+          - 200
+# digest: 4a0a004730450220673eba977a7bd73c7c4148aa2bf226e730b513341a7cd1ae30be770f683e72b7022100e7d8db58e805bf6c1d7dcccc4fb74b00260e1858371da7ee45bf8a30e73b5a97:922c64590222798bb761d5b6d8e72950

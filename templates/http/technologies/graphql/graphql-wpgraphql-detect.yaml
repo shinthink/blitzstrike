@@ -1,0 +1,33 @@
+id: graphql-wpgraphql-detect
+info:
+  name: Graphql wpgraphql Detect
+  author: princechaddha
+  severity: info
+  reference:
+    - https://github.com/dolevf/graphw00f/blob/main/graphw00f/lib.py
+  tags: tech,graphql,wordpress,discovery
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/query"
+      - "{{BaseURL}}/"
+    body: '{"query":"query { alias1$1:__typename }"}'
+    headers:
+      Content-Type: application/json
+    redirects: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 400
+
+      - type: word
+        words:
+          - 'Syntax Error: Expected Name, found $'
+        part: body
+# digest: 4a0a00473045022100d82352d1f12f6930c8b9c02cead4935368de5407b35f5c7861ea0ace205ef90a0220423707af6bea3ac1154aeb9689b9b25fba4b74fc2e330682f968606ed40c12fd:922c64590222798bb761d5b6d8e72950

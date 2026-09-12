@@ -1,0 +1,35 @@
+id: wp-rank-math-seo-fpd
+
+info:
+  name: WordPress SEO Plugin Rank Math - Full Path Disclosure
+  author: ritikchaddha,DhiyaneshDK
+  severity: low
+  description: |
+    WordPress Rank Math SEO plugin is vulnerable to full path disclosure via direct access to plugin files.
+  reference:
+    - https://wordpress.org/plugins/seo-by-rank-math/
+  metadata:
+    verified: true
+    max-request: 3
+    vendor: developer
+    product: seo-by-rank-math
+    framework: wordpress
+    fofa-query: body="/wp-content/plugins/seo-by-rank-math/"
+  tags: wp,wordpress,wp-plugin,fpd,rank-math,seo,exposure,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/seo-by-rank-math/vendor/developer/developer.php"
+      - "{{BaseURL}}/wp-content/plugins/seo-by-rank-math/vendor/woocommerce/action-scheduler/classes/ActionScheduler_AdminView.php"
+
+    stop-at-first-match: true
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_all(body, "Fatal error", "Uncaught Error") || contains_all(body, "Warning:", "failed to open stream")'
+          - 'status_code == 200 || status_code == 500'
+          - 'contains(body, "seo-by-rank-math")'
+        condition: and
+# digest: 4b0a00483046022100e41b9f2f6a519d1bc45978cf8771202ebf624325f034ce49ecc9adb56b0d802f02210087ac32359b6662545b01f5182129cbd047b60aafa299d182c888644b600445fa:922c64590222798bb761d5b6d8e72950

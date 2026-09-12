@@ -1,0 +1,51 @@
+id: prettier-ignore-disclosure
+
+info:
+  name: Prettier - Ignore File Disclosure
+  author: ritikchaddha
+  severity: info
+  description: |
+    The .prettierignore file is publicly accessible, potentially revealing project structure, sensitive file paths, and internal directory organization.
+  reference:
+    - https://prettier.io/docs/en/ignore.html
+  metadata:
+    verified: true
+    max-request: 2
+    vendor: prettier
+    product: prettier
+    shodan-query: http.html:".prettierignore"
+    fofa-query: body=".prettierignore" || body="prettier"
+  tags: prettier,config,exposure,disclosure,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/.prettierignore"
+      - "{{BaseURL}}/.prettierrc"
+
+    matchers-condition: and
+    matchers:
+      - type: dsl
+        dsl:
+          - "status_code == 200"
+          - "len(body) > 50"
+          - "contains(content_type, 'application/octet-stream')"
+        condition: and
+
+      - type: word
+        part: response
+        words:
+          - "MongoDB over HTTP on the native"
+          - "application/javascript"
+          - "application/x-javascript"
+          - "application/json"
+          - "application/xml"
+          - "text/xml"
+          - "<html"
+          - "<!doctype"
+          - "<script"
+          - "<meta"
+          - "image/"
+          - "Response xmlns"
+        negative: true
+# digest: 4a0a00473045022100bb267b86d64eeb4a26bfa8b5987e1d4cc1834eca0ecb9d3cef7f59a9c67addbc02202478fbe4627d47cac88303349a1db559b3bc50a4dc2f48c0044e81c5407bbc02:922c64590222798bb761d5b6d8e72950

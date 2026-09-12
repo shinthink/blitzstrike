@@ -1,0 +1,34 @@
+id: cisco-ucm-selfcare-portal
+
+info:
+  name: Cisco Unified Communications Self-Service User Portal - Detection
+  author: Morgan Robertson
+  severity: info
+  description: |
+    Detected the presence of the Cisco Unified Communications User Management Panel.
+  metadata:
+    verified: true
+    product: unified_communications_manager
+    vendor: cisco
+    shodan-query: http.title:"Unified Communications Self Care Portal"
+    fofa-query: title="Unified Communications Self Care Portal"
+  tags: detect,cisco,ucm,panel,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/ucmuser/"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - 'webAppName: "ucmuser"'
+          - 'webAppName="ucmuser"'
+        condition: or
+
+      - type: status
+        status:
+          - 200
+# digest: 4a0a00473045022100b8662b280cef1aa13916aeac6e5536d46bb10abc7821bd5bd57d3382b0c8de44022008df6291ff4784d8479d64f75d4e56acf6ae24a785b262a875f6dc9e15cd7aa2:922c64590222798bb761d5b6d8e72950

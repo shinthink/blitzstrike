@@ -1,0 +1,36 @@
+id: wordpress-amp-fpd
+
+info:
+  name: WordPress AMP - Full Path Disclosure
+  author: pussycat0x
+  severity: low
+  description: |
+    The WordPress AMP - Accelerated Mobile Pages plugin was detected to be vulnerable to Full Path Disclosure, allowing unauthenticated access to the full application path.
+  reference:
+    - https://wordpress.org/plugins/accelerated-mobile-pages/
+  metadata:
+    max-request: 5
+    vendor: wordpress
+    product: accelerated-mobile-pages
+    fofa-query: body="/wp-content/plugins/accelerated-mobile-pages"
+  tags: wordpress,wp,wp-plugin,accelerated-mobile-pages,fpd,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/accelerated-mobile-pages/includes/options/redux-core/framework.php"
+      - "{{BaseURL}}/wp-content/plugins/accelerated-mobile-pages/includes/options/admin-config.php"
+      - "{{BaseURL}}/wp-content/plugins/accelerated-mobile-pages/includes/thirdparty-compatibility.php"
+      - "{{BaseURL}}/wp-content/plugins/accelerated-mobile-pages/templates/starter-flavor.php"
+      - "{{BaseURL}}/wp-content/plugins/accelerated-mobile-pages/classes/class-flavor.php"
+
+    stop-at-first-match: true
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_all(body, "Fatal error", "Uncaught Error:") || contains_all(body, "Warning:", "failed to open stream")'
+          - 'contains(body, "accelerated-mobile-pages")'
+          - 'status_code == 200 || status_code == 500'
+        condition: and
+# digest: 4b0a00483046022100ff24fecd63959235c56a8f9a8afb94efe0fc7542fa5edcf23b124c38da35562c022100bf93018e96244b9d4dae2b2f9aa8a53bf2fa8d19a38dc75a9b9b4a1a3455566f:922c64590222798bb761d5b6d8e72950

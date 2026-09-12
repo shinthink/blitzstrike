@@ -1,0 +1,28 @@
+{
+  "task_id": "t-mu19c8uj",
+  "objective": "audit auth",
+  "plan": [
+    "recon",
+    "analyze",
+    "verify",
+    "report"
+  ],
+  "current_step": "analyze",
+  "status": "failed",
+  "checkpoints": [
+    {
+      "step": "recon",
+      "status": "done",
+      "note": "mapped endpoints",
+      "ts": 1789391234252
+    },
+    {
+      "step": "analyze",
+      "status": "failed",
+      "note": "subagent died",
+      "ts": 1789391234252
+    }
+  ],
+  "created_ts": 1789391234251,
+  "updated_ts": 1789391234252
+}
