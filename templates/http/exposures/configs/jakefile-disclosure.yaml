@@ -1,0 +1,36 @@
+id: jakefile-disclosure
+
+info:
+  name: Jakefile Build Configuration - Disclosure
+  author: 0x_Akoko
+  severity: info
+  description: |
+    Detected Jakefile build configuration was found to be exposed, potentially having contained sensitive information including database credentials, API keys, and server configurations.
+  reference:
+    - https://jakejs.com/
+    - https://github.com/jakejs/jake
+  classification:
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+    cwe-id: CWE-200
+  metadata:
+    verified: true
+    max-request: 2
+    shodan-query: html:"Jakefile"
+  tags: exposure,devops,jakefile,nodejs,config,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/Jakefile"
+      - "{{BaseURL}}/Jakefile.js"
+
+    stop-at-first-match: true
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - '!contains_any(body, "<!DOCTYPE", "<html", "<HTML")'
+          - 'contains(body, "task(") && contains_any(body, "desc(", "jake.", "namespace(")'
+        condition: and
+# digest: 490a0046304402207e79c99d5697b3bf56e4c49d22ad45c74edc7957c8a2e70bc7259814f0350f9a022066b9807a0615954ff2be22699f1d5a115a9a84a4f78b5f23247db6952e4e9bcd:922c64590222798bb761d5b6d8e72950

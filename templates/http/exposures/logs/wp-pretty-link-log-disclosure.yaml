@@ -1,0 +1,28 @@
+id: wp-pretty-link-log-disclosure
+
+info:
+  name: WordPress Pretty Link - Error Log Disclosure
+  author: 0x_Akoko
+  severity: low
+  description: |
+    Detected WordPress Pretty Link plugin debug log file, potentially revealing file paths, errors, and sensitive information.
+  reference:
+    - https://wordpress.org/plugins/pretty-link/
+  metadata:
+    verified: true
+    max-request: 1
+  tags: wordpress,wp-plugin,exposure,pretty-link,logs,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/pretty-link/error_log"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'regex("\\[\\d{2}-[A-Za-z]{3}-\\d{4} \\d{2}:\\d{2}:\\d{2}", body)'
+          - 'contains_any(body, "PHP Fatal error:", "PHP Warning:", "PHP Notice:", "PHP Parse error:")'
+        condition: and
+# digest: 4a0a0047304502207fbc74eb6436217ced7bd3912fc7f3be0939963782700a187accef79d575a0e0022100801a2f649b8109464e291cd4cf8b8952d4bea61cb3d2f45d98ee96ee78091c63:922c64590222798bb761d5b6d8e72950

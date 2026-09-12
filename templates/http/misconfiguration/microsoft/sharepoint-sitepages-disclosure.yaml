@@ -1,0 +1,32 @@
+id: sharepoint-sitepages-disclosure
+
+info:
+  name: Microsoft SharePoint - Site Pages Disclosure
+  author: pussycat0x
+  severity: low
+  description: |
+    Microsoft SharePoint Site Pages library (/SitePages/) is accessible without proper authentication, exposing site content, page structure, and potentially sensitive information. The Site Pages library contains modern SharePoint pages (.aspx files)
+  reference:
+    - https://learn.microsoft.com/en-us/sharepoint/dev/general-development/work-with-site-pages
+    - https://support.microsoft.com/en-us/office/site-pages-library
+    - https://learn.microsoft.com/en-us/sharepoint/dev/features/site-pages-overview
+  metadata:
+    verified: true
+    vendor: microsoft
+    product: sharepoint
+    fofa-query: app="Microsoft-SharePoint"
+    shodan-query: cpe:"cpe:2.3:a:microsoft:sharepoint_server"
+  tags: sharepoint,microsoft,disclosure,sitepages,exposure,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/SitePages/Forms/AllPages.aspx"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'contains_all(body, "Site Contents","Libraries","accessible mode")'
+        condition: and
+# digest: 4a0a00473045022047b513c4bf2de22b0d8bf0b54031965ff8274c9ffd8e7ee5811ca612ea27c70a022100c36fa52088eaee08a99af0dd99eaf024a6bfcce6db5214ca4acb9625ae6565b3:922c64590222798bb761d5b6d8e72950

@@ -1,0 +1,53 @@
+id: wp-links-opml
+
+info:
+  name: WordPress wp-links-opml.php - Version Disclosure
+  author: princechaddha
+  severity: info
+  description: |
+    WordPress wp-links-opml.php file was publicly accessible and expossed the WordPress version in the generator tag.
+  reference:
+    - https://www.acunetix.com/vulnerabilities/web/wordpress-version-disclosed/
+    - https://wordpress.org/
+  classification:
+    cpe: cpe:2.3:a:wordpress:wordpress:*:*:*:*:*:*:*:*
+  metadata:
+    verified: true
+    max-request: 1
+    vendor: wordpress
+    product: wordpress
+    shodan-query:
+      - http.component:"wordpress"
+      - cpe:"cpe:2.3:a:wordpress:wordpress"
+  tags: exposure,wordpress,wp,version,files,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-links-opml.php"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "generator="
+          - "WordPress/"
+        condition: and
+
+      - type: word
+        part: header
+        words:
+          - "text/xml"
+
+      - type: status
+        status:
+          - 200
+
+    extractors:
+      - type: regex
+        name: version
+        group: 1
+        regex:
+          - '(?i)generator="?WordPress/([0-9.]+)"?'
+# digest: 4a0a004730450220412afdfecc28e1973af73d22e4da1dbd9f39740b4ccd243d46cf42bc6a6f897f022100e30a86d0bb0b80580cea1ac2233e256cc31ce9455c4e5fbadf70533fd0c0fff8:922c64590222798bb761d5b6d8e72950

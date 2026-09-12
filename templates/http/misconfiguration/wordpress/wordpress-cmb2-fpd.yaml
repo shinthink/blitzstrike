@@ -1,0 +1,42 @@
+id: wordpress-cmb2-fpd
+
+info:
+  name: WordPress CMB2 - Full Path Disclosure
+  author: ritikchaddha
+  severity: low
+  description: |
+    WordPress CMB2 plugin is vulnerable to full path disclosure via direct access to plugin files.
+  reference:
+    - https://wordpress.org/plugins/cmb2/
+  metadata:
+    verified: true
+    max-request: 3
+    vendor: developer
+    product: cmb2
+    framework: wordpress
+    fofa-query: body="/wp-content/plugins/cmb2/"
+  tags: wp,wordpress,wp-plugin,fpd,cmb2,exposure,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/cmb2/includes/CMB2.php"
+      - "{{BaseURL}}/wp-content/plugins/cmb2/includes/CMB2_Field.php"
+      - "{{BaseURL}}/wp-content/plugins/cmb2/includes/helper-functions.php"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Fatal error"
+          - "plugins/cmb2"
+          - "Uncaught Error:"
+        condition: and
+
+      - type: status
+        status:
+          - 200
+# digest: 490a0046304402204ef86714e5ade776b55ea089936ed50888df76bb4261e87e93dc6628ca868e5302204f30cd6c28701bac89d8e45ca5025ce4459875b7b8be6a276f44034dc1953b9b:922c64590222798bb761d5b6d8e72950

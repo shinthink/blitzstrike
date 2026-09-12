@@ -1,0 +1,37 @@
+id: wp-add-search-to-menu-fpd
+
+info:
+  name: WordPress Ivory Search - Full Path Disclosure
+  author: DhiyaneshDk
+  severity: low
+  description: |
+    WordPress Plugin Ivory Search plugin files are publicly accessible without ABSPATH protection, exposing sensitive server path information through PHP error messages when accessed directly.
+  reference:
+    - https://wordpress.org/plugins/add-search-to-menu/
+  metadata:
+    verified: true
+    max-request: 1
+    publicwww-query: "/plugins/add-search-to-menu"
+  tags: wp,wordpress,wp-plugin,fpd,add-search-to-menu,misconfig,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/add-search-to-menu/includes/class-is-admin-public.php"
+      - "{{BaseURL}}/wp-content/plugins/add-search-to-menu/includes/class-is-widget.php"
+      - "{{BaseURL}}/wp-content/plugins/add-search-to-menu/includes/class-is-index-options.php"
+      - "{{BaseURL}}/wp-content/plugins/add-search-to-menu/includes/class-is-index-manager.php"
+      - "{{BaseURL}}/wp-content/plugins/add-search-to-menu/includes/class-is-customizer.php"
+      - "{{BaseURL}}/wp-content/plugins/add-search-to-menu/includes/compatibility/class-is-tablepress-compat.php"
+      - "{{BaseURL}}/wp-content/plugins/add-search-to-menu/admin/class-is-list-table.php"
+
+    stop-at-first-match: true
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_all(body, "Fatal error", "Uncaught Error") || contains_all(body, "Warning:","failed to open stream")'
+          - 'contains(body, "add-search-to-menu")'
+          - 'status_code == 200 || status_code == 500'
+        condition: and
+# digest: 4b0a004830460221008845447f465b860ed9a290f69db0b94e3e2b34729dd851313f5accbba9bded200221008852d09613e11270b9a1727664178fef2e393808a83e8b95bb7f91ad9c245d3d:922c64590222798bb761d5b6d8e72950

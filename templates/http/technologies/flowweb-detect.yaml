@@ -1,0 +1,33 @@
+id: flowweb-detect
+
+info:
+  name: FlowWeb Web Server - Detection
+  author: Shivam Kamboj
+  severity: info
+  description: |
+    Detected servers running the FlowWeb web server via the Server header.
+  metadata:
+    max-request: 1
+    vendor: flowweb
+    product: flowweb
+    fofa-query: "Server: FlowWeb"
+  tags: tech,flowweb,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers:
+      - type: regex
+        part: header
+        regex:
+          - '(?i)FlowWeb/[0-9.]+'
+
+    extractors:
+      - type: regex
+        part: header
+        group: 1
+        regex:
+          - 'FlowWeb\/([0-9.]+)'
+# digest: 4a0a0047304502210087db2682d9f66073317a6ef9e32b21e9bd806aa9019b3b2437ad1aea55a3457e022032a916ee868694ccd3ab15b601eacb1ff57a59afc7ada47110f598f92ac605d6:922c64590222798bb761d5b6d8e72950

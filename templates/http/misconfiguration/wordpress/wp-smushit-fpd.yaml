@@ -1,0 +1,34 @@
+id: wp-smushit-fpd
+
+info:
+  name: WP Smushit - Full Path Disclosure
+  author: theamanrawat,DhiyaneshDk
+  severity: low
+  description: |
+    Smushit WordPress plugin contains a full path disclosure vulnerability due to improper access restrictions in its source files, allowing unauthenticated attackers to retrieve full server paths and aiding exploitation.
+  impact: |
+    Attackers can obtain sever file paths, aiding in further exploitation of the website.
+  reference:
+    - https://wordpress.org/plugins/wp-smushit/
+  metadata:
+    verified: true
+    max-requests: 1
+    publicwww-query: "/wp-content/plugins/wp-smushit/"
+  tags: debug,wordpress,wp,wp-plugin,wp-smushit,fpd,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/wp-smushit/core/cdn/class-cdn-controller.php"
+      - "{{BaseURL}}/wp-content/plugins/wp-smushit/wp-smush.php"
+
+    stop-at-first-match: true
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_all(body, "Fatal error", "Uncaught Error") || contains_all(body, "Warning:", "failed to open stream")'
+          - 'status_code == 200 || status_code == 500'
+          - 'contains(body, "wp-smushit")'
+        condition: and
+# digest: 4b0a00483046022100c3367fdee311b769c2b04a9db82ce31855b3246e969e758ff724048ebe0922c5022100fbc1fb737f902a5e575a167756fae69a9df7eb81408f9a03180a0e97d56f4abe:922c64590222798bb761d5b6d8e72950

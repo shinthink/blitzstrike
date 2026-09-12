@@ -1,0 +1,34 @@
+id: octoprint-installer
+
+info:
+  name: OctoPrint Installation Page - Exposure
+  author: DhiyaneshDk
+  severity: high
+  description: |
+    Checks for the presence of a OctoPrint Installer Page.
+  classification:
+    cpe: cpe:2.3:a:octoprint:octoprint:*:*:*:*:*:*:*:*
+  metadata:
+    verified: true
+    max-request: 1
+    vendor: octoprint
+    product: octoprint
+    fofa-query: body="Thank you for installing OctoPrint"
+  tags: install,octoprint,misconfig,intrusive,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Thank you for installing OctoPrint"
+
+      - type: status
+        status:
+          - 200
+# digest: 4a0a00473045022100b8b46c1635c3445b11a1a4f93d4487aab3b8ca0e8d4e4c3e315bd991ab14e782022001f43b7448bf0380d87a6c5782dccd4e9ee0bc8f219074f9ee975662594645bf:922c64590222798bb761d5b6d8e72950

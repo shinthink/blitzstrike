@@ -1,0 +1,35 @@
+id: coldfusion-cfide-dir-listing
+
+info:
+  name: Adobe ColdFusion CFIDE - Directory Listing
+  author: 0x_Akoko
+  severity: medium
+  description: |
+    Detected Adobe ColdFusion CFIDE directory listing was exposed. This can reveal sensitive files and subdirectories including administrator interfaces, scripts, and application components.
+  reference:
+    - https://helpx.adobe.com/coldfusion/kb/securing-coldfusion.html
+    - https://www.carnal0wnage.com/papers/LARES-ColdFusion.pdf
+  classification:
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+    cwe-id: CWE-548
+  metadata:
+    max-request: 1
+    verified: true
+    shodan-query: http.title:"Index of" http.html:"CFIDE"
+    fofa-query: title="Index of" && body="CFIDE"
+  tags: misconfig,coldfusion,adobe,exposure,listing,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/CFIDE/"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'contains_all(body, "Index of", "CFIDE")'
+          - 'contains_any(body, "administrator", "scripts", "componentutils", "wizards", "adminapi")'
+        condition: and
+# digest: 4a0a0047304502206ffc8172aeefce4ca9ac7844e40b44bf3fc68dd6bc2268becf0807bf4b110591022100870ca4db9beb8637fb2e9e7a04b1a040bcd4efb07ad0398e5c7a6fe5d52a4d6b:922c64590222798bb761d5b6d8e72950

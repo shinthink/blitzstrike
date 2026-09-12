@@ -1,0 +1,25 @@
+id: google-api-key
+
+info:
+  name: Google API Key
+  author: Swissky
+  severity: low
+  reference:
+    - https://cloud.google.com/docs/authentication/api-keys#securing
+    - https://support.google.com/googleapi/answer/6310037
+  metadata:
+    max-request: 2
+  tags: exposure,token,google,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+      - "{{BaseURL}}/hopfully404"
+
+    extractors:
+      - type: regex
+        part: body
+        regex:
+          - "AIza[0-9A-Za-z\\-_]{35}"
+# digest: 4a0a0047304502200964013ba1aabd988fb02bc8be6867545ad4eafb321b3a1e1c19a6d78f42df02022100ff3f6daf6842ed15d341c22a519af5dca27ddb2d7d994f68f8e69676f118a77d:922c64590222798bb761d5b6d8e72950

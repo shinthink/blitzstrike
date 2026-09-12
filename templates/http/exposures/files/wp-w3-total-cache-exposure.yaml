@@ -1,0 +1,30 @@
+id: wp-w3-total-cache-exposure
+
+info:
+  name: WordPress W3 Total Cache - Cache Files Exposure
+  author: pussycat0x
+  severity: high
+  description: |
+    Detects publicly accessible W3 Total Cache database cache files in the wp-content/w3tc/dbcache/ directory. When database caching to disk is enabled, these files contain raw SQL query results, potentially exposing sensitive data such as user details, password hashes, emails, or other database content if the directory is not properly protected.
+  reference:
+    - https://www.acunetix.com/vulnerabilities/web/wordpress-w3-total-cache-plugin-predictable-cache-filenames/
+    - https://www.openwall.com/lists/oss-security/2012/12/30/3 (CVE-2012-6077 related discussion)
+    - https://siteground.com/blog/w3-total-cache-vulnerability/
+  metadata:
+    verified: true
+    max-request: 1
+    fofa-query: body="/wp-content/w3tc/dbcache/"
+  tags: wordpress,wp-plugin,w3-total-cache,exposure,cache,misconfig,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/w3tc/dbcache/"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'contains_all(body, "wp-content/w3tc/dbcache", "Index of","Parent Directory")'
+        condition: and
+# digest: 4a0a00473045022100c8555716e3832d6fdb96cea4d3e29670463579d4901743f9624351b3d92fd2ce02203f1505df8cce9593ff6f1e56d24d3e3125f6e1b8cb797ea867d15c94879460fa:922c64590222798bb761d5b6d8e72950

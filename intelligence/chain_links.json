@@ -1,0 +1,23 @@
+{
+  "_comment": "Chain-to-chain composition: which escalation chains naturally follow another. A complex bug chains several of these. Each link: from -> to (via the pivot primitive).",
+  "links": [
+    {"from": "ssrf_cloud_metadata", "to": ["default_creds_to_internal_pivot", "docker_container_breakout"], "via": "stolen IAM/cloud credentials"},
+    {"from": "xxe_to_ssrf_and_file_read", "to": ["ssrf_cloud_metadata", "ssrf_to_redis_rce"], "via": "SSRF primitive gained from XXE"},
+    {"from": "ssrf_to_redis_rce", "to": ["default_creds_to_internal_pivot"], "via": "OS shell on internal service"},
+    {"from": "sqli_to_rce", "to": ["sqli_to_hash_dump_and_crack", "path_traversal_to_credential_theft"], "via": "OS shell / DB access"},
+    {"from": "file_upload_to_rce", "to": ["path_traversal_to_credential_theft", "default_creds_to_internal_pivot"], "via": "web shell on host"},
+    {"from": "lfi_to_rce_via_log_poisoning", "to": ["path_traversal_to_credential_theft"], "via": "code execution on host"},
+    {"from": "ssti_to_full_rce", "to": ["path_traversal_to_credential_theft"], "via": "code execution on host"},
+    {"from": "deserialization_to_rce", "to": ["path_traversal_to_credential_theft", "docker_container_breakout"], "via": "code execution on host"},
+    {"from": "xss_to_account_takeover", "to": ["idor_to_admin_takeover", "api_key_leak_to_account_takeover"], "via": "session/account control"},
+    {"from": "idor_to_admin_takeover", "to": ["api_key_leak_to_account_takeover"], "via": "admin access"},
+    {"from": "api_key_leak_to_account_takeover", "to": ["idor_to_admin_takeover"], "via": "account takeover"},
+    {"from": "default_creds_to_internal_pivot", "to": ["docker_container_breakout", "kubernetes_pod_escape"], "via": "internal foothold"},
+    {"from": "docker_container_breakout", "to": ["kubernetes_pod_escape"], "via": "host access"},
+    {"from": "open_redirect_to_oauth_theft", "to": ["xss_to_account_takeover"], "via": "stolen OAuth token"},
+    {"from": "subdomain_takeover_to_cookie_theft", "to": ["xss_to_account_takeover"], "via": "cookie scope control"},
+    {"from": "cache_poison_to_stored_xss", "to": ["xss_to_account_takeover"], "via": "persistent XSS"},
+    {"from": "graphql_idor_to_data_theft", "to": ["idor_to_admin_takeover"], "via": "admin identifier leaked"},
+    {"from": "path_traversal_to_credential_theft", "to": ["default_creds_to_internal_pivot", "docker_container_breakout"], "via": "credentials/hashes recovered"}
+  ]
+}

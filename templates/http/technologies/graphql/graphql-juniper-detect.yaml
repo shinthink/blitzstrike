@@ -1,0 +1,33 @@
+id: graphql-juniper-detect
+info:
+  name: Graphql Juniper Detect
+  author: princechaddha
+  severity: info
+  reference:
+    - https://github.com/dolevf/graphw00f/blob/main/graphw00f/lib.py
+  tags: tech,graphql,juniper,discovery
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/query"
+      - "{{BaseURL}}/"
+    body: '{"query":"queryy { __typename }"}'
+    headers:
+      Content-Type: application/json
+    redirects: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 400
+
+      - type: word
+        words:
+          - 'Unexpected "queryy"'
+        part: body
+# digest: 4a0a00473045022100bb8ef6d1e1fb73d1cf3a8041ea314c63d8aaa09777cf7c7ae3a2d0ed84c63e3a0220799c917385b93c9b20a484c273a3e835685d8357947f39af09f9e08a59e75862:922c64590222798bb761d5b6d8e72950

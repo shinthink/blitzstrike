@@ -1,0 +1,35 @@
+id: magento-downloader-fpd
+
+info:
+  name: Magento Downloader - Full Path Disclosure
+  author: 0x_Akoko
+  severity: low
+  description: |
+    Detected Magento Downloader component exposed internal file system paths through direct file access.
+  reference:
+    - https://magento.com
+  classification:
+    cwe-id: CWE-200
+  metadata:
+    max-request: 4
+    verified: true
+  tags: magento,fpd,exposure,disclosure,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/downloader/lib/Mage/Backup/Nomedia.php"
+      - "{{BaseURL}}/downloader/lib/Mage/Archive/Tar.php"
+      - "{{BaseURL}}/downloader/lib/Mage/Archive/Gz.php"
+      - "{{BaseURL}}/downloader/lib/Mage/Archive/Bz.php"
+
+    stop-at-first-match: true
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'contains_all(body, "Fatal error", "not found", "downloader/lib/Mage/")'
+          - 'contains_any(body, "Mage_Backup", "Mage_Archive")'
+        condition: and
+# digest: 4b0a00483046022100c0589deacc4e64e44adc0155c5dcf6e9a8c83ed8f839eb2199a77dc6d36c766302210083b2fc592880cf0a42193589302025cc6623be8f354153e0d53a2fc86581e588:922c64590222798bb761d5b6d8e72950

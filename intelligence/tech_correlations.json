@@ -1,0 +1,1107 @@
+{
+  "wordpress": {
+    "vulns": [
+      "WordPress user enumeration",
+      "WordPress plugin vulnerabilities",
+      "WordPress theme vulnerabilities",
+      "WordPress xmlrpc.php abuse",
+      "WordPress wp-config.php exposure",
+      "WordPress SQL injection",
+      "WordPress XSS",
+      "WordPress RCE via plugin/theme",
+      "CVE-2021-29447 - WordPress XXE",
+      "CVE-2020-25213 - WordPress RCE"
+    ],
+    "paths": [
+      "/wp-admin",
+      "/wp-login.php",
+      "/wp-content",
+      "/wp-json"
+    ],
+    "tools": [
+      "wpscan",
+      "nikto",
+      "dirb"
+    ],
+    "category": "cms"
+  },
+  "drupal": {
+    "vulns": [
+      "Drupalgeddon - CVE-2014-3704",
+      "Drupal SQL injection",
+      "Drupal RCE",
+      "CVE-2018-7600 - Drupalgeddon2",
+      "CVE-2018-7602 - Drupalgeddon3"
+    ],
+    "paths": [
+      "/user",
+      "/admin",
+      "/node"
+    ],
+    "tools": [
+      "droopescan",
+      "nikto"
+    ],
+    "category": "cms"
+  },
+  "joomla": {
+    "vulns": [
+      "Joomla SQL injection",
+      "Joomla RCE",
+      "CVE-2023-23752 - Joomla RCE",
+      "Joomla admin access"
+    ],
+    "paths": [
+      "/administrator",
+      "/components"
+    ],
+    "tools": [
+      "joomscan"
+    ],
+    "category": "cms"
+  },
+  "magento": {
+    "vulns": [
+      "Magento SQL injection",
+      "Magento admin takeover",
+      "CVE-2022-24086 - Magento RCE",
+      "Magento XSS"
+    ],
+    "paths": [
+      "/admin",
+      "/checkout",
+      "/customer"
+    ],
+    "tools": [
+      "magescan"
+    ],
+    "category": "cms"
+  },
+  "nginx": {
+    "vulns": [
+      "CVE-2021-23017 - Nginx RCE",
+      "Nginx alias bypass",
+      "Nginx path traversal",
+      "Nginx misconfiguration"
+    ],
+    "paths": [],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "apache": {
+    "vulns": [
+      "CVE-2021-41773 - Path traversal",
+      "CVE-2021-42013 - RCE",
+      "Apache mod_security bypass",
+      "Apache .htaccess bypass"
+    ],
+    "paths": [],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "tomcat": {
+    "vulns": [
+      "CVE-2020-1938 - Ghostcat",
+      "Tomcat default credentials",
+      "Tomcat manager RCE",
+      "Tomcat war deployment",
+      "CVE-2017-12615 - RCE"
+    ],
+    "paths": [
+      "/manager/html",
+      "/docs",
+      "/examples"
+    ],
+    "tools": [
+      "tomcatwar",
+      "hydra -M tomcat"
+    ],
+    "category": "framework"
+  },
+  "jenkins": {
+    "vulns": [
+      "Jenkins script console RCE",
+      "Jenkins unauthenticated access",
+      "Jenkins credentials decryption",
+      "CVE-2018-1000861 - Jenkins RCE"
+    ],
+    "paths": [
+      "/script",
+      "/api",
+      "/job/*/configure"
+    ],
+    "tools": [
+      "jenkins_exploit"
+    ],
+    "category": "infrastructure"
+  },
+  "gitlab": {
+    "vulns": [
+      "GitLab SSRF",
+      "CVE-2021-22214 - GitLab RCE"
+    ],
+    "paths": [
+      "/git",
+      "/api"
+    ],
+    "tools": [],
+    "severity": "CRITICAL",
+    "category": "infrastructure"
+  },
+  "gitlab-ce": {
+    "vulns": [
+      "Same as GitLab"
+    ],
+    "paths": [],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "jupyter": {
+    "vulns": [
+      "Jupyter notebook RCE",
+      "Jupyter unauthenticated access",
+      "CVE-2020-26275 - Jupyter RCE"
+    ],
+    "paths": [
+      "/notebooks",
+      "/lab",
+      "/tree"
+    ],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "elasticsearch": {
+    "vulns": [
+      "Elasticsearch unauthenticated",
+      "Elasticsearch query injection",
+      "CVE-2015-1427 - Groovy RCE",
+      "CVE-2014-3120 - Elastic RCE"
+    ],
+    "paths": [
+      "/_search",
+      "/_cluster"
+    ],
+    "tools": [],
+    "category": "database"
+  },
+  "kibana": {
+    "vulns": [
+      "CVE-2019-7609 - Kibana RCE",
+      "Kibana unauthenticated"
+    ],
+    "paths": [
+      "/app/kibana",
+      "/api"
+    ],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "grafana": {
+    "vulns": [
+      "Grafana arbitrary file read",
+      "CVE-2021-43798 - Grafana LFI",
+      "Grafana plugin abuse"
+    ],
+    "paths": [
+      "/api",
+      "/login"
+    ],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "prometheus": {
+    "vulns": [
+      "Prometheus metrics exposure",
+      "Prometheus targets exposure"
+    ],
+    "paths": [
+      "/metrics",
+      "/api/v1"
+    ],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "zabbix": {
+    "vulns": [
+      "Zabbix SQL injection",
+      "Zabbix RCE",
+      "Zabbix default credentials"
+    ],
+    "paths": [
+      "/zabbix",
+      "/api_jsonrpc.php"
+    ],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "cacti": {
+    "vulns": [
+      "CVE-2020-14295 - Cacti RCE",
+      "Cacti SQL injection"
+    ],
+    "paths": [
+      "/cacti"
+    ],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "moodle": {
+    "vulns": [
+      "Moodle SQL injection",
+      "Moodle RCE",
+      "CVE-2020-25627 - Moodle RCE"
+    ],
+    "paths": [
+      "/moodle",
+      "/login/index.php"
+    ],
+    "tools": [],
+    "category": "cms"
+  },
+  "dokuwiki": {
+    "vulns": [
+      "DokuWiki RCE",
+      "DokuWiki XSS"
+    ],
+    "paths": [
+      "/dokuwiki",
+      "/lib/exe"
+    ],
+    "tools": [],
+    "category": "cms"
+  },
+  "owncloud": {
+    "vulns": [
+      "OwnCloud file disclosure",
+      "OwnCloud RCE",
+      "OwnCloud SQL injection"
+    ],
+    "paths": [
+      "/owncloud",
+      "/remote.php"
+    ],
+    "tools": [],
+    "category": "cms"
+  },
+  "nextcloud": {
+    "vulns": [
+      "Nextcloud file disclosure",
+      "Nextcloud RCE",
+      "Nextcloud XXE"
+    ],
+    "paths": [
+      "/nextcloud",
+      "/remote.php"
+    ],
+    "tools": [],
+    "category": "cms"
+  },
+  "openvpn": {
+    "vulns": [
+      "OpenVPN config exposure",
+      "OpenVPN certificate theft"
+    ],
+    "paths": [
+      "/"
+    ],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "wireguard": {
+    "vulns": [
+      "WireGuard config exposure"
+    ],
+    "paths": [],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "aws-s3": {
+    "vulns": [
+      "S3 bucket public access",
+      "S3 bucket takeover",
+      "S3 information disclosure",
+      "S3 malicious object upload"
+    ],
+    "paths": [
+      "/",
+      "/s3"
+    ],
+    "tools": [
+      "aws",
+      "s3scanner"
+    ],
+    "category": "cloud"
+  },
+  "azure-blob": {
+    "vulns": [
+      "Azure Blob public access",
+      "Azure Blob SAS token leak"
+    ],
+    "paths": [],
+    "tools": [],
+    "category": "cloud"
+  },
+  "google-cloud-storage": {
+    "vulns": [
+      "GCS public access",
+      "GCS bucket takeover"
+    ],
+    "paths": [],
+    "tools": [],
+    "category": "cloud"
+  },
+  "php": {
+    "vulns": [
+      "CVE-2024-4577 - PHP-CGI RCE",
+      "PHP phpinfo exposure",
+      "PHP deserialization",
+      "CVE-2019-11043 - PHP-FPM RCE"
+    ],
+    "paths": [
+      "/info.php",
+      "/phpinfo.php"
+    ],
+    "tools": [],
+    "category": "framework"
+  },
+  "node.js": {
+    "vulns": [
+      "Node.js deserialization",
+      "CVE-2021-23337 - Node.js command injection",
+      "Prototype pollution"
+    ],
+    "paths": [],
+    "tools": [],
+    "category": "framework"
+  },
+  "express": {
+    "vulns": [
+      "Express.js path traversal",
+      "Express.js SSTI"
+    ],
+    "paths": [],
+    "tools": [],
+    "category": "framework"
+  },
+  "django": {
+    "vulns": [
+      "Django SQL injection",
+      "Django SSTI",
+      "CVE-2021-44420 - Django RCE"
+    ],
+    "paths": [
+      "/admin",
+      "/api"
+    ],
+    "tools": [],
+    "category": "framework"
+  },
+  "flask": {
+    "vulns": [
+      "Flask SSTI",
+      "Flask debug mode RCE"
+    ],
+    "paths": [],
+    "tools": [],
+    "category": "framework"
+  },
+  "laravel": {
+    "vulns": [
+      "Laravel .env exposure",
+      "Laravel SQL injection",
+      "CVE-2021-3129 - Laravel RCE",
+      "CVE-2022-23347 - Laravel RCE"
+    ],
+    "paths": [
+      "/.env",
+      "/artisan",
+      "/api"
+    ],
+    "tools": [],
+    "category": "framework"
+  },
+  "spring": {
+    "vulns": [
+      "Spring Boot RCE",
+      "CVE-2022-22965 - Spring4Shell",
+      "Spring Data RCE",
+      "CVE-2018-1273 - Spring RCE"
+    ],
+    "paths": [
+      "/actuator",
+      "/env",
+      "/heapdump"
+    ],
+    "tools": [],
+    "category": "framework"
+  },
+  "struts": {
+    "vulns": [
+      "CVE-2020-17530 - Struts RCE",
+      "CVE-2019-0230 - Struts RCE",
+      "CVE-2018-11776 - Struts RCE"
+    ],
+    "paths": [],
+    "tools": [
+      "struts-scanner"
+    ],
+    "category": "framework"
+  },
+  "weblogic": {
+    "vulns": [
+      "CVE-2020-14644 - WebLogic RCE",
+      "CVE-2020-14883 - WebLogic SSRF",
+      "CVE-2019-2725 - WebLogic RCE"
+    ],
+    "paths": [
+      "/console",
+      "/workspaces"
+    ],
+    "tools": [],
+    "category": "framework"
+  },
+  "jboss": {
+    "vulns": [
+      "JBoss JMX console RCE",
+      "CVE-2017-12149 - JBoss RCE",
+      "JBoss deserialization"
+    ],
+    "paths": [
+      "/jmx-console",
+      "/admin-console"
+    ],
+    "tools": [
+      "jboss-autopwn"
+    ],
+    "category": "framework"
+  },
+  "websphere": {
+    "vulns": [
+      "CVE-2020-4450 - WebSphere RCE",
+      "WebSphere admin access"
+    ],
+    "paths": [
+      "/admin",
+      "/ibm/console"
+    ],
+    "tools": [],
+    "category": "framework"
+  },
+  "sharepoint": {
+    "vulns": [
+      "SharePoint RCE",
+      "SharePoint SSRF",
+      "CVE-2020-1147 - SharePoint RCE"
+    ],
+    "paths": [
+      "/_layouts",
+      "/_vti_bin"
+    ],
+    "tools": [
+      "sized"
+    ],
+    "category": "cms"
+  },
+  "exchange": {
+    "vulns": [
+      "CVE-2021-26855 - ProxyLogon",
+      "CVE-2021-26857 - ProxyShell",
+      "CVE-2021-27065 - ProxyLogon",
+      "Exchange privilege escalation"
+    ],
+    "paths": [
+      "/owa",
+      "/ecp",
+      "/ews",
+      "/mapi"
+    ],
+    "tools": [
+      "proxylogon",
+      "proxyshell"
+    ],
+    "category": "infrastructure"
+  },
+  "iis": {
+    "vulns": [
+      "IIS path traversal",
+      "IIS RCE (CVE-2021-31166)",
+      "IIS short filename enumeration"
+    ],
+    "paths": [],
+    "tools": [],
+    "category": "framework"
+  },
+  "graphql": {
+    "vulns": [
+      "GraphQL introspection",
+      "GraphQL batching attacks",
+      "GraphQL authorization bypass",
+      "GraphQL query injection"
+    ],
+    "paths": [
+      "/graphql",
+      "/graphiql",
+      "/graphql.php"
+    ],
+    "tools": [
+      "inql",
+      "graphql-map"
+    ],
+    "category": "infrastructure"
+  },
+  "rest-api": {
+    "vulns": [
+      "REST API information disclosure",
+      "REST API authorization bypass",
+      "REST API SQL injection"
+    ],
+    "paths": [
+      "/api",
+      "/api/v1",
+      "/api/v2"
+    ],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "soap": {
+    "vulns": [
+      "SOAP XXE",
+      "SOAP injection"
+    ],
+    "paths": [
+      "/soap",
+      "/service"
+    ],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "oauth": {
+    "vulns": [
+      "OAuth redirect URI bypass",
+      "OAuth CSRF",
+      "OAuth token leakage"
+    ],
+    "paths": [
+      "/oauth",
+      "/oauth/authorize"
+    ],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "openid": {
+    "vulns": [
+      "OpenID configuration exposure",
+      "OpenID replay attacks"
+    ],
+    "paths": [
+      "/.well-known/openid-configuration"
+    ],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "saml": {
+    "vulns": [
+      "SAML signature bypass",
+      "SAML XML signature wrapping",
+      "CVE-2021-45046 - Log4j"
+    ],
+    "paths": [
+      "/saml",
+      "/sso"
+    ],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "jwt": {
+    "vulns": [
+      "JWT algorithm confusion",
+      "JWT none algorithm",
+      "JWT weak secret",
+      "JWT key confusion attack"
+    ],
+    "paths": [],
+    "tools": [
+      "jwt_tool",
+      "jwt2john"
+    ],
+    "category": "infrastructure"
+  },
+  "ldap": {
+    "vulns": [
+      "LDAP injection",
+      "LDAP unauthenticated access"
+    ],
+    "paths": [],
+    "tools": [],
+    "category": "infrastructure"
+  },
+  "samba": {
+    "vulns": [
+      "Samba RCE - CVE-2017-7494",
+      "Samba symlink traversal"
+    ],
+    "tools": [
+      "nmblookup",
+      "smbclient"
+    ],
+    "severity": "CRITICAL",
+    "category": "infrastructure"
+  },
+  "nfs": {
+    "vulns": [
+      "NFS export misconfiguration",
+      "NFS root squash bypass",
+      "NFS shell"
+    ],
+    "tools": [
+      "showmount",
+      "mount.nfs"
+    ],
+    "severity": "HIGH",
+    "category": "infrastructure"
+  },
+  "smb": {
+    "vulns": [
+      "SMB signing not required",
+      "EternalBlue - CVE-2017-0144",
+      "SMB null session",
+      "SMB relay attacks"
+    ],
+    "tools": [
+      "enum4linux",
+      "smbclient",
+      "impacket"
+    ],
+    "severity": "CRITICAL",
+    "category": "infrastructure"
+  },
+  "ftp": {
+    "vulns": [
+      "FTP anonymous access",
+      "FTP cleartext credentials",
+      "FTP bounce scan"
+    ],
+    "tools": [
+      "ftp",
+      "nmap --script ftp*"
+    ],
+    "severity": "MEDIUM",
+    "category": "infrastructure"
+  },
+  "telnet": {
+    "vulns": [
+      "Telnet cleartext",
+      "Telnet default credentials"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "category": "infrastructure"
+  },
+  "redis": {
+    "vulns": [
+      "Redis unauthenticated",
+      "Redis write crontab",
+      "Redis Lua RCE"
+    ],
+    "tools": [
+      "redis-cli"
+    ],
+    "severity": "CRITICAL",
+    "category": "database"
+  },
+  "memcached": {
+    "vulns": [
+      "Memcached unauthenticated",
+      "Memcached amplification"
+    ],
+    "tools": [
+      "memcached-tool"
+    ],
+    "severity": "MEDIUM",
+    "category": "database"
+  },
+  "rabbitmq": {
+    "vulns": [
+      "RabbitMQ default credentials",
+      "RabbitMQ management access"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "category": "database"
+  },
+  "kafka": {
+    "vulns": [
+      "Kafka unauthenticated",
+      "Kafka data exposure"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "category": "database"
+  },
+  "zookeeper": {
+    "vulns": [
+      "ZooKeeper unauthenticated",
+      "ZooKeeper data exposure"
+    ],
+    "tools": [
+      "ncat",
+      "zkCli.sh"
+    ],
+    "severity": "HIGH",
+    "category": "database"
+  },
+  "activemq": {
+    "vulns": [
+      "ActiveMQ RCE",
+      "CVE-2023-46604 - ActiveMQ RCE",
+      "ActiveMQ webshell upload"
+    ],
+    "tools": [],
+    "severity": "CRITICAL",
+    "category": "database"
+  },
+  "glassfish": {
+    "vulns": [
+      "GlassFish RCE",
+      "GlassFish admin access"
+    ],
+    "paths": [
+      "/common/commonJSF.jsf"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "category": "framework"
+  },
+  "payara": {
+    "vulns": [
+      "Payara RCE"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "category": "framework"
+  },
+  "wildfly": {
+    "vulns": [
+      "WildFly RCE",
+      "JBoss/WildFly admin"
+    ],
+    "paths": [
+      "/management"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "category": "framework"
+  },
+  "node-red": {
+    "vulns": [
+      "Node-RED editor access",
+      "Node-RED code execution"
+    ],
+    "paths": [
+      "/red/admin",
+      "/editor"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "category": "infrastructure"
+  },
+  "sonarqube": {
+    "vulns": [
+      "SonarQube API exposure",
+      "SonarQube default credentials"
+    ],
+    "paths": [
+      "/api",
+      "/sonar"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "category": "infrastructure"
+  },
+  "nexus": {
+    "vulns": [
+      "Nexus RCE",
+      "CVE-2020-10199 - Nexus RCE",
+      "Nexus default credentials"
+    ],
+    "paths": [
+      "/nexus",
+      "/service"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "category": "infrastructure"
+  },
+  "artifactory": {
+    "vulns": [
+      "Artifactory RCE",
+      "Artifactory default credentials"
+    ],
+    "paths": [
+      "/artifactory",
+      "/ui"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "category": "infrastructure"
+  },
+  "confluence": {
+    "vulns": [
+      "Confluence RCE",
+      "CVE-2022-26134 - Confluence RCE",
+      "CVE-2021-26084 - Confluence RCE"
+    ],
+    "paths": [
+      "/wiki",
+      "/spaces"
+    ],
+    "tools": [
+      "confluence-exp"
+    ],
+    "severity": "CRITICAL",
+    "category": "cms"
+  },
+  "jira": {
+    "vulns": [
+      "Jira SSRF",
+      "Jira information disclosure",
+      "CVE-2019-8451 - Jira SSRF"
+    ],
+    "paths": [
+      "/jira",
+      "/rest"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "category": "cms"
+  },
+  "github": {
+    "vulns": [
+      "GitHub Enterprise RCE",
+      "GitHub secret leakage"
+    ],
+    "paths": [
+      "/api",
+      "/_git"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "category": "infrastructure"
+  },
+  "aws": {
+    "vulns": [
+      "AWS metadata exposure",
+      "AWS keys in code",
+      "AWS IAM misconfiguration",
+      "CVE-2021-45046 - Log4j on AWS"
+    ],
+    "tools": [
+      "awscli",
+      "cloudmapper",
+      "pacbot"
+    ],
+    "severity": "CRITICAL",
+    "category": "cloud"
+  },
+  "azure": {
+    "vulns": [
+      "Azure metadata exposure",
+      "Azure misconfiguration",
+      "Azure AD enumeration"
+    ],
+    "tools": [
+      "az",
+      "microburst"
+    ],
+    "severity": "CRITICAL",
+    "category": "cloud"
+  },
+  "gcp": {
+    "vulns": [
+      "GCP metadata exposure",
+      "GCP IAM misconfiguration",
+      "GCP bucket public access"
+    ],
+    "tools": [
+      "gcloud",
+      "gcpbucketbrute"
+    ],
+    "severity": "CRITICAL",
+    "category": "cloud"
+  },
+  "kubernetes": {
+    "vulns": [
+      "K8s pod escape",
+      "K8s service account tokens",
+      "K8s API unauthorized",
+      "CVE-2018-1002105 - K8s privilege escalation"
+    ],
+    "tools": [
+      "kubectl",
+      "kubesploit"
+    ],
+    "severity": "CRITICAL",
+    "category": "infrastructure"
+  },
+  "docker": {
+    "vulns": [
+      "Docker daemon exposed",
+      "Container escape",
+      "CVE-2019-5736 - Docker escape"
+    ],
+    "tools": [
+      "docker",
+      "docker breakout"
+    ],
+    "severity": "CRITICAL",
+    "category": "infrastructure"
+  },
+  "vmware": {
+    "vulns": [
+      "VMware vCenter RCE",
+      "CVE-2021-22005 - vCenter RCE",
+      "VMware ESXi exploit"
+    ],
+    "tools": [],
+    "severity": "CRITICAL",
+    "category": "infrastructure"
+  },
+  "openvswitch": {
+    "vulns": [
+      "Open vSwitch issues"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "category": "infrastructure"
+  },
+  "mongodb": {
+    "vulns": [
+      "MongoDB unauthenticated",
+      "MongoDB NoSQL injection"
+    ],
+    "tools": [
+      "mongosh",
+      "mongodump"
+    ],
+    "severity": "HIGH",
+    "category": "database"
+  },
+  "hadoop": {
+    "vulns": [
+      "Hadoop unauthenticated",
+      "Hadoop command execution"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "category": "database"
+  },
+  "spark": {
+    "vulns": [
+      "Apache Spark RCE",
+      "Spark UI exposure"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "category": "database"
+  },
+  "solr": {
+    "vulns": [
+      "Solr RCE",
+      "CVE-2019-12409 - Solr RCE",
+      "Solr authentication bypass"
+    ],
+    "paths": [
+      "/solr",
+      "/api"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "category": "database"
+  },
+  "cassandra": {
+    "vulns": [
+      "Cassandra unauthenticated",
+      "Cassandra data exposure"
+    ],
+    "tools": [],
+    "severity": "MEDIUM",
+    "category": "database"
+  },
+  "hdfs": {
+    "vulns": [
+      "HDFS unauthenticated"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "category": "database"
+  },
+  "rabbitmq-management": {
+    "vulns": [
+      "RabbitMQ management RCE"
+    ],
+    "tools": [],
+    "severity": "HIGH",
+    "category": "database"
+  },
+  "consul": {
+    "vulns": [
+      "Consul RCE",
+      "Consul API unauthenticated"
+    ],
+    "tools": [],
+    "severity": "CRITICAL",
+    "category": "database"
+  },
+  "etcd": {
+    "vulns": [
+      "Etcd unauthenticated",
+      "Etcd keys exposure"
+    ],
+    "tools": [
+      "etcdctl"
+    ],
+    "severity": "HIGH",
+    "category": "database"
+  },
+  "vault": {
+    "vulns": [
+      "HashiCorp Vault unauthenticated",
+      "Vault secrets exposure"
+    ],
+    "tools": [],
+    "severity": "CRITICAL",
+    "category": "database"
+  },
+  "mysql": {
+    "vulns": [
+      "MySQL authentication bypass",
+      "MySQL UDF injection",
+      "CVE-2012-2122 - MySQL auth bypass"
+    ],
+    "tools": [
+      "mysql",
+      "sqlmap"
+    ],
+    "category": "database"
+  },
+  "postgresql": {
+    "vulns": [
+      "PostgreSQL injection",
+      "PostgreSQL RCE via COPY",
+      "CVE-2018-1058 - PostgreSQL privilege escalation"
+    ],
+    "tools": [
+      "psql",
+      "sqlmap"
+    ],
+    "category": "database"
+  },
+  "cloudflare": {
+    "vulns": [
+      "Cloudflare bypass",
+      "Cloudflare misconfiguration"
+    ],
+    "tools": [],
+    "category": "cdn_waf"
+  }
+}

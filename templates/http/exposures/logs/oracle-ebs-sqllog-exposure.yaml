@@ -1,0 +1,40 @@
+id: oracle-ebs-sqllog-exposure
+
+info:
+  name: Oracle EBS SQL Log - Exposure
+  author: theamanrawat
+  severity: medium
+  description: |
+    Detected exposure of the sqlnet.log file in Oracle E-Business Suite (EBS), which often contained sensitive information such as database connection details, TNS entries, usernames, and error logs.
+  reference:
+    - https://the-infosec.com/2017/03/29/do-you-know-what-your-erp-is-telling-us/
+  metadata:
+    verified: false
+    max-request: 2
+  tags: oracle,ebs,exposure,log,sensitive,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/html/bin/sqlnet.log"
+      - "{{BaseURL}}/OA_HTML/bin/sqlnet.log"
+
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "DESCRIPTION="
+          - "USER="
+        condition: and
+
+      - type: word
+        part: header
+        words:
+          - "text/plain"
+
+      - type: status
+        status:
+          - 200
+# digest: 490a00463044022040dd0ccf64986066bca6fa3c84cca1533b036e19ab70c3b4a6f0ebe6355c0d3202202c3ca9092962c929a22e3b9acc098b053b0dfa19db82fce74eeef957b65572c2:922c64590222798bb761d5b6d8e72950

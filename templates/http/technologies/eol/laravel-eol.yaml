@@ -1,0 +1,59 @@
+id: laravel-eol
+
+info:
+  name: Laravel End-of-Life Detection
+  author: Shivam Kamboj
+  severity: info
+  description: |
+    Detected Laravel framework versions that had reached End-of-Life (EOL) and no longer received security updates.
+  reference:
+    - https://endoflife.date/laravel
+    - https://laravel.com/docs/releases
+  metadata:
+    verified: true
+    max-requests: 4
+    product: laravel
+    vendor: laravel
+    fofa-query: "x-laravel-version"
+  tags: tech,laravel,eol,framework,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+      - "{{BaseURL}}/composer.json"
+      - "{{BaseURL}}/composer.lock"
+
+    redirects: true
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      - type: dsl
+        name: eol-version-detected
+        dsl:
+          - "compare_versions(version, '<= 11.51.0')"
+
+      - type: dsl
+        dsl:
+          - 'contains(tolower(body), "laravel")'
+          - 'contains_any(tolower(header), "x-powered-by", "x-laravel-version")'
+        condition: or
+
+    extractors:
+      - type: regex
+        name: version
+        group: 1
+        part: header
+        regex:
+          - '(?i)x-powered-by:\s*Laravel[/\s]+([0-9]+\.[0-9]+(?:\.[0-9]+)?)'
+          - '(?i)x-laravel-version:\s*([0-9]+\.[0-9]+(?:\.[0-9]+)?)'
+
+      - type: regex
+        name: version
+        group: 1
+        part: body
+        regex:
+          - '"laravel/framework":\s*"\^([0-9]+\.[0-9]+)'
+          - '&quot;laravelVersion&quot;:&quot;([0-9.]+)&quot;'
+# digest: 4a0a0047304502206cdfa852912bc553ae3a670ca85f0af008a5524b855ae049a92dcacf8392f480022100d9ff3452eb64add4fb78ce425894a33485b20cc1bd2bc4345fa9df10c3adc94a:922c64590222798bb761d5b6d8e72950

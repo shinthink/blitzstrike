@@ -1,0 +1,29 @@
+id: wp-wpfront-scroll-top-fpd
+
+info:
+  name: WordPress WPFront Scroll Top - Full Path Disclosure
+  author: DhiyaneshDk
+  severity: low
+  description: |
+    WordPress Plugin WPFront Scroll Top plugin files are publicly accessible without ABSPATH protection, exposing sensitive server path information through PHP error messages when accessed directly.
+  reference:
+    - https://wordpress.org/plugins/wpfront-scroll-top/
+  metadata:
+    verified: true
+    max-request: 1
+    publicwww-query: "/plugins/wpfront-scroll-top"
+  tags: wp,wordpress,wp-plugin,fpd,wpfront-scroll-top,misconfig,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/wpfront-scroll-top/wpfront-scroll-top.php"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_all(body, "Fatal error", "Uncaught Error") || contains_all(body, "Warning:","failed to open stream")'
+          - 'contains(body, "wpfront-scroll-top")'
+          - 'status_code == 200 || status_code == 500'
+        condition: and
+# digest: 4b0a004830460221009719f1099282512136e6d1f4df116bca0abaf06ce8cdc3167cf3930bd21682c7022100e8d51801efe979ccfadc844a4528d15abc9d2a07ef62094aa8f53b51d23f9ca0:922c64590222798bb761d5b6d8e72950

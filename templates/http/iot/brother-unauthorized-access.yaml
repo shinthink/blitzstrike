@@ -1,0 +1,30 @@
+id: brother-unauthorized-access
+
+info:
+  name: Brother Printer
+  author: pussycat0x
+  severity: medium
+  description: Brother Printer unauthorized access was detected.
+  reference:
+    - https://www.exploit-db.com/ghdb/6889
+  metadata:
+    max-request: 1
+  tags: iot,printer,unauth,intrusive,vuln,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/net/net/net.html"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "Brother Industries"
+          - "Network Status"
+        condition: and
+
+      - type: status
+        status:
+          - 200
+# digest: 4b0a00483046022100c1547ef15f0e9a77bbc7305bdb599125573ebd4f4188140b76bf898914a4cca90221008ce7d0cffefbc1a86af34b5be34fd0ce2b9efd1c498fd4daba70f06aa17eacac:922c64590222798bb761d5b6d8e72950

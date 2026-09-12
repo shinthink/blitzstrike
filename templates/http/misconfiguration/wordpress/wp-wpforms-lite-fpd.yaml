@@ -1,0 +1,29 @@
+id: wp-wpforms-lite-fpd
+
+info:
+  name: WordPress WPForms - Full Path Disclosure
+  author: DhiyaneshDk
+  severity: low
+  description: |
+    WordPress Plugin WPForms files are publicly accessible without ABSPATH protection, exposing sensitive server path information through PHP error messages when accessed directly.
+  reference:
+    - https://wordpress.org/plugins/wpforms-lite/
+  metadata:
+    verified: true
+    max-request: 1
+    fofa-query: body="/wp-content/plugins/wpforms-lite"
+  tags: wp,wordpress,wp-plugin,fpd,wpforms-lite,misconfig,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/wpforms-lite/src/Frontend/Modern.php"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_all(body, "Fatal error", "Uncaught Error") || contains_all(body, "Warning:", "failed to open stream")'
+          - 'status_code == 200 || status_code == 500'
+          - 'contains(body, "wpforms-lite")'
+        condition: and
+# digest: 490a00463044022069f0d574292e719e31683e41cc51b3d539d4b19d773add44a92193b9457d940002200c79518be1e79daec9cfc0aa59adbfc1ed9c1e48d856cf985f187bf190ffe2a8:922c64590222798bb761d5b6d8e72950

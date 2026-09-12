@@ -1,0 +1,113 @@
+{
+  "_comment": "OWASP WSTG -> Blitz Strike coverage map. Each WSTG category maps to the Blitz skill/phase/tools/data that covers it; 'advanced' lists the high-value tests where Blitz has a specific deterministic or doctrine capability (the moat).",
+  "categories": [
+    {
+      "wstg": "WSTG-INFO",
+      "name": "Information Gathering",
+      "phase": "recon",
+      "skill": "web-hunting (live) / source-audit (source)",
+      "tools": ["live_recon", "list_attack_vectors", "detect_framework", "blitz_scan"],
+      "data": ["attack_vectors", "port_correlations", "tech_correlations"],
+      "advanced": ["Fingerprint Web Server/App/Framework", "Attack Surface Identification", "Map Application Architecture"]
+    },
+    {
+      "wstg": "WSTG-CONF",
+      "name": "Configuration & Deployment Management",
+      "phase": "recon",
+      "skill": "web-hunting",
+      "tools": ["live_recon", "active_scan"],
+      "data": [],
+      "advanced": ["Subdomain Takeover", "Cloud Storage", "Path Confusion", "Old Backup & Unreferenced Files", "Content Security Policy"]
+    },
+    {
+      "wstg": "WSTG-IDNT",
+      "name": "Identity Management",
+      "phase": "analyze",
+      "skill": "web-hunting",
+      "tools": ["active_scan"],
+      "data": ["payloads"],
+      "advanced": ["Account Enumeration & Guessable User Account"]
+    },
+    {
+      "wstg": "WSTG-ATHN",
+      "name": "Authentication",
+      "phase": "analyze",
+      "skill": "web-hunting",
+      "tools": ["active_scan", "bypass_lookup"],
+      "data": ["bypass_techniques", "payloads"],
+      "advanced": ["Bypassing Authentication Schema", "Weak Password Change/Reset", "Multi-Factor Authentication"]
+    },
+    {
+      "wstg": "WSTG-ATHZ",
+      "name": "Authorization",
+      "phase": "analyze",
+      "skill": "web-hunting + ap-idor-exploitation",
+      "tools": ["active_scan", "browser_validate"],
+      "data": [],
+      "advanced": ["Insecure Direct Object References", "Privilege Escalation", "OAuth Weaknesses", "Directory Traversal / File Include"]
+    },
+    {
+      "wstg": "WSTG-SESS",
+      "name": "Session Management",
+      "phase": "analyze",
+      "skill": "web-hunting",
+      "tools": ["active_scan"],
+      "data": ["payloads"],
+      "advanced": ["JSON Web Tokens", "Session Fixation", "Session Puzzling", "Cross-Site Request Forgery"]
+    },
+    {
+      "wstg": "WSTG-INPV",
+      "name": "Input Validation / Injection",
+      "phase": "analyze + deep",
+      "skill": "source-audit (taint) + web-hunting (advanced)",
+      "tools": ["eagle_eye2", "taint_file", "complex_scan", "active_scan"],
+      "data": ["chains", "chain_links", "payloads", "bypass_techniques"],
+      "advanced": ["HTTP Request Smuggling", "Host Header Injection", "Server-Side Template Injection", "Server-Side Request Forgery", "Mass Assignment", "CSV Injection", "Prototype Pollution", "Insecure Deserialization", "SQL/LDAP/XPath/SSI/XML/Command/Code Injection", "HTTP Response Splitting"]
+    },
+    {
+      "wstg": "WSTG-ERRH",
+      "name": "Error Handling",
+      "phase": "analyze",
+      "skill": "web-hunting",
+      "tools": ["active_scan"],
+      "data": [],
+      "advanced": ["Improper Error Handling", "Stack Traces"]
+    },
+    {
+      "wstg": "WSTG-CRYP",
+      "name": "Cryptography",
+      "phase": "analyze",
+      "skill": "hp-tls-transport + ap-client-side-crypto-forgery",
+      "tools": ["active_scan"],
+      "data": [],
+      "advanced": ["Weak Transport Layer Security", "Padding Oracle", "Weak Cryptographic Primitives"]
+    },
+    {
+      "wstg": "WSTG-BUSL",
+      "name": "Business Logic",
+      "phase": "deep",
+      "skill": "hp-business-logic-fuzzing + complex_scan",
+      "tools": ["complex_scan", "route_scan"],
+      "data": ["chains", "chain_links"],
+      "advanced": ["Circumvention of Work Flows", "Process Timing (race conditions)", "Payment Functionality", "Number of Times a Function Can Be Used"]
+    },
+    {
+      "wstg": "WSTG-CLNT",
+      "name": "Client-side",
+      "phase": "deep",
+      "skill": "web-hunting + ap-stored-xss-admin-bot",
+      "tools": ["browser_validate", "active_scan"],
+      "data": ["payloads"],
+      "advanced": ["DOM-based XSS", "Cross-Origin Resource Sharing", "Clickjacking", "Browser Storage", "Reverse Tabnabbing", "Client-Side Template Injection", "Web Messaging"]
+    },
+    {
+      "wstg": "WSTG-APIT",
+      "name": "API Testing",
+      "phase": "analyze + deep",
+      "skill": "web-hunting + hp-api-security",
+      "tools": ["active_scan", "browser_validate"],
+      "data": [],
+      "advanced": ["Broken Object/Function Level Authorization", "Excessive Data Exposure", "GraphQL", "WebSockets"]
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+id: wp-yith-woocommerce-wishlist-fpd
+
+info:
+  name: WordPress YITH WooCommerce Wishlist - Full Path Disclosure
+  author: ritikchaddha
+  severity: low
+  description: |
+    WordPress YITH WooCommerce Wishlist plugin is vulnerable to full path disclosure via direct access to plugin files.
+  reference:
+    - https://wordpress.org/plugins/yith-woocommerce-wishlist/
+  metadata:
+    verified: true
+    max-request: 3
+    vendor: yithemes
+    product: yith-woocommerce-wishlist
+    framework: wordpress
+    fofa-query: body="/wp-content/plugins/yith-woocommerce-wishlist/"
+  tags: wp,wordpress,wp-plugin,fpd,yith,woocommerce,wishlist,exposure,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/yith-woocommerce-wishlist/includes/class-yith-wcwl.php"
+      - "{{BaseURL}}/wp-content/plugins/yith-woocommerce-wishlist/includes/class-yith-wcwl-frontend.php"
+      - "{{BaseURL}}/wp-content/plugins/yith-woocommerce-wishlist/includes/functions-yith-wcwl.php"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Fatal error"
+          - "yith-woocommerce-wishlist"
+          - "Uncaught Error:"
+        condition: and
+
+      - type: status
+        status:
+          - 200
+# digest: 4a0a00473045022100c2443a726d19cf22b356a27e237cbe73c1ba592f3749c54c778239122587267a02202657314fab9fa24f195dc01599a92f285ab7e568a1edbb107a6ef43ad80fa3cd:922c64590222798bb761d5b6d8e72950

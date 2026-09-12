@@ -1,0 +1,32 @@
+id: frigate-api-exposure
+
+info:
+  name: Frigate NVR - API Exposure
+  author: 0x_Akoko
+  severity: medium
+  description: |
+    Detected an exposed Frigate NVR API, potentially allowing unauthorized access to camera feeds, internal network configuration, and MQTT credentials.
+  reference:
+    - https://frigate.video/
+    - https://github.com/blakeblackshear/frigate
+  metadata:
+    verified: true
+    max-request: 1
+    shodan-query: http.title:"Frigate"
+    fofa-query: title="Frigate"
+  tags: frigate,nvr,iot,exposure,camera,config,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/api/config"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'contains(content_type, "application/json")'
+          - 'contains_all(body, "\"cameras\"", "\"version\"", "\"detectors\"")'
+          - 'contains_any(body, "\"mqtt\"", "\"frigate\"", "\"birdseye\"", "\"record\"")'
+        condition: and
+# digest: 4a0a0047304502207c1cc1a506f3416a7937b816677aaa7a00efc1ace5113e098609321f292bbab80221009c389123b55a21ebb5637832ef5424bbd6c6604e45992ec21d505a34c14e0eb9:922c64590222798bb761d5b6d8e72950

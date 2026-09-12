@@ -1,0 +1,58 @@
+id: codepen-login-check
+
+info:
+  name: codepen.io Login Check
+  author: parthmalhotra,pdresearch
+  severity: critical
+  description: Checks for a valid codepen account.
+  reference:
+    - https://owasp.org/www-community/attacks/Credential_stuffing
+  metadata:
+    max-request: 2
+  tags: creds-stuffing,login-check,cloud,codepen,vuln
+
+self-contained: true
+
+flow: |
+  if (template["username"] && template["password"]) {
+    http();
+  }
+
+http:
+  - raw:
+      - |
+        GET https://codepen.io/login HTTP/1.1
+        Host: codepen.io
+      - |
+        POST https://codepen.io/login/login HTTP/1.1
+        Host: codepen.io
+        Content-Type: application/x-www-form-urlencoded
+        X-CSRF-Token: {{token}}
+
+        authenticity_token={{token}}&email={{username}}&password={{password}}&login-type=fullpage
+
+    extractors:
+      - type: dsl
+        dsl:
+          - username
+          - password
+
+      - type: xpath
+        part: body
+        xpath:
+          - '//input[@name="authenticity_token"]/@value'
+        name: token
+        internal: true
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        negative: true
+        words:
+          - 'The username or password you entered is incorrect, please try again.'
+
+      - type: status
+        status:
+          - 302
+# digest: 4a0a004730450221008951224ce3baa74b65021a45bdac7ef508796fddc9b70af1ab98f19a9654a1a6022023b9392b6b1d9c78586c877a889401e59658af3599c0b6c0fdea762659d60ddc:922c64590222798bb761d5b6d8e72950

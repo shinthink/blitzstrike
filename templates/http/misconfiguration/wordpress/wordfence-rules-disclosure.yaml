@@ -1,0 +1,39 @@
+id: wordfence-rules-disclosure
+
+info:
+  name: WordPress Wordfence - Rules File Disclosure
+  author: ritikchaddha
+  severity: medium
+  description: |
+    The Wordfence Security plugin for WordPress stores configuration files in the /wp-content/wflogs/ directory. These files may be accessible without authentication and can expose sensitive configuration data, firewall rules, attack logs, and internal paths.
+  reference:
+    - https://wordpress.org/support/topic/files-created-in-wflogs-before-plugin-activated/
+    - https://forum.ait-pro.com/forums/topic/wordfence-firewall-wp-contentwflogsconfig-php-file-quarantined/
+  classification:
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+    cwe-id: CWE-200
+  metadata:
+    max-request: 1
+    verified: true
+    fofa-query: body="/plugins/wordfence"
+  tags: wordpress,wp-plugin,wordfence,rules,disclosure,exposure,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/wflogs/rules.php"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "wfWAFrule"
+          - "$this"
+        condition: and
+
+      - type: status
+        status:
+          - 200
+# digest: 4b0a00483046022100ef753bf30fc170ad0b50fcd0c4cfb940d715dc48f60f25aa04018de386d9901502210096a950b77bd0afeff6cab4d2c30dd50eae1fc1e3106912d603c6437bbe86f3b0:922c64590222798bb761d5b6d8e72950

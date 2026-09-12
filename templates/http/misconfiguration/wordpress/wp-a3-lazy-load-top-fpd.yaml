@@ -1,0 +1,32 @@
+id: wp-a3-lazy-load-top-fpd
+
+info:
+  name: WordPress a3 Lazy Load - Full Path Disclosure
+  author: DhiyaneshDk
+  severity: low
+  description: |
+    WordPress Plugin a3 Lazy Load plugin files are publicly accessible without ABSPATH protection, exposing sensitive server path information through PHP error messages when accessed directly.
+  reference:
+    - https://wordpress.org/plugins/a3-lazy-load/
+  metadata:
+    verified: true
+    max-request: 1
+    publicwww-query: "/plugins/a3-lazy-load"
+  tags: wp,wordpress,wp-plugin,fpd,a3-lazy-load,misconfig,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/a3-lazy-load/a3-lazy-load.php"
+      - "{{BaseURL}}/wp-content/plugins/a3-lazy-load/admin/a3-lazy-load-admin.php"
+
+    stop-at-first-match: true
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_all(body, "Fatal error", "Uncaught Error") || contains_all(body, "Warning:","failed to open stream")'
+          - 'contains(body, "a3-lazy-load")'
+          - 'status_code == 200 || status_code == 500'
+        condition: and
+# digest: 4b0a00483046022100a8055a479e91a5cad077a9c6d3eae8ddccc2f5fa423a0a0b210cb5c06063e7b5022100c3e841a5c572aad6350c40b271fc29bf7ce77ec7215f05731c5a9400f0840497:922c64590222798bb761d5b6d8e72950

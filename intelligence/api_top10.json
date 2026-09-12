@@ -1,0 +1,15 @@
+{
+  "_comment": "OWASP API Security Top 10 (2023) mapped to Blitz Strike coverage. Each risk has its id, name, and the Blitz technique/tool that hunts it.",
+  "risks": [
+    {"id": "API1", "name": "Broken Object Level Authorization (BOLA)", "cwe": ["CWE-639"], "desc": "Accessing another user's object by tampering the object id without an authorization check.", "blitz": "technique_lookup(idor) + active_scan", "data": []},
+    {"id": "API2", "name": "Broken Authentication", "cwe": ["CWE-287", "CWE-384"], "desc": "Weak or bypassable authentication (JWT, OAuth, token, credential flaws).", "blitz": "technique_lookup(jwt) + technique_lookup(oauth) + bypass_lookup(auth)", "data": []},
+    {"id": "API3", "name": "Broken Object Property Level Authorization (BOPLA)", "cwe": ["CWE-915", "CWE-639"], "desc": "Mass assignment / excessive data exposure of object properties.", "blitz": "technique_lookup(mass_assignment) + complex_scan", "data": []},
+    {"id": "API4", "name": "Unrestricted Resource Consumption", "cwe": ["CWE-400", "CWE-770"], "desc": "DoS via missing rate limits, deep recursion, or resource exhaustion.", "blitz": "technique_lookup(rate_limit_bypass) + technique_lookup(race_condition)", "data": []},
+    {"id": "API5", "name": "Broken Function Level Authorization (BFLA)", "cwe": ["CWE-862", "CWE-285"], "desc": "Invoking admin-only functions without the right role.", "blitz": "technique_lookup(idor) + route_scan", "data": []},
+    {"id": "API6", "name": "Unrestricted Access to Sensitive Business Flows", "cwe": ["CWE-841"], "desc": "Abusing a legitimate business flow (purchase, redeem) without authorization.", "blitz": "technique_lookup(bypass_payment) + hp-business-logic-fuzzing", "data": []},
+    {"id": "API7", "name": "Server Side Request Forgery", "cwe": ["CWE-918"], "desc": "The API fetches an attacker-influenced URL to reach internal services.", "blitz": "technique_lookup(ssrf) + ap-ssrf-cloud-metadata", "data": ["chains"]},
+    {"id": "API8", "name": "Security Misconfiguration", "cwe": ["CWE-16"], "desc": "Verbose errors, exposed debug/admin endpoints, missing headers, CORS misconfig.", "blitz": "technique_lookup(cors) + live_recon + web-hunting (exposed config)", "data": []},
+    {"id": "API9", "name": "Improper Inventory Management", "cwe": ["CWE-1057"], "desc": "Orphaned/legacy API versions or endpoints left undocumented and unprotected.", "blitz": "live_recon (versioned APIs) + web-hunting (recon)", "data": []},
+    {"id": "API10", "name": "Unsafe Consumption of APIs", "cwe": ["CWE-20", "CWE-502"], "desc": "Trusting third-party API responses that are then processed unsafely.", "blitz": "technique_lookup(deserialization) + technique_lookup(command_injection)", "data": []}
+  ]
+}

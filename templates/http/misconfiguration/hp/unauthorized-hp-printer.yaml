@@ -1,0 +1,28 @@
+id: unauthorized-hp-printer
+
+info:
+  name: Unauthorized HP Printer
+  author: pussycat0x
+  severity: high
+  description: HP Printer is exposed.
+  metadata:
+    max-request: 1
+  tags: hp,iot,unauth,misconfig,intrusive,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/SSI/Auth/ip_snmp.htm"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "HP"
+          - "<h1>SNMP</h1>"
+        condition: and
+
+      - type: status
+        status:
+          - 200
+# digest: 4a0a00473045022067077f41bb43a578e7c3310d15cac3ed60f7e295ad9a9d576bf3e1db7733a727022100d0edc28d35b98a6ed60ecd2115182fde94cabe3af14c48c42797ad5253a3acc8:922c64590222798bb761d5b6d8e72950

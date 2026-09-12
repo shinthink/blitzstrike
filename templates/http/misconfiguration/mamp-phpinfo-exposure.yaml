@@ -1,0 +1,34 @@
+id: mamp-phpinfo-exposure
+
+info:
+  name: MAMP - PHP Info Exposure
+  author: 0x_Akoko
+  severity: low
+  description: |
+    Detected MAMP server was exposed phpinfo() page, revealing sensitive PHP configuration, server paths, and environment variables.
+  reference:
+    - https://www.mamp.info/
+    - https://www.acunetix.com/vulnerabilities/web/phpinfo-pages/
+  classification:
+    cvss-metrics: CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:N/A:N
+    cvss-score: 5.3
+    cwe-id: CWE-200
+  metadata:
+    verified: true
+    max-request: 1
+    fofa-query: title="MAMP"
+  tags: mamp,phpinfo,exposure,misconfig,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/MAMP/phpinfo.php"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'contains_all(body, "phpinfo()", "PHP Version")'
+          - 'contains_any(body, "MAMP", "/Applications/MAMP", "C:\\MAMP")'
+        condition: and
+# digest: 490a00463044022056215f706e9f07bc6100f9582de6a021204c04c1c2ff980ebf3112a1c5d231d10220436629295f088c7e55edbabbbc36b0bc6d92fe70ee0ced337961677411a3f6f7:922c64590222798bb761d5b6d8e72950

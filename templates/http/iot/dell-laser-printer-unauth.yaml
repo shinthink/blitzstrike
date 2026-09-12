@@ -1,0 +1,47 @@
+id: dell-laser-printer-unauth
+
+info:
+  name: Dell Laser Printer - Unauthenticated Detect
+  author: pussycat0x
+  severity: high
+  description: |
+    The Dell Laser Printer web interface was accessible without authentication.
+  metadata:
+    max-request: 1
+    shodan-query: title="Laser Printer"
+    verified: true
+  tags: dell,iot,unauth,misconfig,printer,intrusive,vuln,discovery
+
+flow: http(1) && http(2)
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - "status_code == 200"
+          - "contains_all(body, '<TITLE>Dell','Laser Printer</TITLE>')"
+        condition: and
+
+    extractors:
+      - type: regex
+        part: body
+        name: printer_version
+        regex:
+          - 'Dell([ 0-9A-Za-z]+).*Laser Printer'
+
+  - method: GET
+    path:
+      - "{{BaseURL}}/cgi-bin/dynamic/config/secure/security.html"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - "status_code == 200"
+          - "contains_all(body, 'Security','Security')"
+        condition: and
+        internal: true
+# digest: 4b0a00483046022100d91f58f0d9fc8f04eac145caf29ff6c8563637872846aa085887fae1de56e1f5022100e8e6b952f4c46410605a86660d9d55d5297d3a1ed4d359b2efc7440ade744bce:922c64590222798bb761d5b6d8e72950

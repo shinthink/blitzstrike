@@ -1,0 +1,31 @@
+id: mochiweb-detect
+
+info:
+  name: MochiWeb - Detect
+  author: Shivam Kamboj
+  severity: info
+  description: |
+    Detected servers using the MochiWeb framework through the Server header.
+  metadata:
+    verified: true
+    shodan-query: http.component:"mochiweb" country:"US"
+  tags: tech,mochiweb,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers:
+      - type: regex
+        part: header
+        regex:
+          - 'MochiWeb'
+
+    extractors:
+      - type: regex
+        part: header
+        group: 1
+        regex:
+          - 'MochiWeb/([0-9.]+)'
+# digest: 4a0a00473045022100c765d96547b5e5a9069587a99657a5e26c34e964675d839256e30875a569ff57022076dd5ee8e2e9f29be0decf60eb0bdd19de3f2d86c6bab0abc2517293296cc44b:922c64590222798bb761d5b6d8e72950

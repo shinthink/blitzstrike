@@ -1,0 +1,40 @@
+id: ntp-version-detect
+
+info:
+  name: NTP Version Detection
+  author: pussycat0x
+  severity: info
+  description: |
+    Detects if a target host is running NTP Service on port 123.
+  metadata:
+    verified: true
+    shodan-query: "NTP"
+  tags: js,network,ntp,ntpsec,udp,javascript,discovery
+
+javascript:
+  - pre-condition: |
+      isUDPPortOpen(Host, Port);
+
+    code: |
+      const c = require("nuclei/net");
+      const payload = "160203e80000000000000000";
+      const conn = c.Open('udp', `${Host}:${Port}`);
+      conn.SendHex(payload);
+      let resp = conn.RecvFullString(2048);
+      resp;
+
+    args:
+      Host: "{{Host}}"
+      Port: 123
+
+    matchers:
+      - type: dsl
+        dsl:
+          - contains_all(response, "version","processor","system")
+
+    extractors:
+      - type: regex
+        group: 1
+        regex:
+          - 'version="([^"]+)"'
+# digest: 4a0a00473045022022184b0b532b6ba065cbe04f429deb3c8bf6c7bd0bc6a415dcf69445916f9170022100fa713a642a3a8b7089759ecb0ea005eaa78ae5e25ada40d1576023c257a5c0fc:922c64590222798bb761d5b6d8e72950

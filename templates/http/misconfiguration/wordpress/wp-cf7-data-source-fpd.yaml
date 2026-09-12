@@ -1,0 +1,29 @@
+id: wp-cf7-data-source-fpd
+
+info:
+  name: WordPress Data Source for Contact Form 7 - Full Path Disclosure
+  author: DhiyaneshDk
+  severity: low
+  description: |
+    WordPress Plugin CData Source for Contact Form 7 files are publicly accessible without ABSPATH protection, exposing sensitive server path information through PHP error messages when accessed directly.
+  reference:
+    - https://wordpress.org/plugins/cf7-data-source/
+  metadata:
+    verified: true
+    max-request: 1
+    publicwww-query: "/plugins/cf7-data-source"
+  tags: wp,wordpress,wp-plugin,fpd,call-now-button,misconfig,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/wp-content/plugins/cf7-data-source/cf7-datasource.php"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains_all(body, "Fatal error", "Uncaught Error") || contains_all(body, "Warning:", "failed to open stream")'
+          - 'status_code == 200 || status_code == 500'
+          - 'contains(body, "cf7-data-source")'
+        condition: and
+# digest: 4b0a00483046022100d382aae9b341fc1f8d63992db48939582dc92e3ed5fd81bd3b96be1f177db31b022100f6665bd8f1762a27bba332ed745d7031de846eb280c3813235bf1d0cf5253cc5:922c64590222798bb761d5b6d8e72950

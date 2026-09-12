@@ -1,0 +1,31 @@
+id: miniupnpd-detect
+
+info:
+  name: MiniUPnPd - Detect
+  author: Shivam Kamboj
+  severity: info
+  description: |
+    Detected servers using the MiniUPnPd service through the Server header.
+  metadata:
+    max-request: 1
+    shodan-query: "MiniUPnPd"
+  tags: tech,miniupnpd,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers:
+      - type: regex
+        part: header
+        regex:
+          - 'MiniUPnPd'
+
+    extractors:
+      - type: regex
+        part: header
+        group: 1
+        regex:
+          - 'MiniUPnPd/([0-9.]+)'
+# digest: 4a0a004730450221009f8e21a862eb64ed6094627407ad5e74d01a314448d44094bd5e5ec8eba3706702206435ea5f5dd60d98a4e59baa9d594f8c7fbc4cf7ba6ffdc281156a935aa9e628:922c64590222798bb761d5b6d8e72950

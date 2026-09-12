@@ -1,0 +1,33 @@
+id: graphql-hypergraphql-detect
+info:
+  name: Graphql Hypergraphql Detect
+  author: princechaddha
+  severity: info
+  reference:
+    - https://github.com/dolevf/graphw00f/blob/main/graphw00f/lib.py
+  tags: tech,graphql,hypergraphql,discovery
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/query"
+      - "{{BaseURL}}/"
+    body: '{"query":"zzz { __typename }"}'
+    headers:
+      Content-Type: application/json
+    redirects: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+          - 400
+
+      - type: word
+        words:
+          - "Validation error of type InvalidSyntax: Invalid query syntax."
+        part: body
+# digest: 490a0046304402206b1593b64fecfd1f6e9599ae2d9db59dec2d99a8e0c7a8157e2c05a0627685e502204d40357511c1ace9811ab31c9372350c5118bfc995a35cb217ec7aaf8c05dfbf:922c64590222798bb761d5b6d8e72950

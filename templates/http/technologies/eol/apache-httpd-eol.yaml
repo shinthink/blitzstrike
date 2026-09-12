@@ -1,0 +1,39 @@
+id: apache-httpd-eol
+
+info:
+  name: Apache HTTP Server End-of-Life - Detect
+  author: Shivam Kamboj
+  severity: info
+  description: |
+    Detected Apache HTTP Server versions that have reached End-of-Life (EOL) and no longer receive security updates.
+  reference:
+    - https://httpd.apache.org/
+    - https://endoflife.date/apache
+  metadata:
+    verified: true
+    max-request: 1
+    shodan-query: "Server: Apache/"
+    product: http_server
+    vendor: apache
+  tags: tech,apache,eol,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - compare_versions(version, '<=2.2.34')
+          - contains(server, 'Apache')
+        condition: and
+
+    extractors:
+      - type: regex
+        part: header
+        name: version
+        group: 1
+        regex:
+          - 'Server: Apache/([0-9.]+)'
+# digest: 4a0a00473045022100e7629937b6cd365b29928349ffc44a79e691c4f65bd2f11e778bdb2576e22a5e0220148daad7f6be600fada5720e8fec4949dd20774c3887bee2618ba3b0700b823d:922c64590222798bb761d5b6d8e72950

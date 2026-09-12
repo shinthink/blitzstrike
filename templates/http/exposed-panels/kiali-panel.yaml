@@ -1,0 +1,43 @@
+id: kiali-panel
+
+info:
+  name: Kiali - Detect
+  author: righettod
+  severity: info
+  description: |
+    kiali panel was detected.
+  reference:
+    - https://kiali.io/
+  classification:
+    cpe: cpe:2.3:a:kiali:kiali:*:*:*:*:*:*:*:*
+  metadata:
+    verified: true
+    max-request: 2
+    vendor: kiali
+    product: kiali
+    shodan-query: title:"Kiali"
+  tags: panel,kiali,detect,login,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/kiali/api/status"
+      - "{{BaseURL}}/kiali/"
+
+    host-redirects: true
+    max-redirects: 2
+    stop-at-first-match: true
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'contains_any(to_lower(body), "kiali-ui", "<title>kiali</title>", "<title>kiali console</title>", "kiali version")'
+        condition: and
+
+    extractors:
+      - type: regex
+        part: body
+        group: 1
+        regex:
+          - '(?i)"Kiali version":\s*"([a-z0-9.]+)"'
+# digest: 490a0046304402204832bfb6426aaaaefe2dd7e8990f58faf318cae1771fc1126dd2ff21105d8b50022040618ef1a308be6a6704f4820d86e99ccc0fe2080a7154cc9fdcb004ad012dd3:922c64590222798bb761d5b6d8e72950

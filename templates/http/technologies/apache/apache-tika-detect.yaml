@@ -1,0 +1,46 @@
+id: apache-tika-detect
+
+info:
+  name: Apache Tika - Detection
+  author: icarot
+  severity: info
+  description: |
+    Detects an Apache Tika server, a toolkit that detects and extracts metadata and text from over a thousand different file types (such as PPT, XLS, and PDF).
+  reference:
+    - https://github.com/apache/tika/
+  classification:
+    cpe: cpe:2.3:a:apache:tika:*:*:*:*:*:*:*:*
+  metadata:
+    max-request: 3
+    shodan-query: title:"Welcome to the Apache Tika"
+    vendor: apache
+    product: tika
+  tags: tech,tika,apache,detect,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/"
+      - "{{BaseURL}}/tika"
+      - "{{BaseURL}}/version"
+
+    stop-at-first-match: true
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - 'Apache Tika'
+          - 'apache.tika'
+        condition: and
+
+      - type: status
+        status:
+          - 200
+
+    extractors:
+      - type: regex
+        part: response
+        regex:
+          - "Apache Tika [0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}"
+# digest: 4a0a004730450220117d8c5ea546898526684ef25fced40b225f1ec9b93a82c44ec6229fce3f508e022100e3e78e43ee34e8d627c3f1b1a6351e3ee739a63c4ffc3263f1d64fcde5c70851:922c64590222798bb761d5b6d8e72950

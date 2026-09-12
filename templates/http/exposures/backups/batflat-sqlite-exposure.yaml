@@ -1,0 +1,35 @@
+id: batflat-sqlite-exposure
+
+info:
+  name: Batflat SQLite Database - Exposure
+  author: DhiyaneshDk
+  severity: high
+  description: |
+    Detected exposed Batflat CMS SQLite database files that may contain sensitive information including admin credentials, user data, site configuration, and content. Batflat stores its database in the /inc/data/ directory by default.
+  reference:
+    - https://batflat.org/
+    - https://github.com/sruupl/batflat
+  classification:
+    cwe-id: CWE-219,CWE-552
+  metadata:
+    verified: true
+    max-request: 1
+    shodan-query: html:"Batflat"
+  tags: batflat,database,sqlite,unauth,backup,exposure,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/inc/data/database.sdb"
+
+    matchers-condition: and
+    matchers:
+      - type: binary
+        binary:
+          - "53514c69746520666f726d6174203300"  # "SQLite format 3\0" hex
+        part: body
+
+      - type: status
+        status:
+          - 200
+# digest: 4a0a0047304502207e45989b30a9e3e3445114c81e26b6e00c0661f8dc7f944791aa9df599e892e5022100d7fca39f898ab0f1a8b45d304c0c89e85f9c98e4b1a6bdf3d6829c34f365e751:922c64590222798bb761d5b6d8e72950

@@ -1,0 +1,43 @@
+id: perforce-repository
+
+info:
+  name: Perforce Repository Disclosure
+  author: DhiyaneshDk
+  severity: low
+  description: |
+    Detected an exposed .p4ignore file, which could have revealed ignored files, sensitive paths, or developer-specific information useful for further enumeration.
+  reference:
+    - https://help.perforce.com/helix-core/server-apps/cmdref/current/Content/CmdRef/P4IGNORE.html
+  metadata:
+    max-request: 1
+    verified: true
+    shodan-query: html:"Perforce"
+  tags: exposure,perforce,repo,disclosure,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/.p4ignore"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "*.log"
+          - "yarn-error.log"
+        condition: or
+
+      - type: word
+        part: content_type
+        words:
+          - "application/octet-stream"
+
+      - type: dsl
+        dsl:
+          - "!contains_any(tolower(body), '<html','<body','<!doctype')"
+
+      - type: status
+        status:
+          - 200
+# digest: 490a004630440220419223bf0bdc51c2428aa08aaf334e5ba235bc1f6eb480e27495c10f052868f302204d9dd76da847e1540c960e2326f9cd9b3f90099b3680bb392776a3e0d20221ed:922c64590222798bb761d5b6d8e72950

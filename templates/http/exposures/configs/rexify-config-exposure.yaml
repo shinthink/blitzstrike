@@ -1,0 +1,37 @@
+id: rexify-config-exposure
+
+info:
+  name: Rexify Configuration - Exposure
+  author: theamanrawat
+  severity: high
+  description: |
+    Rexfile configuration from the Rex/Rexify automation framework was exposed. These files may contain SSH credentials, server hostnames, private key paths, and other sensitive data.
+  reference:
+    - https://www.rexify.org/
+  metadata:
+    verified: true
+    max-request: 1
+  tags: exposure,config,rexify,rex,devops,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/Rexfile"
+
+    matchers-condition: and
+    matchers:
+      - type: word
+        words:
+          - "use Rex"
+          - "task"
+          - "group"
+          - "user"
+          - "password"
+          - "desc"
+        condition: and
+        part: body
+
+      - type: status
+        status:
+          - 200
+# digest: 4a0a0047304502207abc1571f0db5dd2b18a3a3a3f8b1e2dfb7d47ece9914b79eb168a4e8af097cc022100f6b8e430c78e5c3236bef51cb9530f6d73b981e9bdfcc317b7ae36ebd2d82cda:922c64590222798bb761d5b6d8e72950

@@ -1,0 +1,31 @@
+id: expect-ct-misconfigured
+
+info:
+  name: Expect-CT Header - Misconfigured
+  author: theamanrawat
+  severity: info
+  description: |
+    Detected misconfigured Expect-CT headers: max-age is 0 (ineffective) and enforce directive is missing
+  reference:
+    - https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Expect-CT
+    - https://scotthelme.co.uk/a-new-security-header-expect-ct/
+  tags: headers,expect-ct,misconfiguration,vuln
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    matchers:
+      - type: dsl
+        dsl:
+          - 'contains(tolower(header), "expect-ct")'
+          - 'contains(tolower(header), "max-age=0") || !contains(tolower(header), "enforce")'
+        condition: and
+
+    extractors:
+      - type: kval
+        part: header
+        kval:
+          - expect_ct
+# digest: 4a0a0047304502203e4f285d4f003fbf5acb722eb217dcfb6cbfda86f6d21066c8a7bb033ecbaaaa02210096b49643e6048ea06874945cea40dd9ee2302587fb0b2d0e96767802e42c2c86:922c64590222798bb761d5b6d8e72950

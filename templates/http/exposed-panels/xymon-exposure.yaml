@@ -1,0 +1,40 @@
+id: xymon-exposure
+
+info:
+  name: Xymon - Exposure
+  author: theamanrawat
+  severity: low
+  description: |
+    Detected the exposure of the Xymon monitoring system interface.
+  reference:
+    - https://xymon.com/
+  metadata:
+    shodan-query: http.title:"Xymon"
+  tags: xymon,exposure,monitoring,panel,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}/xymon/"
+      - "{{BaseURL}}/xymon-se/xymon/"
+
+    stop-at-first-match: true
+    matchers-condition: and
+    matchers:
+      - type: word
+        part: body
+        words:
+          - "Xymon"
+          - "xymon-se"
+          - "xymon-cgi"
+        condition: and
+
+      - type: word
+        part: header
+        words:
+          - "text/html"
+
+      - type: status
+        status:
+          - 200
+# digest: 490a0046304402207a7edd352ca4b3bed689a3ccfa136f959f33898c73745f341923a380dc147a82022061c17a38036cc815634f0f4b8d3486e128ab7d2a314fedff59678929aa735c69:922c64590222798bb761d5b6d8e72950

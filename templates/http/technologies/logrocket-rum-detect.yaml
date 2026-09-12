@@ -1,0 +1,33 @@
+id: logrocket-rum-detect
+
+info:
+  name: LogRocket RUM - Detect
+  author: Shivam Kamboj
+  severity: info
+  description: |
+    Detects LogRocket Session Replay & Frontend Monitoring artifacts.
+  reference:
+    - https://logrocket.com/
+  metadata:
+    verified: true
+    max-request: 1
+    vendor: logrocket
+    product: logrocket
+    shodan-query: http.html:"LogRocket.init"
+    fofa-query: body="LogRocket.init" || body="cdn.logrocket.io"
+  tags: tech,detect,rum,logrocket,discovery
+
+http:
+  - method: GET
+    path:
+      - "{{BaseURL}}"
+
+    redirects: true
+    max-redirects: 2
+    matchers:
+      - type: dsl
+        dsl:
+          - 'status_code == 200'
+          - 'contains(body, "LogRocket.min.js")'
+        condition: and
+# digest: 4a0a004730450220055ef490ac7a6664e16da494b884e1c8098e9f1153bdfd03ee9e7ff8e14d096602210084883795a11a96fbc1c1b6116c08bc721007d4c3ad75365ff142cbddd0a23d60:922c64590222798bb761d5b6d8e72950

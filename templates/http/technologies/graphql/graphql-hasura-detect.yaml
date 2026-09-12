@@ -1,0 +1,46 @@
+id: graphql-hasura-detect
+info:
+  name: Graphql Hasura Detect
+  author: princechaddha
+  severity: info
+  reference:
+    - https://github.com/dolevf/graphw00f/blob/main/graphw00f/lib.py
+  tags: tech,graphql,hasura,discovery
+
+http:
+  - method: POST
+    path:
+      - "{{BaseURL}}/graphql"
+      - "{{BaseURL}}/api/graphql"
+      - "{{BaseURL}}/query"
+      - "{{BaseURL}}/"
+    body: '{"query":"query {aa}"}'
+    headers:
+      Content-Type: application/json
+    redirects: true
+
+    matchers-condition: and
+    matchers:
+      - type: status
+        status:
+          - 200
+
+      - type: word
+        words:
+          - "field \"aa\" not found in type: 'query_root'"
+        part: body
+
+      - type: word
+        words:
+          - 'Content-Type: text/html'
+        part: header
+        negative: true
+
+      - type: word
+        words:
+          - '<html'
+          - '<body'
+        part: body
+        condition: or
+        negative: true
+# digest: 4a0a00473045022100e936cda8fa1464f0cca7effdfbf15d45635c1434382fd96b6767b9977c29085f022041b970db849cc56f479160464afce059fcbcab64fa4249a593655fbbf05fc4bb:922c64590222798bb761d5b6d8e72950
