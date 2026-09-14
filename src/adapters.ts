@@ -357,7 +357,17 @@ const pythonAdapter: LanguageAdapter = {
           for (const v of argVars) sinks.push({ variable: v, kind, line: lineOf(n), cwe });
         }
         for (const [re, kinds] of PY_SANITIZERS) {
-          if (re.test(full)) for (const v of argVars) sanitizers.push({ variable: v, neutralizes: kinds, line: lineOf(n) });
+          if (re.test(full)) {
+            for (const v of argVars) {
+              // A sanitizer neutralizes the VALUE it casts, not the dotted-chain
+              // receiver/method names (os.environ.get) or string literals. Without
+              // this, a common method name like `get` neutralized in one place
+              // (`int(os.environ.get(...))`) pollutes the `get` in `request.args.get`
+              // elsewhere and wrongly suppresses real SQLi/command findings.
+              if (new RegExp(`\\b${v}\\s*[.(]`).test(full)) continue;
+              sanitizers.push({ variable: v, neutralizes: kinds, line: lineOf(n) });
+            }
+          }
         }
         calls.push({ name: callee, args: argVars, line: lineOf(n) });
       }
@@ -464,6 +474,106 @@ const javaAdapter: LanguageAdapter = {
 };
 
 // ---------------------------------------------------------------------------
+// Rust adapter (regex/line-oriented — Rust's ownership model makes the classic
+// web sinks map cleanly; the memory-safety surface is handled by the
+// rust_unsafe complex-bugs detector, not the taint engine)
+// ---------------------------------------------------------------------------
+
+const RUST_SOURCES: Array<[RegExp, SourceKind]> = [
+  [/env::args\s*\(|args_os\s*\(/, "cli_argument"],
+  [/stdin\s*\(\s*\)|read_line\s*\(/, "raw_body"],
+  [/\b(?:Query|Form|Json|Path)\b|web::(?:Query|Json|Form|Path)|req\.(?:query|params|param|form|query_string)/, "http_parameter"],
+  [/env::var\s*\(|env::var_os\s*\(/, "env_variable"],
+];
+
+const RUST_SINKS: Array<[RegExp, SinkKind, string?]> = [
+  // command execution — the shell form (sh -c / bash -c / cmd /c) is the vuln;
+  // the list form Command::new("ls").arg(x) is safe.
+  [/Command::new|process::Command/, "command_execution", "CWE-78"],
+  // SQL — runtime `sqlx::query(&format!(...))` is vuln; the `query!` compile-time
+  // macro is safe (checked against the schema at build time).
+  [/sqlx::query(?:_as)?\s*\(|sqlx::raw_sql|\.query\s*\(|\.execute\s*\(|rusqlite|diesel::/, "sql_execution", "CWE-89"],
+  // SSRF — reqwest/hyper fetching an attacker-supplied URL.
+  [/reqwest::get|reqwest::Client|hyper::|\.get\s*\(|\.post\s*\(|\.put\s*\(|\.request\s*\(/, "http_request", "CWE-918"],
+  // path traversal — fs reads/writes keyed on an attacker-supplied path.
+  [/std::fs::(read_to_string|read|write|remove_file|copy|rename)|File::open\s*\(|fs::(read|write|remove_file|copy)\s*\(/, "path_traversal", "CWE-22"],
+  // deserialization — serde/bincode/toml on untrusted bytes (bincode is unsafe for untrusted input).
+  [/serde_json::from_(str|slice)|bincode::deserialize|serde_yaml::from_str|toml::from_str|\.deserialize\s*\(/, "deserialization", "CWE-502"],
+];
+
+const RUST_SANITIZERS: Array<[RegExp, SinkKind[]]> = [
+  // canonicalize resolves the path against the FS root (mitigates traversal)
+  [/canonicalize\s*\(/, ["path_traversal"]],
+  // the compile-time-checked query! macro is safe (no runtime string building)
+  [/query(_as)?!\s*\(/, ["sql_execution"]],
+];
+
+const rustAdapter: LanguageAdapter = {
+  language: "rust",
+  extensions: [".rs"],
+  parse(code, _file) {
+    const sources: IrSource[] = [];
+    const sinks: IrSink[] = [];
+    const sanitizers: IrSanitize[] = [];
+    const calls: IrCall[] = [];
+    const assigns: IrAssign[] = [];
+
+    // `let [mut] name = rhs;` — assign + source detection.
+    const assignRe = /let\s+(?:mut\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+?);/g;
+    let m: RegExpExecArray | null;
+    while ((m = assignRe.exec(code)) !== null) {
+      const varName = m[1];
+      const rhs = m[2];
+      const line = code.slice(0, m.index).split("\n").length;
+      const src = RUST_SOURCES.find(([re]) => re.test(rhs));
+      if (src) sources.push({ variable: varName, kind: src[1], line, attacker_controlled: src[1] !== "cli_argument" && src[1] !== "env_variable" });
+      const rhsVars: string[] = [];
+      const vre = /([a-z_][a-z0-9_]*)/g; let vm: RegExpExecArray | null;
+      while ((vm = vre.exec(rhs)) !== null) {
+        const v = vm[1];
+        if (!RUST_SOURCES.some(([re]) => re.test(v))) rhsVars.push(v);
+      }
+      assigns.push({ target: varName, sources: rhsVars.slice(0, 8), line });
+    }
+
+    // Axum/Actix extractors as function params: fn h(Query(q): Query<...>, ...)
+    const extractorRe = /\b(?:Query|Form|Json|Path)\s*\(\s*([a-z_][a-z0-9_]*)\s*\)/g;
+    while ((m = extractorRe.exec(code)) !== null) {
+      const line = code.slice(0, m.index).split("\n").length;
+      sources.push({ variable: m[1], kind: "http_parameter", line, attacker_controlled: true });
+      assigns.push({ target: m[1], sources: [], line });
+    }
+
+    const lines = code.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      for (const [re, kind, cwe] of RUST_SINKS) {
+        if (!re.test(line)) continue;
+        // skip compile-time-checked SQL macro (query! / query_as!)
+        if (kind === "sql_execution" && /query(_as)?!\s*\(/.test(line)) continue;
+        const argVars: string[] = [];
+        const vre = /([a-z_][a-z0-9_]*)/g; let vm: RegExpExecArray | null;
+        while ((vm = vre.exec(line)) !== null) {
+          const id = vm[1];
+          // skip method/API names + keywords so the tainted variable survives the slice
+          if (/^(new|let|mut|arg|args|command|process|std|sqlx|query|query_as|execute|reqwest|client|get|post|put|request|fs|file|open|read_to_string|read|write|remove_file|copy|rename|serde_json|from_str|from_slice|bincode|deserialize|toml|yaml|format|unwrap|expect|env|args|stdin|read_line)$/.test(id)) continue;
+          argVars.push(id);
+        }
+        for (const v of argVars.slice(0, 8)) sinks.push({ variable: v, kind, line: i + 1, cwe });
+      }
+      for (const [re, kinds] of RUST_SANITIZERS) {
+        if (re.test(line)) {
+          const vre = /([a-z_][a-z0-9_]*)/g; let vm: RegExpExecArray | null;
+          while ((vm = vre.exec(line)) !== null) sanitizers.push({ variable: vm[1], neutralizes: kinds, line: i + 1 });
+        }
+      }
+    }
+
+    return { sources, sinks, sanitizers, calls, assigns };
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Register all adapters
 // ---------------------------------------------------------------------------
 
@@ -471,5 +581,6 @@ registerLanguage(phpAdapter);
 registerLanguage(jsAdapter);
 registerLanguage(pythonAdapter);
 registerLanguage(javaAdapter);
+registerLanguage(rustAdapter);
 
-export { phpAdapter, jsAdapter, pythonAdapter, javaAdapter };
+export { phpAdapter, jsAdapter, pythonAdapter, javaAdapter, rustAdapter };

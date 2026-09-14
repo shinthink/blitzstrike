@@ -6,7 +6,7 @@
  * "browser_devtools" chain hint into a REAL browser session instead of a
  * connection string the LLM has to wire up manually.
  */
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -111,10 +111,14 @@ function findChromium(): string | null {
   return null;
 }
 
-function chromeDevtoolsBin(): { command: string; args: string[] } | null {
+function chromeDevtoolsCommand(): { command: string; args: string[] } | null {
   for (const c of ["/usr/bin/chrome-devtools-mcp", "/usr/local/bin/chrome-devtools-mcp"]) {
     if (existsSync(c)) return { command: c, args: [] };
   }
+  // Auto-install fallback: npx fetches chrome-devtools-mcp on first use
+  // (zero global install). Cached by npx on subsequent runs.
+  const npx = spawnSync("npx", ["--version"], { timeout: 8000 });
+  if (npx.error === undefined) return { command: "npx", args: ["-y", "chrome-devtools-mcp@latest"] };
   return null;
 }
 
@@ -128,17 +132,12 @@ export function parsePageId(text: string): number {
  * console messages + a JS evaluation. This is the auto-verification of the
  * "browser_devtools" chain hint — a real browser session, not a connect string. */
 export async function driveChromeDevtools(target: string, timeoutMs = 25000): Promise<McpResult> {
-  const bin = chromeDevtoolsBin();
+  const bin = chromeDevtoolsCommand();
   if (!bin) {
-    return { ok: false, error: "chrome-devtools-mcp not installed — run: npm install -g chrome-devtools-mcp (or npx chrome-devtools-mcp@latest)" };
+    return { ok: false, error: "chrome-devtools-mcp not available (no global binary and no npx) — install Node/npm first" };
   }
   const chrome = findChromium();
-  const args = [
-    "--headless",
-    "--isolated",
-    "--chromeArg=--no-sandbox",
-    "--chromeArg=--disable-gpu",
-  ];
+  const args = [...bin.args, "--headless", "--isolated", "--chromeArg=--no-sandbox", "--chromeArg=--disable-gpu"];
   if (chrome) args.push(`--executablePath=${chrome}`);
 
   const client = mcpClient(bin.command, args);

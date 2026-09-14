@@ -7,6 +7,9 @@
  */
 import { createHash } from "node:crypto";
 import { VERSION } from "./version.js";
+import { redactSecrets } from "./secrets.js";
+
+export { redactSecrets, REDACTION_PATTERNS } from "./secrets.js";
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -46,6 +49,12 @@ export interface EvidenceProvenance {
 export interface Evidence {
   evidence_id: string;
   type: EvidenceType;
+  /** The role this evidence plays in proving the finding:
+   *  proof (the request/response that triggered it), baseline (the normal
+   *  request that shows the differential), verification (the negative control /
+   *  marker), or supporting (anything else). A CONFIRMED finding should carry a
+   *  `proof` role, and ideally `baseline` + `verification` for a reproducible PoC. */
+  role: EvidenceRole;
   description: string;
   source?: Record<string, unknown>;
   sink?: Record<string, unknown>;
@@ -55,38 +64,12 @@ export interface Evidence {
   provenance: EvidenceProvenance;
 }
 
-// ---------------------------------------------------------------------------
-// Secret redaction (§6)
-// ---------------------------------------------------------------------------
+/** Evidence role — how a piece of evidence supports the finding's verdict. */
+export type EvidenceRole = "proof" | "baseline" | "verification" | "supporting";
 
-const REDACTION_PATTERNS: Array<[RegExp, string]> = [
-  // Authorization / bearer tokens
-  [/(authorization\s*[:=]\s*)(bearer\s+)?[A-Za-z0-9._~+/=-]{8,}/gi, "$1$2[REDACTED]"],
-  [/(api[_-]?key\s*[:=]\s*)["']?[A-Za-z0-9._-]{16,}["']?/gi, "$1[REDACTED]"],
-  [/(access[_-]?token\s*[:=]\s*)["']?[A-Za-z0-9._-]{16,}["']?/gi, "$1[REDACTED]"],
-  [/(secret\s*[:=]\s*)["']?[A-Za-z0-9._/-]{16,}["']?/gi, "$1[REDACTED]"],
-  [/(password\s*[:=]\s*)["']?[^"'\s,}&]{4,}["']?/gi, "$1[REDACTED]"],
-  [/(passwd\s*[:=]\s*)["']?[^"'\s,}&]{4,}["']?/gi, "$1[REDACTED]"],
-  [/(private[_-]?key\s*[:=]\s*)["']?[A-Za-z0-9+/=_-]{16,}["']?/gi, "$1[REDACTED]"],
-  [/(session\s*[:=]\s*)["']?[A-Za-z0-9._-]{12,}["']?/gi, "$1[REDACTED]"],
-  [/(cookie\s*[:=]\s*)["']?[A-Za-z0-9._-]{12,}["']?/gi, "$1[REDACTED]"],
-  [/(set-cookie\s*:\s*)[^\r\n]+/gi, "$1[REDACTED]"],
-  // AWS / generic secret keys
-  [/AKIA[0-9A-Z]{16}/g, "[REDACTED]"],
-  [/ghp_[A-Za-z0-9]{20,}/g, "[REDACTED]"],
-  [/github_pat_[A-Za-z0-9_]{20,}/g, "[REDACTED]"],
-  [/sk-[A-Za-z0-9]{20,}/g, "[REDACTED]"],
-  [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[REDACTED]"],
-];
-
-/** Redact secrets from arbitrary text before persistence/report/log/context. */
-export function redactSecrets(text: string): string {
-  let out = text;
-  for (const [re, repl] of REDACTION_PATTERNS) {
-    out = out.replace(re, repl);
-  }
-  return out;
-}
+// ---------------------------------------------------------------------------
+// Secret redaction (§6) — patterns + logic live in secrets.ts (single source).
+// ---------------------------------------------------------------------------
 
 /** Whether the text contains a recognizable RAW secret (used by the invariant layer).
  *  Implemented as "does redaction change it" — deterministic and does NOT flag
@@ -131,6 +114,8 @@ function nextEvidenceId(): string {
 export interface MakeEvidenceInput {
   type: EvidenceType;
   description: string;
+  /** Role this evidence plays in proving the finding (default "supporting"). */
+  role?: EvidenceRole;
   source?: Record<string, unknown>;
   sink?: Record<string, unknown>;
   artifacts?: Array<{ name: string; kind: string; content: string }>;
@@ -147,6 +132,7 @@ export function makeEvidence(input: MakeEvidenceInput): Evidence {
   return {
     evidence_id: nextEvidenceId(),
     type: input.type,
+    role: input.role ?? "supporting",
     description: redactSecrets(input.description),
     source: input.source ? redactObject(input.source) : undefined,
     sink: input.sink ? redactObject(input.sink) : undefined,
@@ -174,4 +160,25 @@ export function verifyEvidence(evidence: Evidence): { ok: boolean; failed: strin
     if (!verifyArtifact(a)) failed.push(a.name);
   }
   return { ok: failed.length === 0, failed };
+}
+
+/** Summarize a finding's evidence by role. `reproducible` means the finding carries
+ *  a proof (trigger) + baseline (normal) + verification (negative control) — the
+ *  three roles that make a PoC independently reproducible. */
+export function evidenceRoles(evidence: Evidence[]): {
+  roles: Record<EvidenceRole, number>;
+  proof: boolean;
+  baseline: boolean;
+  verification: boolean;
+  reproducible: boolean;
+} {
+  const roles: Record<EvidenceRole, number> = { proof: 0, baseline: 0, verification: 0, supporting: 0 };
+  for (const e of evidence) roles[e.role] = (roles[e.role] ?? 0) + 1;
+  return {
+    roles,
+    proof: roles.proof > 0,
+    baseline: roles.baseline > 0,
+    verification: roles.verification > 0,
+    reproducible: roles.proof > 0 && roles.baseline > 0 && roles.verification > 0,
+  };
 }

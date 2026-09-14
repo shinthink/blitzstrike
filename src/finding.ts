@@ -10,9 +10,10 @@
  *     an AI agent assigning a high score.
  *   - Lifecycle is strict and machine-readable.
  */
-import { Evidence, makeEvidence } from "./evidence.js";
+import { Evidence, makeEvidence, type EvidenceType } from "./evidence.js";
 import { assertFindingInvariants } from "./invariants.js";
 import { recordAudit } from "./audit.js";
+import { listExchanges, groundTrafficEvidence } from "./traffic.js";
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -24,6 +25,10 @@ export type FindingStatus =
   | "hypothesis"
   | "validating"
   | "confirmed"
+  | "retesting"
+  | "fixed"
+  | "still_vulnerable"
+  | "inconclusive"
   | "false_positive"
   | "rejected"
   | "blocked"
@@ -50,6 +55,10 @@ export interface FindingTarget {
   host?: string;
   endpoint?: string;
   path?: string;
+  /** Vulnerable request parameter/field (for the Vulnerability Location block). */
+  param?: string;
+  /** HTTP method (GET/POST/…) for the Vulnerability Location block. */
+  method?: string;
 }
 
 export interface FindingClassification {
@@ -89,6 +98,23 @@ export interface FindingChain {
   name?: string;
 }
 
+/** Whether a finding's (HTTP) evidence is grounded byte-for-byte in recorded
+ *  live traffic. `no_traffic` = nothing recorded (fail-open, no penalty);
+ *  `grounded` = at least one artifact found in the ledger; `ungrounded` =
+ *  traffic exists but NO artifact could be located (evidence not traceable). */
+export type FindingGrounding = "grounded" | "ungrounded" | "inconclusive" | "no_traffic";
+
+/** Evidence types that CAN be grounded against HTTP traffic. Source-code
+ *  evidence (source_location/source_symbol/data_flow/sink_location) cannot. */
+const HTTP_EVIDENCE_TYPES = new Set<EvidenceType>([
+  "request",
+  "response",
+  "baseline_comparison",
+  "validation_result",
+  "tool_output",
+  "chain_execution",
+]);
+
 export interface FindingTimestamps {
   created: string;
   updated: string;
@@ -108,6 +134,8 @@ export interface Finding {
   sink: FindingSink;
   validation: FindingValidation;
   evidence: Evidence[];
+  /** Whether the (HTTP) evidence is grounded in recorded live traffic. */
+  grounding?: FindingGrounding;
   chain: FindingChain;
   impact: Record<string, unknown>;
   remediation: Record<string, unknown>;
@@ -126,7 +154,17 @@ export const LIFECYCLE_TRANSITIONS: Record<FindingStatus, FindingStatus[]> = {
   // "unconfirmed" live there, not in the lifecycle). The lifecycle only moves
   // to a terminal state — confirmed/false_positive/blocked/out_of_scope.
   validating: ["confirmed", "false_positive", "blocked", "out_of_scope"],
-  confirmed: [],
+  // Retest loop (post-confirmation): a confirmed finding can be re-verified to
+  // check whether the vendor patched it. still_vulnerable → retesting re-opens
+  // the loop (re-retest later); fixed is terminal (closed).
+  confirmed: ["retesting"],
+  retesting: ["fixed", "still_vulnerable", "inconclusive", "false_positive"],
+  fixed: [],
+  still_vulnerable: ["retesting"],
+  // inconclusive = could NOT determine (WAF blocked / target down / missing login
+  // / evidence insufficient). NOT a "fixed" — one failed request proves nothing.
+  // Re-openable via retesting once the blocker clears.
+  inconclusive: ["retesting"],
   false_positive: [],
   rejected: [],
   blocked: [],
@@ -214,15 +252,21 @@ export interface MakeFindingInput {
   chainId?: string | null;
   chainName?: string;
   status?: FindingStatus;
+  /** Evidence attached at creation — a finding must never be created empty
+   * when the producer already holds the observed artifact (headers, URL,
+   * response body). Each entry becomes a redacted SHA-256-tagged record. */
+  evidence?: Array<{ type: EvidenceType; description: string; content?: string }>;
 }
 
-/** Create a canonical finding. Default status = detected (hypothesis-pending). */
+/** Create a canonical finding. Default status = detected (hypothesis-pending).
+ * Evidence passed in `input.evidence` is attached immediately so the finding is
+ * never born empty when the producer holds the observed artifact. */
 export function makeFinding(input: MakeFindingInput): Finding {
   const now = new Date().toISOString();
   const status = input.status ?? "detected";
   const factors = confidenceFactorsFor(input);
   const confidence = computeConfidence(factors);
-  const finding: Finding = {
+  let finding: Finding = {
     id: nextFindingId(),
     status,
     title: input.title,
@@ -245,6 +289,16 @@ export function makeFinding(input: MakeFindingInput): Finding {
     remediation: {},
     timestamps: { created: now, updated: now },
   };
+  if (input.evidence?.length) {
+    for (const e of input.evidence) {
+      const ev = makeEvidence({
+        type: e.type,
+        description: e.description,
+        artifacts: e.content ? [{ name: "artifact", kind: "evidence", content: e.content }] : [],
+      });
+      finding = attachEvidence(finding, ev);
+    }
+  }
   recordAudit("finding_created", { tool: "eagle-eye", target: input.target.host ?? input.target.endpoint, result: status, correlationId: finding.id });
   return finding;
 }
@@ -286,11 +340,32 @@ export function attachEvidence(finding: Finding, evidence: Evidence): Finding {
   };
 }
 
+/** Confidence penalty applied when HTTP evidence cannot be grounded in recorded
+ *  traffic (a fabrication risk). Drops the score below the "confirmed" level. */
+const GROUNDING_PENALTY = 0.2;
+
+/** Auto-ground a finding's HTTP evidence against the recorded traffic.
+ *  - no HTTP artifacts, or no traffic recorded -> "no_traffic" (fail-open)
+ *  - at least one artifact located in the ledger   -> "grounded"
+ *  - traffic exists but NO artifact located        -> "ungrounded"
+ *  Short (<12 char) artifacts are ignored (too small to be a meaningful quote). */
+export function groundFindingEvidence(evidence: Evidence[]): FindingGrounding {
+  const contents = evidence
+    .filter((e) => HTTP_EVIDENCE_TYPES.has(e.type))
+    .flatMap((e) => e.artifacts.map((a) => a.content))
+    .filter((c) => c.trim().length >= 12);
+  if (contents.length === 0) return "no_traffic";
+  if (listExchanges().length === 0) return "no_traffic";
+  return contents.some((c) => groundTrafficEvidence(c).grounded) ? "grounded" : "ungrounded";
+}
+
 /** Mark a hypothesis as confirmed with validation + evidence + recomputed confidence.
  *  A FAILED negative control (negative_control=false) drops confidence below the
  *  confirmed threshold — confirmation requires both a positive marker AND a
  *  clean negative control. Confirmation also REQUIRES evidence (hard invariant:
- *  a finding cannot be CONFIRMED without evidence). */
+ *  a finding cannot be CONFIRMED without evidence) and — when live traffic is
+ *  recorded — the evidence must be GROUNDED in it (ungrounded evidence takes a
+ *  confidence penalty so the level can never read "confirmed"). */
 export function confirmFinding(
   finding: Finding,
   opts: {
@@ -298,6 +373,9 @@ export function confirmFinding(
     negative_control?: boolean;
     baseline?: boolean;
     scope_allowed?: boolean;
+    /** Optional grounding verdict (from verify_evidence / traffic_evidence).
+     *  If omitted, the evidence is auto-grounded against the recorded traffic. */
+    grounding?: FindingGrounding;
   },
 ): Finding {
   if (opts.evidence.length === 0) {
@@ -306,7 +384,11 @@ export function confirmFinding(
   const evidence = opts.evidence.map((e) => makeEvidence(e));
   const negativeControl = opts.negative_control ?? true;
   const scopeAllowed = opts.scope_allowed ?? true;
-  const confidence = computeConfidence({
+
+  // Grounding gate — is the HTTP evidence traceable to real recorded traffic?
+  const grounding: FindingGrounding = opts.grounding ?? groundFindingEvidence(evidence);
+
+  let confidence = computeConfidence({
     static_analysis: true,
     data_flow: true,
     reachability: true,
@@ -314,6 +396,9 @@ export function confirmFinding(
     runtime_validation: true,
     negative_control: negativeControl,
   });
+  if (grounding === "ungrounded") {
+    confidence = Math.max(0, Math.round((confidence - GROUNDING_PENALTY) * 100) / 100);
+  }
   const level = confidenceLevel(confidence);
   // If the negative control failed, the finding is NOT confirmed — it stays a
   // high-confidence hypothesis (evidence is insufficient to call it confirmed).
@@ -323,6 +408,7 @@ export function confirmFinding(
     status,
     confidence,
     confidence_level: level,
+    grounding,
     validation: {
       performed: true,
       status: negativeControl ? "confirmed" : "unconfirmed",
@@ -354,5 +440,32 @@ export function rejectFinding(
     remediation: { ...updated.remediation, note: reason },
     evidence: [...updated.evidence, ...ev],
     timestamps: { ...updated.timestamps, updated: new Date().toISOString() },
+  };
+}
+
+/** Re-verify a confirmed finding (retest loop). Advances confirmed/still_vulnerable
+ *  → retesting → fixed (patch applied) | still_vulnerable (still exploitable) |
+ *  inconclusive (could not determine — WAF blocked / target down / missing login /
+ *  evidence insufficient; one failed request proves nothing). A retest records its
+ *  verdict as evidence + audit trail so the retest history is machine-readable and
+ *  re-runnable. */
+export function retestFinding(
+  finding: Finding,
+  opts: {
+    verdict: "fixed" | "still_vulnerable" | "inconclusive";
+    reason: string;
+    evidence?: Array<Parameters<typeof makeEvidence>[0]>;
+  },
+): Finding {
+  // retest only makes sense from a confirmed (or still_vulnerable) finding —
+  // transition() throws "illegal transition" for any other source state.
+  const retesting = transition(finding, "retesting");
+  const ev = opts.evidence?.map((e) => makeEvidence(e)) ?? [];
+  const result = transition(retesting, opts.verdict);
+  return {
+    ...result,
+    remediation: { ...result.remediation, retest_note: opts.reason },
+    evidence: [...result.evidence, ...ev],
+    timestamps: { ...result.timestamps, updated: new Date().toISOString() },
   };
 }

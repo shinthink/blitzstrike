@@ -5,7 +5,7 @@
  * commit touched. The full-scan path (run_engagement / enrich_scan) remains the
  * authoritative one; this is a fast incremental pass.
  */
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { writeFileSync, mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -34,7 +34,7 @@ export interface IncrementalResult {
 
 function git(repo: string, args: string): string {
   try {
-    return execSync(`git ${args}`, { cwd: repo, encoding: "utf8", maxBuffer: 50 * 1024 * 1024 }).trim();
+    return execFileSync("git", args.split(/\s+/).filter(Boolean), { cwd: repo, encoding: "utf8", maxBuffer: 50 * 1024 * 1024 }).trim();
   } catch {
     return "";
   }

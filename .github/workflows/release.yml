@@ -9,16 +9,20 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  id-token: write # required for npm provenance / OIDC
-  contents: read
-
 jobs:
   publish:
     name: Publish to npm (trusted publishing)
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write # required for npm provenance / OIDC
+      contents: read
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          registry-url: 'https://registry.npmjs.org'
 
       - uses: oven-sh/setup-bun@v2
         with:

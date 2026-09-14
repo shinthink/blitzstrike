@@ -30,6 +30,18 @@ export interface FrameworkPattern {
   cwe?: string;
 }
 
+/** Vulnerability pattern taxonomy (e.g. WordPress P1-P6): a vuln class with its
+ *  source signals, detect (what to trace), fixed (the correct control), and
+ *  anchor WPVDB/CVE-style record ids that exemplify it. */
+export interface FrameworkVulnPattern {
+  id: string;
+  name: string;
+  signals: string[];
+  detect: string[];
+  fixed: string;
+  anchors: string[];
+}
+
 export interface FrameworkProfile {
   id: string;
   name: string;
@@ -43,6 +55,8 @@ export interface FrameworkProfile {
   routing: FrameworkPattern[];
   orm: FrameworkPattern[];
   middleware: FrameworkPattern[];
+  /** Vulnerability pattern taxonomy (P1-P6 for WordPress, etc.). */
+  patterns?: FrameworkVulnPattern[];
 }
 
 interface FrameworksData {

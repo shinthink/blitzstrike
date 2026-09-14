@@ -576,6 +576,135 @@
           "pattern": "plugins_loaded",
           "label": "plugin lifecycle"
         }
+      ],
+      "patterns": [
+        {
+          "id": "P1",
+          "name": "Remote code execution",
+          "signals": [
+            "dynamic callbacks/templates",
+            "generated PHP",
+            "command/process functions",
+            "executable writes"
+          ],
+          "detect": [
+            "eval",
+            "assert",
+            "variable functions",
+            "call_user_func*",
+            "shell/process APIs",
+            "include paths",
+            "generated PHP",
+            "executable writes"
+          ],
+          "fixed": "closed allow-list, least-privilege gate, no request input in generated/evaluated PHP",
+          "anchors": [
+            "69f9dcd8-ab3c-46ed-ac6b-2f1db35f8d1f",
+            "df32569a-e4fe-430b-8310-df7be80d7249",
+            "9bb1a4ca-976c-461d-82de-8a3b04a56fbc"
+          ]
+        },
+        {
+          "id": "P2",
+          "name": "Arbitrary file upload",
+          "signals": [
+            "$_FILES",
+            "remote import",
+            "base64 file content",
+            "move_uploaded_file",
+            "wp_handle_upload",
+            "custom directories"
+          ],
+          "detect": [
+            "local filesystem upload",
+            "WordPress media upload",
+            "remote-fetch/local-copy",
+            "third-party storage (confused-deputy)"
+          ],
+          "fixed": "auth/capability + nonce (CSRF only) + server-derived dest + normalized name + extension+MIME+content allow-list + executable denial",
+          "anchors": [
+            "e424157e-b79f-4000-8dcc-51413581fdec",
+            "043f449f-fc65-4218-83d2-7742e62f2af3",
+            "110db433-01ec-47ea-b74f-c3faa1757a3c"
+          ]
+        },
+        {
+          "id": "P3",
+          "name": "Unauthenticated account takeover",
+          "signals": [
+            "weak SSO/payment callbacks",
+            "QR/OTP login",
+            "auto-login helpers",
+            "selected user IDs/emails",
+            "bad signatures",
+            "wp_set_auth_cookie"
+          ],
+          "detect": [
+            "all paths to session establishment",
+            "identity lookup"
+          ],
+          "fixed": "verify canonical provider signatures, bind state/code to one account+flow, short expiry/one-time/attempts+rate limits",
+          "anchors": [
+            "6576dcd1-aea6-47c0-9157-4ca56f426612",
+            "d9f1b40f-526a-44ed-a3ec-a3c1ce0f1ece",
+            "56fdcba6-c7b1-443d-9f9d-b738ecaadabc"
+          ]
+        },
+        {
+          "id": "P4",
+          "name": "Unauthenticated password reset",
+          "signals": [
+            "public reset routes",
+            "request-selected account/key/password/email-body data"
+          ],
+          "detect": [
+            "core/custom reset APIs",
+            "mail-body filters"
+          ],
+          "fixed": "expiring one-time server key bound to account + core validation + trusted reset URL/body",
+          "anchors": [
+            "79fa8b91-f88e-4249-9f17-9e98e879f6fa",
+            "6c2d4489-de82-472d-a5f7-dc01b305fdd0"
+          ]
+        },
+        {
+          "id": "P5",
+          "name": "Privilege escalation",
+          "signals": [
+            "client-controlled role/capabilities/custom meta/options",
+            "user insertion/update",
+            "restore auto-login"
+          ],
+          "detect": [
+            "requests into user/role/cap/meta/option/import/restore mutations"
+          ],
+          "fixed": "server-side field allow-list, discard public role/capability metadata, operation-specific capability, prohibit arbitrary option names",
+          "anchors": [
+            "04d64797-751a-4cdd-a37d-70afbad5d784",
+            "929f243b-2f1c-4eca-88bc-03b1a86270ed",
+            "be3d5432-8f8c-4d45-b6e7-de24352378a8"
+          ]
+        },
+        {
+          "id": "P6",
+          "name": "AJAX/REST authorization failure",
+          "signals": [
+            "wp_ajax_nopriv_*",
+            "both auth states",
+            "public REST permissions",
+            "public/shared nonce",
+            "role check without ownership"
+          ],
+          "detect": [
+            "every AJAX/REST/admin-post registration -> callback, permissions, request-selected IDs, sink"
+          ],
+          "fixed": "nonce (CSRF) + authentication (identity) + current_user_can (authority) + object policy (ownership)",
+          "anchors": [
+            "030939ee-9aa9-4082-934e-c9a07fc3dfc3",
+            "c81aa489-0663-40b7-b2ce-f4c8f2edd4b6",
+            "e31c9bf0-7340-4bd7-ad6e-6ad01737654a"
+          ]
+        }
       ]
     },
     {

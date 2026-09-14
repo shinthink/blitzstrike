@@ -1,0 +1,231 @@
+{
+  "$schema": "blitzstrike-app-playbooks-v1",
+  "version": "1.0.0",
+  "_comment": "Live-verified playbooks for INTENTIONALLY-VULNERABLE lab apps (no registration, no real targets). Each app maps to its known vuln chains — deterministic, pre-verified, model-independent — so Blitz can (a) benchmark against a known answer, (b) map a detected vuln class back to a verified chain, (c) auto-generate a PoC from the verified steps. steps are the deterministic actions; expected_proof is what MUST be observed to confirm; negative_control is how a fixed/hardened instance refutes it. proof_oracle ties to the verification-oracle doctrine. Never hardcode in code — edit here.",
+  "apps": [
+    {
+      "id": "vampi",
+      "name": "VAmPI",
+      "type": "api",
+      "description": "Vulnerable REST API (Flask) for API security testing — IDOR/BOLA, mass assignment, SSRF.",
+      "vulns": [
+        {
+          "vuln_class": "idor",
+          "title": "BOLA — read another user's profile",
+          "endpoint": "GET /users/v1/{username}",
+          "access": "unauth",
+          "severity": "high",
+          "steps": ["register/login as user A", "GET /users/v1/{username_of_user_B}", "observe user B's profile fields returned"],
+          "proof_oracle": "differential",
+          "expected_proof": "user B's data (email/password) returned to user A's session",
+          "negative_control": "a fixed instance returns 403/404 for a non-self username"
+        },
+        {
+          "vuln_class": "mass_assignment",
+          "title": "Mass assignment — self-register as admin",
+          "endpoint": "POST /users/v1/register",
+          "access": "unauth",
+          "severity": "critical",
+          "steps": ["POST /users/v1/register with {username, password, email, admin: true}", "login with the new account", "confirm admin privileges"],
+          "proof_oracle": "differential",
+          "expected_proof": "the registered account has the admin role (elevated access)",
+          "negative_control": "a fixed instance ignores/whitelists the admin field"
+        },
+        {
+          "vuln_class": "ssrf",
+          "title": "SSRF via book cover_url",
+          "endpoint": "POST /books/v1",
+          "access": "auth",
+          "severity": "high",
+          "steps": ["POST /books/v1 with cover_url = http://<callback>", "observe the callback fired from the app server"],
+          "proof_oracle": "oob",
+          "expected_proof": "the app server (not you) makes the outbound request to the callback",
+          "negative_control": "a fixed instance validates/allowlists the cover_url host"
+        }
+      ]
+    },
+    {
+      "id": "dvga",
+      "name": "DVGA",
+      "type": "graphql",
+      "description": "Damn Vulnerable GraphQL Application — introspection, command injection (RCE), IDOR.",
+      "vulns": [
+        {
+          "vuln_class": "info_disclosure",
+          "title": "GraphQL introspection enabled",
+          "endpoint": "POST /graphql",
+          "access": "unauth",
+          "severity": "medium",
+          "steps": ["send the introspection query {__schema{types{name fields{name}}}}", "observe the full schema returned"],
+          "proof_oracle": "differential",
+          "expected_proof": "the complete schema (types + fields) is returned unauthenticated",
+          "negative_control": "a hardened instance returns an introspection-disabled error"
+        },
+        {
+          "vuln_class": "rce",
+          "title": "Command injection via systemDebug",
+          "endpoint": "POST /graphql (systemDebug query)",
+          "access": "auth",
+          "severity": "critical",
+          "steps": ["authenticate with default creds (if default creds enabled)", "send the systemDebug query with a benign command", "observe the command output"],
+          "proof_oracle": "differential",
+          "expected_proof": "the injected command's output (read-only, e.g. id) is returned",
+          "negative_control": "a fixed instance rejects the command or returns no exec output"
+        }
+      ]
+    },
+    {
+      "id": "nodegoat",
+      "name": "OWASP NodeGoat",
+      "type": "web",
+      "description": "Node.js + Express + MongoDB app — IDOR, server-side JS injection (RCE), NoSQL injection.",
+      "vulns": [
+        {
+          "vuln_class": "idor",
+          "title": "Cross-user allocation IDOR",
+          "endpoint": "GET /allocations/{id}",
+          "access": "auth",
+          "severity": "high",
+          "steps": ["login as user A", "GET /allocations/{id_of_user_B}", "observe user B's allocation data returned"],
+          "proof_oracle": "differential",
+          "expected_proof": "user B's allocation records returned to user A",
+          "negative_control": "a fixed instance scopes the query to the session user"
+        },
+        {
+          "vuln_class": "rce",
+          "title": "Server-side JS injection (eval) → RCE",
+          "endpoint": "profile/contributions route",
+          "access": "auth",
+          "severity": "critical",
+          "steps": ["submit a JS expression in the vulnerable field", "observe server-side evaluation (e.g. a benign eval returns a computed value)"],
+          "proof_oracle": "differential",
+          "expected_proof": "the expression evaluates server-side (computed output, not echo)",
+          "negative_control": "a fixed instance treats the input as a plain string (no eval)"
+        },
+        {
+          "vuln_class": "nosql",
+          "title": "NoSQL injection (MongoDB operator) in login",
+          "endpoint": "POST /login",
+          "access": "unauth",
+          "severity": "critical",
+          "steps": ["send username[$ne]=x&password[$ne]=y (or JSON {$ne:null})", "observe authentication bypass"],
+          "proof_oracle": "differential",
+          "expected_proof": "login succeeds without valid credentials (operator injection)",
+          "negative_control": "a fixed instance treats the keys as literal strings (login fails)"
+        }
+      ]
+    },
+    {
+      "id": "dvwa",
+      "name": "DVWA",
+      "type": "web",
+      "description": "Damn Vulnerable Web Application (PHP) — command injection, file upload RCE, SQLi, LFI, XSS.",
+      "vulns": [
+        {
+          "vuln_class": "rce",
+          "title": "Command injection",
+          "endpoint": "GET /vulnerabilities/exec/?ip=",
+          "access": "auth",
+          "severity": "high",
+          "steps": ["GET /vulnerabilities/exec/?ip=127.0.0.1; id", "observe the command output appended"],
+          "proof_oracle": "differential",
+          "expected_proof": "the appended command's output appears in the response",
+          "negative_control": "a fixed instance escapes the shell metacharacters"
+        },
+        {
+          "vuln_class": "file_upload",
+          "title": "Arbitrary file upload → RCE",
+          "endpoint": "POST /vulnerabilities/upload/",
+          "access": "auth",
+          "severity": "high",
+          "steps": ["upload a .php shell (low security allows direct .php)", "browse to the uploaded file", "observe code execution"],
+          "proof_oracle": "differential",
+          "expected_proof": "the uploaded file executes (read-only phpinfo/id)",
+          "negative_control": "a fixed instance rejects the extension or stores non-executable"
+        },
+        {
+          "vuln_class": "sqli",
+          "title": "SQL injection",
+          "endpoint": "GET /vulnerabilities/sqli/?id=",
+          "access": "auth",
+          "severity": "high",
+          "steps": ["GET /vulnerabilities/sqli/?id=1' OR '1'='1", "observe the query result / DB error / differential"],
+          "proof_oracle": "differential",
+          "expected_proof": "the injected quote changes the result set (or a DB error is returned)",
+          "negative_control": "a fixed instance parameterizes the query (no injection effect)"
+        }
+      ]
+    },
+    {
+      "id": "crapi",
+      "name": "crAPI",
+      "type": "api",
+      "description": "Completely Ridiculous API — BOLA (IDOR), mass assignment, JWT issues.",
+      "vulns": [
+        {
+          "vuln_class": "idor",
+          "title": "BOLA — read another vehicle's location",
+          "endpoint": "GET /identity/api/v2/vehicle/{vehicleid}/location",
+          "access": "auth",
+          "severity": "high",
+          "steps": ["login as user A", "GET .../vehicle/{vehicleid_of_user_B}/location", "observe user B's location returned"],
+          "proof_oracle": "differential",
+          "expected_proof": "another user's vehicle location returned to user A",
+          "negative_control": "a fixed instance checks the vehicle belongs to the session user"
+        },
+        {
+          "vuln_class": "mass_assignment",
+          "title": "Mass assignment on account update",
+          "endpoint": "PUT /identity/api/v2/user/videos (or vehicle metadata)",
+          "access": "auth",
+          "severity": "high",
+          "steps": ["update a resource with an unexpected privileged field", "observe the field is accepted"],
+          "proof_oracle": "differential",
+          "expected_proof": "the injected field (role/credit) is persisted",
+          "negative_control": "a fixed instance whitelists the editable fields"
+        }
+      ]
+    },
+    {
+      "id": "juice-shop",
+      "name": "OWASP Juice Shop",
+      "type": "web",
+      "description": "OWASP Juice Shop (Node.js) — SQLi, JWT (weak secret / alg none), IDOR, XSS.",
+      "vulns": [
+        {
+          "vuln_class": "sqli",
+          "title": "SQL injection on login",
+          "endpoint": "POST /rest/user/login",
+          "access": "unauth",
+          "severity": "high",
+          "steps": ["POST /rest/user/login with email=' OR 1=1--", "observe auth bypass"],
+          "proof_oracle": "differential",
+          "expected_proof": "login succeeds with the injected predicate (no valid creds)",
+          "negative_control": "a fixed instance parameterizes the query (login fails)"
+        },
+        {
+          "vuln_class": "jwt",
+          "title": "JWT alg none / weak secret",
+          "endpoint": "Authorization header",
+          "access": "unauth",
+          "severity": "high",
+          "steps": ["capture the JWT", "re-sign with alg:none (or brute the weak secret)", "replay with elevated claims"],
+          "proof_oracle": "differential",
+          "expected_proof": "the tampered token is accepted (elevated identity)",
+          "negative_control": "a fixed instance pins the algorithm + strong secret (token rejected)"
+        },
+        {
+          "vuln_class": "idor",
+          "title": "Basket IDOR",
+          "endpoint": "GET /rest/basket/{id}",
+          "access": "auth",
+          "severity": "medium",
+          "steps": ["login as user A", "GET /rest/basket/{id_of_user_B}", "observe user B's basket"],
+          "proof_oracle": "differential",
+          "expected_proof": "another user's basket contents returned",
+          "negative_control": "a fixed instance scopes the basket to the session user"
+        }
+      ]
+    }
+  ]
+}

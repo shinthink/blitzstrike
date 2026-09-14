@@ -1,0 +1,159 @@
+{
+  "surfaces": [
+    {
+      "id": "image_proxy",
+      "name": "Image proxy / URL-rewrite service",
+      "fingerprints": [
+        "imgproxy",
+        "image proxy",
+        "url unfurling",
+        "image resize",
+        "?url=",
+        "slack-imgs",
+        "image-resize",
+        "proxy.php?url"
+      ],
+      "high_value_tests": [
+        "SSRF \u2014 the url= param reaches the proxy; point it at 169.254.169.254 or an internal range",
+        "URL validation bypass \u2014 encoded/internal-scheme (file://, gopher://, 127.0.0.1) variants",
+        "XSS via image content \u2014 SVG/HTML payloads rendered inline"
+      ]
+    },
+    {
+      "id": "redirect_proxy",
+      "name": "URL redirect / safety proxy",
+      "fingerprints": [
+        "redirect",
+        "safety proxy",
+        "redir",
+        "url shortener",
+        "outbound link",
+        "?to=",
+        "?redirect=",
+        "?url="
+      ],
+      "high_value_tests": [
+        "Open redirect \u2014 bypass the safety check to cloak phishing links",
+        "SSRF \u2014 the proxy fetches the target URL server-side",
+        "URL validation bypass \u2014 scheme/domain confusion (//, @, encoded chars)"
+      ]
+    },
+    {
+      "id": "edge_cache",
+      "name": "Edge cache / entity data service",
+      "fingerprints": [
+        "edge",
+        "cache",
+        "conditional fetch",
+        "timestamp",
+        "entity",
+        "flannel",
+        "graphql"
+      ],
+      "high_value_tests": [
+        "IDOR \u2014 read other entities (user/channel/tenant) by id without auth",
+        "Cache poisoning \u2014 inject a key that serves attacker content to other users",
+        "Unauthorized entity enumeration \u2014 bulk read via timestamp/resource pattern"
+      ]
+    },
+    {
+      "id": "payment_portal",
+      "name": "Payment / billing portal",
+      "fingerprints": [
+        "payment",
+        "billing",
+        "checkout",
+        "invoice",
+        "subscription",
+        "stripe",
+        "paypal",
+        "braintree",
+        "plan",
+        "pricing"
+      ],
+      "high_value_tests": [
+        "Price/amount manipulation \u2014 alter the client-side total before checkout",
+        "IDOR on invoices/payment records \u2014 read or modify other users' billing",
+        "Subscription tampering \u2014 upgrade/entitlement without payment",
+        "Auth bypass on checkout/order endpoints"
+      ]
+    },
+    {
+      "id": "ai_agent",
+      "name": "AI agent / no-code app builder",
+      "fingerprints": [
+        "agent",
+        "ai",
+        "llm",
+        "no-code",
+        "builder",
+        "prompt",
+        "gpt",
+        "assistant",
+        "horizons"
+      ],
+      "high_value_tests": [
+        "Prompt injection \u2192 SSRF / RCE / data exfiltration via tool-call abuse",
+        "Insecure deserialization of tool-call arguments",
+        "Stored XSS in agent-generated output rendered in the dashboard"
+      ]
+    },
+    {
+      "id": "file_service",
+      "name": "File upload / download service",
+      "fingerprints": [
+        "file",
+        "upload",
+        "download",
+        "supra",
+        "miata",
+        "attachment",
+        "?file=",
+        "?download="
+      ],
+      "high_value_tests": [
+        "XSS via file content \u2014 SVG/HTML served inline",
+        "SSRF via file URL / remote file fetch",
+        "Upload \u2192 RCE \u2014 executable file landing web-reachable"
+      ]
+    },
+    {
+      "id": "electron_desktop",
+      "name": "Electron / desktop app",
+      "fingerprints": [
+        "electron",
+        "browserwindow",
+        "desktop",
+        "chromium",
+        "node.js desktop",
+        "app.asar"
+      ],
+      "high_value_tests": [
+        "HTML injection \u2192 BrowserWindow RCE (nodeIntegration + remote content)",
+        "Insecure IPC / preload bridge \u2014 expose privileged APIs to renderer",
+        "Remote content loading \u2014 hot-update/CDN resources replaced"
+      ]
+    },
+    {
+      "id": "auth_sso",
+      "name": "Authentication / SSO portal",
+      "fingerprints": [
+        "auth",
+        "sso",
+        "oauth",
+        "saml",
+        "login",
+        "passport",
+        "jwt",
+        "token",
+        "signin"
+      ],
+      "high_value_tests": [
+        "OAuth open redirect via redirect_uri manipulation",
+        "JWT alg:none / weak secret / missing expiry",
+        "Token leakage / account enumeration / 2FA bypass"
+      ]
+    }
+  ],
+  "note": "Generalized attack-surface \u2192 high-value-test map, derived from public target-recon dossiers. Each surface is matched by fingerprint keywords against the detected tech stack/headers/body; when a surface is present, test its high-value cases FIRST (surface-first, not payload-spraying)."
+}

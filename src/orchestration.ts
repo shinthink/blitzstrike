@@ -48,8 +48,8 @@ export const STATE_MACHINE: StateDefinition[] = [
   { state: "select_chain", description: "Match the hypothesis to an escalation chain.", recommended_tools: ["list_chains", "read_playbook"], required_evidence: ["matched_chain"], next: ["validate"], confidence: "high" },
   { state: "validate", description: "Verify live with baseline + marker + negative control.", recommended_tools: ["strike_verify", "browser_validate"], required_evidence: ["baseline", "marker_reflection", "negative_control"], next: ["evidence"], confidence: "medium" },
   { state: "evidence", description: "Attach hashable, provenance-bound evidence.", recommended_tools: ["finding_attach_evidence"], required_evidence: ["evidence_artifact"], next: ["finding"], confidence: "high" },
-  { state: "finding", description: "Confirm the finding (invariants enforced).", recommended_tools: ["confirm_finding"], required_evidence: ["confirmed_finding"], next: ["report"], confidence: "high" },
-  { state: "report", description: "Produce a reproducible report.", recommended_tools: ["report", "security-report"], required_evidence: ["report"], next: [], confidence: "high" },
+  { state: "finding", description: "Confirm the finding (invariants enforced).", recommended_tools: ["finding_transition"], required_evidence: ["confirmed_finding"], next: ["report"], confidence: "high" },
+  { state: "report", description: "Produce a reproducible report.", recommended_tools: ["generate_report"], required_evidence: ["report"], next: [], confidence: "high" },
 ];
 
 export function stateDefinition(state: EngagementState): StateDefinition {
@@ -80,7 +80,7 @@ export const RISK_POLICY: RiskPolicyRule[] = [
   { action: "active_scan", risk: "medium", requires_scope: true, destructive: false },
   { action: "browser_validate", risk: "medium", requires_scope: true, destructive: false },
   { action: "strike_verify", risk: "high", requires_scope: true, destructive: false },
-  { action: "confirm_finding", risk: "high", requires_scope: true, destructive: false },
+  { action: "finding_transition", risk: "high", requires_scope: true, destructive: false },
 ];
 
 export function riskOf(action: string): RiskPolicyRule | null {

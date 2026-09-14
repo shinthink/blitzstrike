@@ -53,12 +53,20 @@ const JAVA_SINKS: Record<string, boolean> = {
   archive_extraction: true, path_traversal: true,
   template_injection: true, xpath_injection: true, ldap_injection: true,
 };
+const RUST_SINKS: Record<string, boolean> = {
+  sql_execution: true, code_execution: false, command_execution: true,
+  file_operations: true, file_inclusion: false, deserialization: true,
+  http_request: true, redirect: true, html_render: false, xml_processing: false,
+  archive_extraction: false, path_traversal: true,
+  template_injection: false, xpath_injection: false, ldap_injection: false,
+};
 
 const SINK_BY_LANG: Record<string, Record<string, boolean>> = {
   php: PHP_SINKS,
   javascript: JS_SINKS,
   python: PY_SINKS,
   java: JAVA_SINKS,
+  rust: RUST_SINKS,
 };
 
 export interface CoverageMatrix {

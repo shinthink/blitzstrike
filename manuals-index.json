@@ -335,6 +335,7 @@
     "web-application": "playbooks/web-application.md",
     "cloud-native-assessment": "playbooks/cloud-native-assessment.md",
     "forensics-triage": "playbooks/forensics-triage.md",
-    "external-attack-surface": "playbooks/external-attack-surface.md"
+    "external-attack-surface": "playbooks/external-attack-surface.md",
+    "verify-phase": "playbooks/verify-phase.md"
   }
 }

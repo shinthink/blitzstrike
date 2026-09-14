@@ -1,12 +1,15 @@
 /** Intelligence data layer — WAF signatures, tech/CVE correlations, ports, fuzzers.
  *
- * Loads the JSON data files (sourced from airecon, MIT) and exposes lookup +
+ * Loads the JSON data files (MIT-licensed public datasets) and exposes lookup +
  * enrichment helpers. This is the enrichment data layer BlitzStrike previously
  * lacked.
  */
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { empiricalPrior } from "./intelligence.js";
+import { patternLookup } from "./patterns.js";
+import { canonicalId } from "./synonyms.js";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const INTEL = join(ROOT, "intelligence");
@@ -330,7 +333,86 @@ const TECH_HINTS: Record<string, string[]> = {
   nextjs: ["ssrf", "idor"],
 };
 
-export function attackPlan(target: string, tech: string[] = [], params: string[] = []): Record<string, unknown> {
+export type AttackMode = "full" | "quick" | "stealth";
+
+/** Passive vectors (recon/config/header checks — no active attack payload) for `stealth` mode. */
+const STEALTH_VECTORS = new Set<string>([
+  "cors_misconfiguration", "jwt", "open_redirect", "idor", "auth_bypass",
+  "rest_api_auth", "debug_mode", "actuator_exposure", "viewstate", "xmlrpc",
+]);
+
+/** Estimated wall-clock seconds per vector, derived from its operation class
+ *  (passive/config < injection scan < deep/manual). Unknown vectors default to 180s. */
+const VECTOR_TIME: Record<string, number> = {
+  // passive / config checks (fast)
+  cors_misconfiguration: 90, jwt: 90, open_redirect: 120, debug_mode: 90,
+  actuator_exposure: 90, viewstate: 120, xmlrpc: 120, rest_api_auth: 120,
+  // injection scans (medium)
+  xss: 180, sql_injection: 180, ssti: 180, ssrf: 180, command_injection: 180,
+  path_traversal: 180, lfi: 180, nosql_injection: 180, mass_assignment: 180,
+  prototype_pollution: 180,
+  // deep / multi-step (slower)
+  xxe: 240, file_upload: 240, deserialization: 240, pickle_deserialization: 240,
+  // manual authorization / logic (slowest)
+  idor: 300, auth_bypass: 300, business_logic: 360, upload_rce: 300,
+  wp_plugin_audit: 600,
+};
+const DEFAULT_VECTOR_TIME = 180;
+
+/** Deterministic relevance PRIOR: priority 1 = directly-implied, 4 = generic baseline.
+ *  P = clamp(0.85 - 0.15*(priority-1), 0.25, 0.85), then upgraded by the EMPIRICAL
+ *  hit-rate from the intelligence ledger (Bayesian posterior). This is a PLANNING
+ *  prior, NOT the evidence-backed confidence (computeConfidence). */
+function successProbability(priority: number, vector: string, tech: string): number {
+  const formula = Math.round(Math.min(0.85, Math.max(0.25, 0.85 - 0.15 * (priority - 1))) * 100) / 100;
+  return empiricalPrior(vector, tech, formula);
+}
+
+function estimateTime(vector: string): number {
+  return VECTOR_TIME[vector] ?? DEFAULT_VECTOR_TIME;
+}
+
+/** Typical bug-bounty payout fallback for vectors that are NOT a detector class
+ *  (xss / business_logic / open_redirect / …). Detector classes read their range
+ *  from patterns.json (payout_min/max). [min, max] USD. */
+const PAYOUT_FALLBACK: Record<string, [number, number]> = {
+  xss: [500, 5000],
+  command_injection: [1000, 10000],
+  open_redirect: [300, 3000],
+  cors_misconfiguration: [300, 3000],
+  business_logic: [500, 10000],
+  lfi: [1000, 10000],
+  nosql_injection: [1000, 15000],
+  pickle_deserialization: [5000, 30000],
+  upload_rce: [500, 10000],
+  auth_bypass: [1000, 10000],
+  idor: [500, 5000],
+  wp_plugin_audit: [500, 10000],
+  xmlrpc: [300, 3000],
+  rest_api_auth: [500, 5000],
+  debug_mode: [200, 2000],
+  actuator_exposure: [500, 5000],
+  viewstate: [1000, 5000],
+};
+
+function fmtUsd(v: number): string {
+  return v >= 1000 ? `$${v / 1000}K` : `$${v}`;
+}
+
+/** Resolve a vector's typical payout range. Detector classes go through the
+ *  pattern library (authoritative); non-detector vectors fall back to
+ *  PAYOUT_FALLBACK; unknown vectors return null (no bounty signal). */
+function payoutFor(vector: string): { min: number; max: number; display: string } | null {
+  const pat = patternLookup(canonicalId(vector));
+  if (pat && pat.payout_min != null && pat.payout_max != null) {
+    return { min: pat.payout_min, max: pat.payout_max, display: pat.typical_payout ?? `${fmtUsd(pat.payout_min)}–${fmtUsd(pat.payout_max)}` };
+  }
+  const fb = PAYOUT_FALLBACK[vector];
+  if (fb) return { min: fb[0], max: fb[1], display: `${fmtUsd(fb[0])}–${fmtUsd(fb[1])}` };
+  return null;
+}
+
+export function attackPlan(target: string, tech: string[] = [], params: string[] = [], mode: AttackMode = "full"): Record<string, unknown> {
   const data = loadJson<AttackVectorsData>("attack_vectors");
   const totalCategories = data?.categories.length ?? 0;
   const plan: Array<{ vector: string; priority: number; reason: string; tool: string; source: string }> =
@@ -356,18 +438,36 @@ export function attackPlan(target: string, tech: string[] = [], params: string[]
     for (const h of hints) add(h, 2, `tech '${t}' suggests ${h}`, "technique_lookup / read_skill", "tech");
   }
 
-  const sorted = plan.sort((a, b) => a.priority - b.priority || a.vector.localeCompare(b.vector));
+  let sorted = plan.sort((a, b) => a.priority - b.priority || a.vector.localeCompare(b.vector));
+
+  // Mode filtering (after sort, before numbering) — full keeps everything.
+  if (mode === "quick") sorted = sorted.filter((p) => p.priority <= 2);
+  else if (mode === "stealth") sorted = sorted.filter((p) => STEALTH_VECTORS.has(p.vector));
+
+  const totalTime = sorted.reduce((s, p) => s + estimateTime(p.vector), 0);
+  const techKey = (tech[0] ?? "unknown").toLowerCase();
+
   return {
     target,
+    mode,
     taxonomy: { total_categories: totalCategories, total_vectors_here: sorted.length },
-    plan: sorted.map((p, i) => ({
-      order: i + 1,
-      vector: p.vector,
-      priority: p.priority,
-      reason: p.reason,
-      tool: p.tool,
-      source: p.source,
-    })),
+    plan: sorted.map((p, i) => {
+      const sp = successProbability(p.priority, p.vector, techKey);
+      const payout = payoutFor(p.vector);
+      return {
+        order: i + 1,
+        vector: p.vector,
+        priority: p.priority,
+        success_probability: sp,
+        typical_payout: payout?.display ?? null,
+        expected_value_usd: payout ? Math.round(sp * (payout.min + payout.max) / 2) : null,
+        estimated_time_sec: estimateTime(p.vector),
+        reason: p.reason,
+        tool: p.tool,
+        source: p.source,
+      };
+    }),
+    total_estimated_time_sec: totalTime,
   };
 }
 
@@ -861,4 +961,169 @@ export function taxonomy(kind?: string, query?: string): Record<string, unknown>
     error: "unknown taxonomy kind",
     usage: "taxonomy(kind='web'|'api'|'cwe'|'asvs', query?)",
   };
+}
+
+// ---------------------------------------------------------------------------
+// Finding -> next-action knowledge base (ab-signals.json)
+// ---------------------------------------------------------------------------
+
+interface AbSignalClass {
+  class: string;
+  name: string;
+  cwe: string;
+  keywords: string[];
+  negative_keywords: string[];
+  proof_oracle: string;
+  test_vectors: string[];
+  negative_control: string;
+  followup: string[];
+  chain_with: string[];
+  kill_conditions: string[];
+}
+
+interface AbSignalsData {
+  classes: AbSignalClass[];
+}
+
+/** List every finding class in the ab-signals knowledge base. */
+export function listAbSignalClasses(): Record<string, unknown> {
+  const data = loadJson<AbSignalsData>("ab-signals");
+  if (!data) return { error: "ab-signals.json not found" };
+  return {
+    classes: data.classes.map((c) => ({ class: c.class, name: c.name, cwe: c.cwe, proof_oracle: c.proof_oracle })),
+  };
+}
+
+/** Look up the finding -> next-action entry for a vuln class (by id or keyword).
+ *  Returns: how to CONFIRM it (proof_oracle + test_vectors + negative_control),
+ *  what to suppress (negative_keywords), what to try NEXT (followup), what it
+ *  CHAINS into (chain_with), and when to STOP (kill_conditions). */
+export function abSignal(classOrKeyword: string): Record<string, unknown> {
+  const data = loadJson<AbSignalsData>("ab-signals");
+  if (!data) return { found: false, error: "ab-signals.json not found" };
+  const q = classOrKeyword.trim().toLowerCase();
+  if (!q) return { found: false, error: "pass a vuln class (sqli/xss/ssrf/idor/ssti/rce/...) or keyword" };
+  const hit = data.classes.find(
+    (c) => c.class.toLowerCase() === q || c.name.toLowerCase().includes(q) || c.keywords.some((k) => k.toLowerCase().includes(q) || q.includes(k.toLowerCase())),
+  );
+  if (hit) return { found: true, ...hit };
+  return { found: false, query: classOrKeyword, suggestions: data.classes.map((c) => c.class) };
+}
+
+// ---------------------------------------------------------------------------
+// CVE verify chains (cve-chains.json) — high-impact RCE/unauth CVEs
+// ---------------------------------------------------------------------------
+
+interface CveChainStep {
+  step: number;
+  action: string;
+  tool_hint: string;
+  success_criteria: string;
+  invariant_check: string;
+  negative_control: string;
+}
+
+interface CveChain {
+  cve: string[];
+  name: string;
+  product: string;
+  attack_type: string;
+  access: string;
+  cvss: number;
+  fingerprint: { signals: string[]; detect: string[] };
+  verify_chain: CveChainStep[];
+  proof_oracle: string;
+  impact: string;
+}
+
+interface CveChainsData {
+  chains: CveChain[];
+}
+
+/** List every curated high-impact CVE verify chain (summary form). */
+export function listCveChains(): Record<string, unknown> {
+  const data = loadJson<CveChainsData>("cve-chains");
+  if (!data) return { error: "cve-chains.json not found" };
+  return {
+    count: data.chains.length,
+    chains: data.chains.map((c) => ({ cve: c.cve, name: c.name, product: c.product, attack_type: c.attack_type, access: c.access, cvss: c.cvss, proof_oracle: c.proof_oracle })),
+  };
+}
+
+/** Look up a CVE's safe non-weaponized verify chain (by CVE id, name, or product).
+ *  Returns the fingerprint (how to detect the vulnerable version), the verify
+ *  chain (safe read-only proof steps), the proof oracle, and the negative control. */
+export function cveChain(cveId: string): Record<string, unknown> {
+  const data = loadJson<CveChainsData>("cve-chains");
+  if (!data) return { found: false, error: "cve-chains.json not found" };
+  const q = cveId.trim();
+  if (!q) return { found: false, error: "pass a CVE id (e.g. CVE-2021-44228), name, or product" };
+  const upper = q.toUpperCase();
+  const hit = data.chains.find((c) => c.cve.some((x) => x.toUpperCase() === upper));
+  if (hit) return { found: true, ...hit };
+  const lower = q.toLowerCase();
+  const byName = data.chains.find((c) => c.name.toLowerCase().includes(lower) || c.product.toLowerCase().includes(lower));
+  if (byName) return { found: true, matched_by: "name/product", ...byName };
+  return { found: false, query: cveId, suggestions: data.chains.map((c) => c.cve[0]) };
+}
+
+// ---------------------------------------------------------------------------
+// Live-verified app playbooks (app-playbooks.json) — lab-app vuln chains
+// ---------------------------------------------------------------------------
+
+interface AppPlaybookVuln {
+  vuln_class: string;
+  title: string;
+  endpoint: string;
+  access: string;
+  severity: string;
+  steps: string[];
+  proof_oracle: string;
+  expected_proof: string;
+  negative_control: string;
+}
+
+interface AppPlaybook {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+  vulns: AppPlaybookVuln[];
+}
+
+interface AppPlaybooksData {
+  apps: AppPlaybook[];
+}
+
+/** List every live-verified lab-app playbook (summary form). */
+export function listAppPlaybooks(): Record<string, unknown> {
+  const data = loadJson<AppPlaybooksData>("app-playbooks");
+  if (!data) return { error: "app-playbooks.json not found" };
+  return {
+    count: data.apps.length,
+    apps: data.apps.map((a) => ({ id: a.id, name: a.name, type: a.type, vuln_count: a.vulns.length, vuln_classes: a.vulns.map((v) => v.vuln_class) })),
+  };
+}
+
+/** Look up a live-verified lab-app playbook by app id/name, or by vuln class
+ *  (returns every app with that class + its verified chain). */
+export function appPlaybook(appOrClass: string): Record<string, unknown> {
+  const data = loadJson<AppPlaybooksData>("app-playbooks");
+  if (!data) return { found: false, error: "app-playbooks.json not found" };
+  const q = appOrClass.trim().toLowerCase();
+  if (!q) return { found: false, error: "pass an app id/name (vampi/dvga/nodegoat/dvwa/crapi/juice-shop) or a vuln class (idor/rce/sqli/...)" };
+  const app = data.apps.find(
+    (a) => a.id === q || a.name.toLowerCase() === q || a.name.toLowerCase().includes(q) || a.id.includes(q),
+  );
+  if (app) return { found: true, ...app };
+  const matching = data.apps.filter((a) => a.vulns.some((v) => v.vuln_class === q || v.vuln_class.includes(q)));
+  if (matching.length) {
+    return {
+      found: true,
+      matched_by: "vuln_class",
+      vuln_class: q,
+      apps: matching.map((a) => ({ id: a.id, name: a.name, type: a.type, vulns: a.vulns.filter((v) => v.vuln_class === q || v.vuln_class.includes(q)) })),
+    };
+  }
+  return { found: false, query: appOrClass, suggestions: data.apps.map((a) => a.id) };
 }

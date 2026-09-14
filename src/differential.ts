@@ -16,7 +16,7 @@
 import { writeFileSync, rmSync, mkdtempSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { analyzeDataFlow2 } from "./eagle2.js";
 import { analyzeTaintUniversal, detectLanguage } from "./universal-taint.js";
 import "./adapters.js";
@@ -273,7 +273,7 @@ const SOURCE_EXTS = [".php", ".phtml", ".php5", ".js", ".mjs", ".ts", ".tsx", ".
 export function analyzeGitDiff(repo: string, base = "HEAD~1", head = "HEAD"): GitDiffResult {
   const git = (args: string) => {
     try {
-      return execSync(`git ${args}`, { cwd: repo, encoding: "utf8", maxBuffer: 50 * 1024 * 1024 }).trim();
+      return execFileSync("git", args.split(/\s+/).filter(Boolean), { cwd: repo, encoding: "utf8", maxBuffer: 50 * 1024 * 1024 }).trim();
     } catch {
       return "";
     }
@@ -296,4 +296,153 @@ export function analyzeGitDiff(repo: string, base = "HEAD~1", head = "HEAD"): Gi
   const security_sensitive = files.reduce((n, f) => n + f.result.changes.filter((c) => c.severity === "high").length, 0);
 
   return { repo, base, head, files, total_changes, security_sensitive };
+}
+
+// ---------------------------------------------------------------------------
+// Patch reversal — the 1-day weaponization engine.
+//
+// A security PATCH is a public disclosure of the vulnerability it fixes. Read
+// the delta, find what the patch ADDED to make the code safer (a sanitizer, an
+// auth/nonce gate, a parameterized query, input validation) or what it REMOVED
+// (a dangerous sink), and REVERSE it: that is the vulnerability in the OLD
+// version. Each reversal carries a DERIVED signature to feed variant_scan, so
+// you can sweep the install base for unpatched copies of the same bug.
+// ---------------------------------------------------------------------------
+
+export type PatchKind = "sanitizer_added" | "authorization_added" | "prepared_statement_added" | "validation_added" | "sink_removed";
+
+export interface PatchFinding {
+  kind: PatchKind;
+  /** What the OLD version did wrong (the reversed 0-day). */
+  old_vuln: string;
+  /** How the NEW version fixed it. */
+  new_fix: string;
+  cwe?: string;
+  line: number;
+  severity: "high" | "medium";
+  detail: string;
+  /** DERIVED signature for this patch class. */
+  signature: string;
+  /** The detector signature to feed variant_scan for mining unpatched copies. */
+  mine_signature: string;
+}
+
+const PATCH_RANK = { high: 0, medium: 1 } as const;
+
+export function analyzePatch(oldCode: string, newCode: string, language = "php"): Record<string, unknown> {
+  const { added, removed } = diffLines(oldCode, newCode);
+  const findings: PatchFinding[] = [];
+
+  // ADDED lines = the FIX (what the new version gained → reveals the old 0-day).
+  for (const l of added) {
+    const sans = findSanitizers(l.text);
+    if (sans.length > 0) {
+      findings.push({
+        kind: "sanitizer_added",
+        old_vuln: "raw attacker input reached a sink without escaping",
+        new_fix: l.text.trim(),
+        severity: "high",
+        line: l.line,
+        detail: `sanitizer ADDED: ${sans.map((s) => s.label).join(", ")} — the OLD version passed raw input to a sink (sanitization gap).`,
+        signature: "patch:sanitizer_added",
+        mine_signature: "complex_bugs:wrong_sanitizer",
+      });
+    }
+
+    const gates = AUTH_GATES.filter((g) => l.text.includes(g));
+    if (gates.length > 0) {
+      findings.push({
+        kind: "authorization_added",
+        old_vuln: "missing authorization / nonce check",
+        new_fix: l.text.trim(),
+        severity: "high",
+        line: l.line,
+        detail: `authorization gate ADDED: ${gates.join(", ")} — the OLD version performed no auth/nonce check (auth bypass / CSRF).`,
+        signature: "patch:authorization_added",
+        mine_signature: "complex_bugs:missing_authz",
+      });
+    }
+
+    if (/->prepare\s*\(|\bprepare\s*\(\s*["']/.test(l.text)) {
+      findings.push({
+        kind: "prepared_statement_added",
+        old_vuln: "raw SQL string interpolation",
+        new_fix: l.text.trim(),
+        severity: "high",
+        line: l.line,
+        detail: "parameterized query ADDED — the OLD version concatenated user input into SQL (SQLi).",
+        signature: "patch:prepared_statement_added",
+        mine_signature: "complex_bugs:wrong_sanitizer",
+      });
+    }
+
+    if (/preg_match\s*\(\s*["']\/\^|in_array\s*\(\s*\$|ctype_[a-z]+|is_numeric\s*\(|filter_var\s*\(/.test(l.text)) {
+      findings.push({
+        kind: "validation_added",
+        old_vuln: "unvalidated / arbitrary input accepted",
+        new_fix: l.text.trim(),
+        severity: "medium",
+        line: l.line,
+        detail: "input validation ADDED — the OLD version accepted arbitrary input (type/format gap).",
+        signature: "patch:validation_added",
+        mine_signature: "complex_bugs:wrong_sanitizer",
+      });
+    }
+  }
+
+  // REMOVED lines = the VULNERABLE code (a dangerous sink the patch deleted).
+  // Only flag when the removed sink was fed by an attacker-controlled source —
+  // a benign `echo $x` (literal) is not a reversal signal.
+  for (const l of removed) {
+    const sink = classifySink(l.text);
+    const source = classifySource(l.text);
+    if (sink && source && source.attacker_controlled) {
+      findings.push({
+        kind: "sink_removed",
+        old_vuln: `dangerous sink fed by attacker input: ${sink.category}`,
+        new_fix: "(removed)",
+        cwe: sink.cwe,
+        severity: "high",
+        line: l.line,
+        detail: `sink REMOVED: ${l.text.trim()} (${sink.category}) — the OLD version executed this dangerous operation on attacker input.`,
+        signature: `patch:sink_removed:${sink.category}`,
+        mine_signature: `taint:${sink.category}`,
+      });
+    }
+  }
+
+  findings.sort((a, b) => PATCH_RANK[a.severity] - PATCH_RANK[b.severity] || a.line - b.line);
+
+  const count = (k: PatchKind) => findings.filter((f) => f.kind === k).length;
+
+  return {
+    language,
+    reversal_findings: findings.map((f) => ({
+      kind: f.kind,
+      old_vuln: f.old_vuln,
+      new_fix: f.new_fix,
+      cwe: f.cwe,
+      line: f.line,
+      severity: f.severity,
+      detail: f.detail,
+      signature: f.signature,
+      mine_signature: f.mine_signature,
+    })),
+    summary: {
+      sanitizer_added: count("sanitizer_added"),
+      authorization_added: count("authorization_added"),
+      prepared_statement_added: count("prepared_statement_added"),
+      validation_added: count("validation_added"),
+      sink_removed: count("sink_removed"),
+    },
+    interpretation: "Each reversal is the vulnerability REVERSED from the patch: the OLD version had this bug, the NEW version fixed it. Sweep unpatched installs with variant_scan(root, { signature: mine_signature }).",
+  };
+}
+
+/** Patch reversal between two file paths (old → new). */
+export function analyzePatchFiles(oldPath: string, newPath: string, language?: string): Record<string, unknown> {
+  const oldCode = readFileSync(oldPath, "utf8");
+  const newCode = readFileSync(newPath, "utf8");
+  const lang = language ?? languageOf(newPath);
+  return analyzePatch(oldCode, newCode, lang);
 }
