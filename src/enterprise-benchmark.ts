@@ -26,7 +26,7 @@ export const ENTERPRISE_FIXTURES: EnterpriseFixture[] = [
   { id: "js-express", dir: join(ROOT, "js-express"), expected_vulns: 2 },
   { id: "py-django", dir: join(ROOT, "py-django"), expected_vulns: 2 },
   { id: "java-spring", dir: join(ROOT, "java-spring"), expected_vulns: 2 },
-  { id: "wp-batch-route", dir: join(ROOT, "wp-batch-route"), expected_vulns: 1 },
+  { id: "wp-batch-route", dir: join(ROOT, "wp-batch-route"), expected_vulns: 3 }, // __return_true REST route + missing permission_callback (route confusion) + raw SQLi in get_users
   { id: "php-complex", dir: join(ROOT, "php-complex"), expected_vulns: 4 },
 ];
 

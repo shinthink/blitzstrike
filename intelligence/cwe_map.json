@@ -1,56 +1,352 @@
 {
   "_comment": "Technique class -> CWE mapping (standard weakness IDs, for grounding + professional reporting). Each entry maps a techniques.json class id to its CWE ID(s) and name.",
   "mapping": [
-    {"id": "ssrf", "cwe": "CWE-918", "name": "Server-Side Request Forgery (SSRF)"},
-    {"id": "request_smuggling", "cwe": "CWE-444", "name": "Inconsistent Interpretation of HTTP Requests (Request Smuggling)"},
-    {"id": "cache_poisoning", "cwe": "CWE-524", "name": "Use of Cache Containing Sensitive Information"},
-    {"id": "race_condition", "cwe": "CWE-362", "name": "Concurrent Execution using Shared Resource (TOCTOU)"},
-    {"id": "ssti", "cwe": "CWE-1336", "name": "Improper Neutralization of Special Elements Used in a Template Engine (SSTI)"},
-    {"id": "deserialization", "cwe": "CWE-502", "name": "Deserialization of Untrusted Data"},
-    {"id": "prototype_pollution", "cwe": "CWE-1321", "name": "Improperly Controlled Modification of Object Prototype Attributes (Prototype Pollution)"},
-    {"id": "mass_assignment", "cwe": "CWE-915", "name": "Improperly Controlled Modification of Dynamically-Determined Object Attributes"},
-    {"id": "sql_injection", "cwe": "CWE-89", "name": "SQL Injection"},
-    {"id": "nosql_injection", "cwe": "CWE-943", "name": "Improper Neutralization of Special Elements in Data Query Logic (NoSQL Injection)"},
-    {"id": "xss", "cwe": "CWE-79", "name": "Cross-site Scripting"},
-    {"id": "cors", "cwe": "CWE-942", "name": "Permissive Cross-domain Policy with Untrusted Domains (CORS)"},
-    {"id": "csrf", "cwe": "CWE-352", "name": "Cross-Site Request Forgery"},
-    {"id": "jwt", "cwe": "CWE-347", "name": "Improper Verification of Cryptographic Signature"},
-    {"id": "oauth", "cwe": "CWE-287", "name": "Improper Authentication"},
-    {"id": "host_header", "cwe": "CWE-644", "name": "Improper Neutralization of HTTP Headers for Scripting Syntax (Host Header)"},
-    {"id": "open_redirect", "cwe": "CWE-601", "name": "URL Redirection to Untrusted Site (Open Redirect)"},
-    {"id": "subdomain_takeover", "cwe": "CWE-350", "name": "Reliance on Reverse DNS Resolution for a Security-Critical Action"},
-    {"id": "idor", "cwe": "CWE-639", "name": "Authorization Bypass Through User-Controlled Key (IDOR/BOLA)"},
-    {"id": "graphql", "cwe": "CWE-862", "name": "Missing Authorization"},
-    {"id": "websocket", "cwe": "CWE-345", "name": "Insufficient Verification of Data Authenticity (WebSocket Hijacking)"},
-    {"id": "file_upload", "cwe": "CWE-434", "name": "Unrestricted Upload of File with Dangerous Type"},
-    {"id": "path_traversal_lfi", "cwe": "CWE-22", "name": "Improper Limitation of a Pathname to a Restricted Directory (Path Traversal)"},
-    {"id": "command_injection", "cwe": "CWE-78", "name": "OS Command Injection"},
-    {"id": "xxe", "cwe": "CWE-611", "name": "Improper Restriction of XML External Entity Reference (XXE)"},
-    {"id": "crlf_injection", "cwe": "CWE-93", "name": "Improper Neutralization of CRLF Sequences (CRLF Injection)"},
-    {"id": "ldap_injection", "cwe": "CWE-90", "name": "Improper Neutralization of Special Elements in LDAP Queries"},
-    {"id": "xpath_injection", "cwe": "CWE-643", "name": "Improper Neutralization of Data within XPath Expressions"},
-    {"id": "xslt_injection", "cwe": "CWE-91", "name": "XML Injection (XSLT)"},
-    {"id": "ssi_injection", "cwe": "CWE-97", "name": "Improper Neutralization of Server-Side Includes (SSI)"},
-    {"id": "xssi", "cwe": "CWE-200", "name": "Exposure of Sensitive Information to an Unauthorized Actor (XSSI)"},
-    {"id": "email_injection", "cwe": "CWE-74", "name": "Improper Neutralization of Special Elements in Output (Email Header Injection)"},
-    {"id": "formula_csv_injection", "cwe": "CWE-1236", "name": "Improper Neutralization of Formula Elements in a CSV File"},
-    {"id": "orm_injection", "cwe": "CWE-89", "name": "SQL Injection (via ORM)"},
-    {"id": "rsql_injection", "cwe": "CWE-89", "name": "SQL Injection (RSQL/FIQL)"},
-    {"id": "unicode_injection", "cwe": "CWE-180", "name": "Incorrect Behavior Order: Validate Before Canonicalize"},
-    {"id": "dangling_markup", "cwe": "CWE-79", "name": "Cross-site Scripting (Dangling Markup)"},
-    {"id": "account_takeover", "cwe": "CWE-287", "name": "Improper Authentication (Account Takeover)"},
-    {"id": "two_fa_bypass", "cwe": "CWE-308", "name": "Use of Single-factor Authentication"},
-    {"id": "rate_limit_bypass", "cwe": "CWE-799", "name": "Improper Control of Interaction Frequency (Rate Limit)"},
-    {"id": "password_reset_bypass", "cwe": "CWE-640", "name": "Weak Password Recovery Mechanism for Forgotten Password"},
-    {"id": "captcha_bypass", "cwe": "CWE-804", "name": "Guessable CAPTCHA"},
-    {"id": "registration_vulnerabilities", "cwe": "CWE-799", "name": "Improper Control of Interaction Frequency"},
-    {"id": "payment_bypass", "cwe": "CWE-841", "name": "Improper Enforcement of Behavioral Workflow (Business Logic)"},
-    {"id": "timing_attacks", "cwe": "CWE-208", "name": "Observable Timing Discrepancy"},
-    {"id": "uuid_insecurities", "cwe": "CWE-330", "name": "Use of Insufficiently Random Values"},
-    {"id": "reverse_tab_nabbing", "cwe": "CWE-1022", "name": "Use of Web Link to Untrusted Target with window.opener Access (Reverse Tabnabbing)"},
-    {"id": "iframe_traps", "cwe": "CWE-1021", "name": "Improper Restriction of Rendered UI Layers or Frames (Clickjacking)"},
-    {"id": "cookie_hacking", "cwe": "CWE-565", "name": "Reliance on Cookies without Validation and Integrity Checking"},
-    {"id": "postmessage_vulnerabilities", "cwe": "CWE-345", "name": "Insufficient Verification of Data Authenticity (postMessage)"},
-    {"id": "web_vulnerabilities_methodology", "cwe": "CWE-1057", "name": "Improper Inventory / Methodology"}
+    {
+      "id": "ssrf",
+      "cwe": "CWE-918",
+      "name": "Server-Side Request Forgery (SSRF)"
+    },
+    {
+      "id": "request_smuggling",
+      "cwe": "CWE-444",
+      "name": "Inconsistent Interpretation of HTTP Requests (Request Smuggling)"
+    },
+    {
+      "id": "cache_poisoning",
+      "cwe": "CWE-524",
+      "name": "Use of Cache Containing Sensitive Information"
+    },
+    {
+      "id": "race_condition",
+      "cwe": "CWE-362",
+      "name": "Concurrent Execution using Shared Resource (TOCTOU)"
+    },
+    {
+      "id": "ssti",
+      "cwe": "CWE-1336",
+      "name": "Improper Neutralization of Special Elements Used in a Template Engine (SSTI)"
+    },
+    {
+      "id": "deserialization",
+      "cwe": "CWE-502",
+      "name": "Deserialization of Untrusted Data"
+    },
+    {
+      "id": "prototype_pollution",
+      "cwe": "CWE-1321",
+      "name": "Improperly Controlled Modification of Object Prototype Attributes (Prototype Pollution)"
+    },
+    {
+      "id": "mass_assignment",
+      "cwe": "CWE-915",
+      "name": "Improperly Controlled Modification of Dynamically-Determined Object Attributes"
+    },
+    {
+      "id": "sql_injection",
+      "cwe": "CWE-89",
+      "name": "SQL Injection"
+    },
+    {
+      "id": "nosql_injection",
+      "cwe": "CWE-943",
+      "name": "Improper Neutralization of Special Elements in Data Query Logic (NoSQL Injection)"
+    },
+    {
+      "id": "xss",
+      "cwe": "CWE-79",
+      "name": "Cross-site Scripting"
+    },
+    {
+      "id": "cors",
+      "cwe": "CWE-942",
+      "name": "Permissive Cross-domain Policy with Untrusted Domains (CORS)"
+    },
+    {
+      "id": "csrf",
+      "cwe": "CWE-352",
+      "name": "Cross-Site Request Forgery"
+    },
+    {
+      "id": "jwt",
+      "cwe": "CWE-347",
+      "name": "Improper Verification of Cryptographic Signature"
+    },
+    {
+      "id": "oauth",
+      "cwe": "CWE-287",
+      "name": "Improper Authentication"
+    },
+    {
+      "id": "host_header",
+      "cwe": "CWE-644",
+      "name": "Improper Neutralization of HTTP Headers for Scripting Syntax (Host Header)"
+    },
+    {
+      "id": "open_redirect",
+      "cwe": "CWE-601",
+      "name": "URL Redirection to Untrusted Site (Open Redirect)"
+    },
+    {
+      "id": "subdomain_takeover",
+      "cwe": "CWE-350",
+      "name": "Reliance on Reverse DNS Resolution for a Security-Critical Action"
+    },
+    {
+      "id": "idor",
+      "cwe": "CWE-639",
+      "name": "Authorization Bypass Through User-Controlled Key (IDOR/BOLA)"
+    },
+    {
+      "id": "graphql",
+      "cwe": "CWE-862",
+      "name": "Missing Authorization"
+    },
+    {
+      "id": "websocket",
+      "cwe": "CWE-345",
+      "name": "Insufficient Verification of Data Authenticity (WebSocket Hijacking)"
+    },
+    {
+      "id": "file_upload",
+      "cwe": "CWE-434",
+      "name": "Unrestricted Upload of File with Dangerous Type"
+    },
+    {
+      "id": "path_traversal_lfi",
+      "cwe": "CWE-22",
+      "name": "Improper Limitation of a Pathname to a Restricted Directory (Path Traversal)"
+    },
+    {
+      "id": "command_injection",
+      "cwe": "CWE-78",
+      "name": "OS Command Injection"
+    },
+    {
+      "id": "xxe",
+      "cwe": "CWE-611",
+      "name": "Improper Restriction of XML External Entity Reference (XXE)"
+    },
+    {
+      "id": "crlf_injection",
+      "cwe": "CWE-93",
+      "name": "Improper Neutralization of CRLF Sequences (CRLF Injection)"
+    },
+    {
+      "id": "ldap_injection",
+      "cwe": "CWE-90",
+      "name": "Improper Neutralization of Special Elements in LDAP Queries"
+    },
+    {
+      "id": "xpath_injection",
+      "cwe": "CWE-643",
+      "name": "Improper Neutralization of Data within XPath Expressions"
+    },
+    {
+      "id": "xslt_injection",
+      "cwe": "CWE-91",
+      "name": "XML Injection (XSLT)"
+    },
+    {
+      "id": "ssi_injection",
+      "cwe": "CWE-97",
+      "name": "Improper Neutralization of Server-Side Includes (SSI)"
+    },
+    {
+      "id": "xssi",
+      "cwe": "CWE-200",
+      "name": "Exposure of Sensitive Information to an Unauthorized Actor (XSSI)"
+    },
+    {
+      "id": "email_injection",
+      "cwe": "CWE-74",
+      "name": "Improper Neutralization of Special Elements in Output (Email Header Injection)"
+    },
+    {
+      "id": "formula_csv_injection",
+      "cwe": "CWE-1236",
+      "name": "Improper Neutralization of Formula Elements in a CSV File"
+    },
+    {
+      "id": "orm_injection",
+      "cwe": "CWE-89",
+      "name": "SQL Injection (via ORM)"
+    },
+    {
+      "id": "rsql_injection",
+      "cwe": "CWE-89",
+      "name": "SQL Injection (RSQL/FIQL)"
+    },
+    {
+      "id": "unicode_injection",
+      "cwe": "CWE-180",
+      "name": "Incorrect Behavior Order: Validate Before Canonicalize"
+    },
+    {
+      "id": "dangling_markup",
+      "cwe": "CWE-79",
+      "name": "Cross-site Scripting (Dangling Markup)"
+    },
+    {
+      "id": "account_takeover",
+      "cwe": "CWE-287",
+      "name": "Improper Authentication (Account Takeover)"
+    },
+    {
+      "id": "two_fa_bypass",
+      "cwe": "CWE-308",
+      "name": "Use of Single-factor Authentication"
+    },
+    {
+      "id": "rate_limit_bypass",
+      "cwe": "CWE-799",
+      "name": "Improper Control of Interaction Frequency (Rate Limit)"
+    },
+    {
+      "id": "password_reset_bypass",
+      "cwe": "CWE-640",
+      "name": "Weak Password Recovery Mechanism for Forgotten Password"
+    },
+    {
+      "id": "captcha_bypass",
+      "cwe": "CWE-804",
+      "name": "Guessable CAPTCHA"
+    },
+    {
+      "id": "registration_vulnerabilities",
+      "cwe": "CWE-799",
+      "name": "Improper Control of Interaction Frequency"
+    },
+    {
+      "id": "payment_bypass",
+      "cwe": "CWE-841",
+      "name": "Improper Enforcement of Behavioral Workflow (Business Logic)"
+    },
+    {
+      "id": "timing_attacks",
+      "cwe": "CWE-208",
+      "name": "Observable Timing Discrepancy"
+    },
+    {
+      "id": "uuid_insecurities",
+      "cwe": "CWE-330",
+      "name": "Use of Insufficiently Random Values"
+    },
+    {
+      "id": "reverse_tab_nabbing",
+      "cwe": "CWE-1022",
+      "name": "Use of Web Link to Untrusted Target with window.opener Access (Reverse Tabnabbing)"
+    },
+    {
+      "id": "iframe_traps",
+      "cwe": "CWE-1021",
+      "name": "Improper Restriction of Rendered UI Layers or Frames (Clickjacking)"
+    },
+    {
+      "id": "cookie_hacking",
+      "cwe": "CWE-565",
+      "name": "Reliance on Cookies without Validation and Integrity Checking"
+    },
+    {
+      "id": "postmessage_vulnerabilities",
+      "cwe": "CWE-345",
+      "name": "Insufficient Verification of Data Authenticity (postMessage)"
+    },
+    {
+      "id": "web_vulnerabilities_methodology",
+      "cwe": "CWE-1057",
+      "name": "Improper Inventory / Methodology"
+    },
+    {
+      "id": "missing_authz",
+      "cwe": "CWE-862",
+      "name": "Missing Authorization"
+    },
+    {
+      "id": "missing_nonce",
+      "cwe": "CWE-352",
+      "name": "Cross-Site Request Forgery (Missing Nonce)"
+    },
+    {
+      "id": "priv_esc",
+      "cwe": "CWE-269",
+      "name": "Improper Privilege Management"
+    },
+    {
+      "id": "hardcoded_secret",
+      "cwe": "CWE-798",
+      "name": "Use of Hard-coded Credentials"
+    },
+    {
+      "id": "type_juggling",
+      "cwe": "CWE-697",
+      "name": "Incorrect Comparison"
+    },
+    {
+      "id": "path_confusion",
+      "cwe": "CWE-22",
+      "name": "Improper Limitation of a Pathname to a Restricted Directory (Path Traversal)"
+    },
+    {
+      "id": "wrong_sanitizer",
+      "cwe": "CWE-20",
+      "name": "Improper Input Validation"
+    },
+    {
+      "id": "llm_injection",
+      "cwe": "CWE-77",
+      "name": "Improper Neutralization of Special Elements used in a Command (LLM Prompt Injection)"
+    },
+    {
+      "id": "graphql_exposure",
+      "cwe": "CWE-200",
+      "name": "Exposure of Sensitive Information"
+    },
+    {
+      "id": "oauth_misconfig",
+      "cwe": "CWE-601",
+      "name": "URL Redirection to Untrusted Site (Open Redirect)"
+    },
+    {
+      "id": "grpc_reflection",
+      "cwe": "CWE-200",
+      "name": "Exposure of Sensitive Information"
+    },
+    {
+      "id": "dependency_confusion",
+      "cwe": "CWE-427",
+      "name": "Uncontrolled Search Path Element"
+    },
+    {
+      "id": "ml_supply_chain",
+      "cwe": "CWE-502",
+      "name": "Deserialization of Untrusted Data"
+    },
+    {
+      "id": "rust_unsafe",
+      "cwe": "CWE-119",
+      "name": "Improper Restriction of Operations within the Bounds of a Memory Buffer"
+    },
+    {
+      "id": "rust_format_string",
+      "cwe": "CWE-134",
+      "name": "Use of Externally-Controlled Format String"
+    },
+    {
+      "id": "jwt_alg_confusion",
+      "cwe": "CWE-347",
+      "name": "Improper Verification of Cryptographic Signature",
+      "category": "authentication"
+    },
+    {
+      "id": "cache_deception",
+      "cwe": "CWE-525",
+      "name": "Use of Web Browser Cache Containing Sensitive Information",
+      "category": "cryptographic_failure"
+    },
+    {
+      "id": "cors_misconfiguration",
+      "cwe": "CWE-942",
+      "name": "Overly Permissive Cross-domain Whitelist (CORS)"
+    }
   ]
 }

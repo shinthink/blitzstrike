@@ -6,3 +6,29 @@ dist/
 .DS_Store
 blitzstrike
 *.tgz
+
+# Tools cloned by `blitzstrike install-tools` (git-clone installs) — never
+# commit these into the repo; they land in ~/.blitzstrike/tools instead.
+RsaCtfTool/
+evilginx2/
+joomscan/
+massdns/
+phpggc/
+pwndbg/
+radare2/
+rizin/
+testssl.sh/
+SSRFmap/
+Gopherus/
+CMSeeK/
+
+# Local runtime state (tasks, memory, audit) — never commit
+.blitzstrike/
+
+# Downloaded benchmark plugins (test data, 900MB+) — never commit/publish
+bench/plugins-bench/
+bench/plugins-bench2/
+bench/fp-test/
+
+# Temp test scripts
+bench/_*.ts

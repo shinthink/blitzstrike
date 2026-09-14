@@ -1,0 +1,993 @@
+{
+  "$schema": "blitzstrike-patterns-v1",
+  "version": "1.1.0",
+  "_comment": "Empirical grounding layer. Every detector type is traced to its real-world bug class (CWE), its real-world signature, the chains it composes into (cross-ref chains.json), citable references, per-class bypass techniques, and the high-value assets (crown jewels) that class typically hits. Detection is derived from this data, never hardcoded. References are public standards (CWE/OWASP) and disclosed-report classes \u2014 no vendor/product framing.",
+  "patterns": [
+    {
+      "id": "sql_injection",
+      "name": "SQL Injection",
+      "cwe": "CWE-89",
+      "real_world": "User input is interpolated into a SQL query by string concatenation instead of parameterization. The single most-reported web class; real disclosures range from boolean/UNION extraction to stacked queries for admin takeover.",
+      "detection_signatures": [
+        "raw string-interpolated query into a SQL sink",
+        "no prepare()/parameterization",
+        "cross-file: concatenated variable with no visible source"
+      ],
+      "chain_templates": [
+        "sqli_to_rce",
+        "sqli_to_hash_dump_and_crack",
+        "sql_injection_to_rce",
+        "second_order_sqli"
+      ],
+      "references": [
+        "CWE-89",
+        "OWASP A03:2021 Injection"
+      ],
+      "bypass_techniques": [
+        "comment/whitespace obfuscation to slip past keyword filters",
+        "hex + double-URL encoding of payloads",
+        "second-order: store payload, trigger on a later read",
+        "time-based blind when output is suppressed",
+        "chunked/case-mangled keywords"
+      ],
+      "crown_jewels": [
+        "credential + session tables",
+        "admin/role tables",
+        "PII and financial records",
+        "password-hash dumps for offline cracking"
+      ],
+      "payout_min": 1000,
+      "payout_max": 15000,
+      "typical_payout": "$1K\u2013$15K"
+    },
+    {
+      "id": "ssrf",
+      "name": "Server-Side Request Forgery",
+      "cwe": "CWE-918",
+      "real_world": "A server fetches an attacker-supplied URL with no host allowlist, letting it reach cloud metadata endpoints, internal services, or the loopback interface.",
+      "detection_signatures": [
+        "server-side fetch of a request-controlled URL",
+        "no host/allowlist validation"
+      ],
+      "chain_templates": [
+        "ssrf_cloud_metadata",
+        "ssrf_to_redis_rce",
+        "blind_ssrf_to_oob_exfil"
+      ],
+      "references": [
+        "CWE-918",
+        "OWASP A10:2021 SSRF"
+      ],
+      "bypass_techniques": [
+        "DNS rebinding to pass host checks",
+        "decimal/octal/hex + IPv6 IP encodings",
+        "redirect chains to a blocklisted host",
+        "gopher/dict/file URL schemes",
+        "localhost aliases (0, 127.1, ::1)"
+      ],
+      "crown_jewels": [
+        "cloud metadata (169.254.169.254) for instance credentials",
+        "internal admin panels + APIs",
+        "internal Redis/DB/Elasticsearch",
+        "cloud IAM / STS AssumeRole endpoints"
+      ],
+      "payout_min": 1000,
+      "payout_max": 15000,
+      "typical_payout": "$1K\u2013$15K"
+    },
+    {
+      "id": "ssti",
+      "name": "Server-Side Template Injection",
+      "cwe": "CWE-1336",
+      "real_world": "User input reaches a template engine (Jinja2, Twig, Freemarker, ERB, \u2026) that evaluates expressions, yielding code execution via template syntax like {{7*7}}.",
+      "detection_signatures": [
+        "template render of request input",
+        "expression evaluation in a template engine"
+      ],
+      "chain_templates": [
+        "ssti_template_injection_rce",
+        "ssti_to_full_rce"
+      ],
+      "references": [
+        "CWE-1336",
+        "OWASP A03:2021 Injection"
+      ],
+      "bypass_techniques": [
+        "sandbox escape via attribute/object introspection",
+        "unicode/alternate delimiter to dodge input filters",
+        "chaining globals/locals to reach builtins",
+        "engine-specific escapes (Jinja2 \u2192 Python, Twig \u2192 PHP)"
+      ],
+      "crown_jewels": [
+        "direct RCE",
+        "config files + secrets",
+        "template/partials with injected backdoors"
+      ],
+      "payout_min": 2000,
+      "payout_max": 10000,
+      "typical_payout": "$2K\u2013$10K"
+    },
+    {
+      "id": "xxe",
+      "name": "XML External Entity Injection",
+      "cwe": "CWE-611",
+      "real_world": "An XML parser resolves external entities, letting an attacker read local files or hit internal URLs via DOCTYPE entity definitions.",
+      "detection_signatures": [
+        "XML parse without disabling external entities",
+        "DOCTYPE/ENTITY processing"
+      ],
+      "chain_templates": [
+        "xxe_to_ssrf_and_file_read"
+      ],
+      "references": [
+        "CWE-611",
+        "OWASP A03:2021 Injection"
+      ],
+      "bypass_techniques": [
+        "parameter entities + external DTD for blind exfiltration",
+        "OOB (out-of-band) via FTP/HTTP entity callbacks",
+        "UTF-7/UTF-16 encodings to dodge ASCII filters",
+        "XInclude when DOCTYPE is blocked"
+      ],
+      "crown_jewels": [
+        "local files (/etc/passwd, app keys, .env)",
+        "internal SSRF via entity",
+        "cloud metadata via file:// + SSRF chain"
+      ],
+      "payout_min": 1000,
+      "payout_max": 10000,
+      "typical_payout": "$1K\u2013$10K"
+    },
+    {
+      "id": "deserialization",
+      "name": "Insecure Deserialization",
+      "cwe": "CWE-502",
+      "real_world": "Attacker-controlled serialized data is deserialized and escalated through a magic-method gadget chain (__destruct/__wakeup/__toString) into code execution or object injection.",
+      "detection_signatures": [
+        "unserialize()/pickle.loads/yaml.load of request data",
+        "a magic-method gadget in scope"
+      ],
+      "chain_templates": [
+        "deserialization_pop_chain",
+        "deserialization_to_rce",
+        "appkey_leak_deserialization_rce"
+      ],
+      "references": [
+        "CWE-502",
+        "OWASP A08:2021 Software and Data Integrity Failures"
+      ],
+      "bypass_techniques": [
+        "custom gadget chains for the app's own classes",
+        "phar:// stream wrappers to trigger unserialize",
+        "wrapper formats (pickle, yaml, jsonpickle)",
+        "encrypted-session forgery once a secret leaks"
+      ],
+      "crown_jewels": [
+        "RCE via gadget chain",
+        "session/cookie forgery",
+        "admin object injection"
+      ],
+      "payout_min": 5000,
+      "payout_max": 30000,
+      "typical_payout": "$5K\u2013$30K"
+    },
+    {
+      "id": "type_juggling",
+      "name": "PHP Type Juggling (Loose Comparison)",
+      "cwe": "CWE-697",
+      "real_world": "A loose comparison (==) between user input and a hash/secret collapses via the 0e magic-hash or numeric-string coercion, bypassing authentication.",
+      "detection_signatures": [
+        "loose comparison == of user input against a secret/hash",
+        "0e-prefixed or numeric-string coercion"
+      ],
+      "chain_templates": [
+        "php_type_juggling_auth_bypass"
+      ],
+      "references": [
+        "CWE-697",
+        "OWASP A07:2021 Identification and Authentication Failures"
+      ],
+      "bypass_techniques": [
+        "0e magic hashes (0e1234\u2026 == 0e5678\u2026)",
+        "numeric-string coercion (\"1admin\" == 1)",
+        "array comparison (array() == false)",
+        "null/empty-string coercion"
+      ],
+      "crown_jewels": [
+        "authentication bypass",
+        "session/cookie validation bypass",
+        "API token check bypass"
+      ],
+      "payout_min": 500,
+      "payout_max": 5000,
+      "typical_payout": "$500\u2013$5K"
+    },
+    {
+      "id": "mass_assignment",
+      "name": "Mass Assignment",
+      "cwe": "CWE-915",
+      "real_world": "Request data is bound to model fields without an allowlist (extract()/parse_str/framework mass-assign), letting an attacker set privileged fields like role or is_admin.",
+      "detection_signatures": [
+        "extract()/parse_str of request data without a safe flag",
+        "model binding without an allowlist"
+      ],
+      "chain_templates": [
+        "mass_assignment_to_admin_takeover",
+        "extract_variable_injection_lfi"
+      ],
+      "references": [
+        "CWE-915",
+        "OWASP API6:2023 Unrestricted Access to Sensitive Business Flows"
+      ],
+      "bypass_techniques": [
+        "nested/array parameters to reach guarded fields",
+        "JSON body field injection",
+        "adding is_admin/role/verified fields to a request",
+        "framework default mass-assign without allowlist"
+      ],
+      "crown_jewels": [
+        "role / is_admin / is_verified flags",
+        "subscription tier + pricing fields",
+        "account ownership / org membership"
+      ],
+      "payout_min": 500,
+      "payout_max": 5000,
+      "typical_payout": "$500\u2013$5K"
+    },
+    {
+      "id": "prototype_pollution",
+      "name": "Prototype Pollution",
+      "cwe": "CWE-1321",
+      "real_world": "A deep merge of request data into an object pollutes Object.prototype, corrupting logic and escalating to code execution in gadget-heavy runtimes.",
+      "detection_signatures": [
+        "deep merge/extend of request data into objects",
+        "__proto__ / constructor.prototype assignment"
+      ],
+      "chain_templates": [
+        "prototype_pollution_to_rce"
+      ],
+      "references": [
+        "CWE-1321"
+      ],
+      "bypass_techniques": [
+        "__proto__ via constructor.prototype aliases",
+        "array-key pollution to reach the merge",
+        "gadget chaining to RCE",
+        "property injection to bypass auth/ACL"
+      ],
+      "crown_jewels": [
+        "RCE gadgets (child_process, template engines)",
+        "authentication/ACL bypass",
+        "XSS or property-injection escalation"
+      ],
+      "payout_min": 1000,
+      "payout_max": 10000,
+      "typical_payout": "$1K\u2013$10K"
+    },
+    {
+      "id": "crlf_injection",
+      "name": "CRLF Injection / Header Injection",
+      "cwe": "CWE-93",
+      "real_world": "Request-controlled newlines are written into an HTTP header, enabling response splitting, cookie injection, or cache poisoning.",
+      "detection_signatures": [
+        "request input reaches a header without CR/LF stripping"
+      ],
+      "chain_templates": [
+        "cache_poisoning_xss",
+        "cache_poison_to_stored_xss"
+      ],
+      "references": [
+        "CWE-93",
+        "OWASP A03:2021 Injection"
+      ],
+      "bypass_techniques": [
+        "double-URL-encoded %0d%0a",
+        "unicode line separators (U+2028/U+2029)",
+        "header smuggling via folded headers"
+      ],
+      "crown_jewels": [
+        "Set-Cookie injection \u2192 session fixation",
+        "response splitting \u2192 XSS",
+        "cache poisoning \u2192 stored XSS"
+      ],
+      "payout_min": 300,
+      "payout_max": 3000,
+      "typical_payout": "$300\u2013$3K"
+    },
+    {
+      "id": "path_confusion",
+      "name": "Path Traversal / Path Confusion",
+      "cwe": "CWE-22",
+      "real_world": "A request-controlled path is normalized or resolved without confinement (../, %2e%2e, absolute paths), reading or writing files outside the intended directory.",
+      "detection_signatures": [
+        "request input reaches a file path without confinement"
+      ],
+      "chain_templates": [
+        "path_traversal_file_write",
+        "path_traversal_to_credential_theft",
+        "lfi_log_poison_rce",
+        "lfi_to_rce_via_log_poisoning"
+      ],
+      "references": [
+        "CWE-22",
+        "OWASP A01:2021 Broken Access Control"
+      ],
+      "bypass_techniques": [
+        "null-byte truncation (legacy PHP)",
+        "double encoding %252e%252e%252f",
+        "unicode + absolute-path variants",
+        "symlink / wildcard resolution",
+        "log-poisoning to turn LFI into RCE"
+      ],
+      "crown_jewels": [
+        "config files + .env + private keys",
+        "/etc/passwd and shadow",
+        "source code for further audit",
+        "writable dirs for a shell drop"
+      ],
+      "payout_min": 1000,
+      "payout_max": 10000,
+      "typical_payout": "$1K\u2013$10K"
+    },
+    {
+      "id": "wrong_sanitizer",
+      "name": "Wrong-Context Sanitization",
+      "cwe": "CWE-20",
+      "real_world": "A value is sanitized for one context (e.g. HTML) but reaches a sink that needs a different context (e.g. SQL), so the sanitizer provides no real protection.",
+      "detection_signatures": [
+        "a sanitizer/validator for context X feeding a sink that requires context Y"
+      ],
+      "chain_templates": [
+        "second_order_sqli"
+      ],
+      "references": [
+        "CWE-20",
+        "OWASP A03:2021 Injection"
+      ],
+      "bypass_techniques": [
+        "context mismatch (HTML-escape then SQL, or vice-versa)",
+        "double encoding to survive a single decode",
+        "sanitizer that misses alternate encodings"
+      ],
+      "crown_jewels": [
+        "downstream injection (SQLi/XSS/RCE)",
+        "stored data that re-enters a different sink"
+      ],
+      "payout_min": 300,
+      "payout_max": 3000,
+      "typical_payout": "$300\u2013$3K"
+    },
+    {
+      "id": "missing_authz",
+      "name": "Missing Authorization (Broken Access Control)",
+      "cwe": "CWE-862",
+      "real_world": "A state-changing handler lacks a capability/ownership check, letting an unauthenticated or low-privilege caller perform an admin action.",
+      "detection_signatures": [
+        "state-changing operation with no current_user_can/is_user_logged_in check"
+      ],
+      "chain_templates": [
+        "idor_to_admin_takeover",
+        "mass_assignment_to_admin_takeover",
+        "idor_object_reference"
+      ],
+      "references": [
+        "CWE-862",
+        "OWASP A01:2021 Broken Access Control"
+      ],
+      "bypass_techniques": [
+        "HTTP verb tampering (GET vs POST vs PUT)",
+        "sequential/UUID/guessable object-ID enumeration",
+        "cross-tenant / cross-org ID swapping",
+        "header-based authz spoofing"
+      ],
+      "crown_jewels": [
+        "cross-tenant data + employee PII",
+        "admin/moderator endpoints",
+        "financial documents + billing APIs",
+        "org/account management actions"
+      ],
+      "payout_min": 1000,
+      "payout_max": 10000,
+      "typical_payout": "$1K\u2013$10K",
+      "validation": [
+        "Two-account test: attacker account A reads victim account B's object (A's token + B's id -> B's data). A single self-account test does not prove IDOR."
+      ]
+    },
+    {
+      "id": "missing_nonce",
+      "name": "Missing Nonce (CSRF)",
+      "cwe": "CWE-352",
+      "real_world": "A state-changing action lacks an anti-CSRF token, letting a victim's browser perform the action on their behalf via a forged request.",
+      "detection_signatures": [
+        "state-changing operation with no nonce/referer verification"
+      ],
+      "chain_templates": [
+        "nonce_harvest_auth_bypass"
+      ],
+      "references": [
+        "CWE-352",
+        "OWASP A01:2021 Broken Access Control"
+      ],
+      "bypass_techniques": [
+        "empty/null token accepted",
+        "predictable or reusable tokens",
+        "verb switching to skip the check",
+        "referer/Origin header spoofing or absence"
+      ],
+      "crown_jewels": [
+        "password/email change",
+        "money transfer / payment actions",
+        "admin config changes"
+      ],
+      "payout_min": 300,
+      "payout_max": 3000,
+      "typical_payout": "$300\u2013$3K"
+    },
+    {
+      "id": "file_upload",
+      "name": "Unrestricted File Upload",
+      "cwe": "CWE-434",
+      "real_world": "A file is uploaded with an attacker-controlled name/extension and no server-side filetype whitelist, landing web-reachable for code execution.",
+      "detection_signatures": [
+        "move_uploaded_file/wp_upload_bits with attacker-controlled name",
+        "no extension/mime whitelist",
+        "uploadAllow=all connector config"
+      ],
+      "chain_templates": [
+        "upload_polyglot_rce",
+        "file_upload_to_rce",
+        "split_controller_upload_bypass"
+      ],
+      "references": [
+        "CWE-434",
+        "OWASP A04:2021 Insecure Design"
+      ],
+      "bypass_techniques": [
+        "double extension (.php.jpg, .jpg.php)",
+        "null-byte + alternate extensions (.pht, .php5, .phtml)",
+        "content-type/mime spoofing",
+        "polyglot files (valid image + payload)"
+      ],
+      "crown_jewels": [
+        "web-reachable upload directory",
+        "avatar/profile/document uploads",
+        "document converters (PDF/Office) with a known chain"
+      ],
+      "payout_min": 500,
+      "payout_max": 10000,
+      "typical_payout": "$500\u2013$10K"
+    },
+    {
+      "id": "priv_esc",
+      "name": "Privilege Escalation",
+      "cwe": "CWE-269",
+      "real_world": "A role/capability/user change is fed by request input and reachable from a public entry point with no capability check, letting a user self-assign admin.",
+      "detection_signatures": [
+        "set_role/add_role/add_cap of request input",
+        "cross-file: sink reachable from public hook with no capability check"
+      ],
+      "chain_templates": [
+        "mass_assignment_to_admin_takeover",
+        "idor_to_admin_takeover"
+      ],
+      "references": [
+        "CWE-269",
+        "OWASP A01:2021 Broken Access Control"
+      ],
+      "bypass_techniques": [
+        "role parameter injection in registration/profile",
+        "missing capability check on a public hook",
+        "default-role override",
+        "wp_capabilities/user-meta injection"
+      ],
+      "crown_jewels": [
+        "administrator / superuser role",
+        "tenant-admin role",
+        "org-owner / root capabilities"
+      ],
+      "payout_min": 1000,
+      "payout_max": 10000,
+      "typical_payout": "$1K\u2013$10K"
+    },
+    {
+      "id": "hardcoded_secret",
+      "name": "Hardcoded Credentials",
+      "cwe": "CWE-798",
+      "real_world": "A secret (API key, database password, access token, private key) is committed in source, exposing it to anyone with repo access. Real disclosures regularly turn a leaked key into account takeover or cloud compromise.",
+      "detection_signatures": [
+        "secret field assigned a literal",
+        "known secret format (JWT/AWS/GitHub/Slack/\u2026) in source",
+        "high-entropy token under a non-obvious name"
+      ],
+      "chain_templates": [
+        "api_key_leak_to_account_takeover",
+        "appkey_leak_deserialization_rce",
+        "default_creds_to_internal_pivot"
+      ],
+      "references": [
+        "CWE-798",
+        "OWASP A02:2021 Cryptographic Failures"
+      ],
+      "bypass_techniques": [
+        "base64/hex-encoded secrets that evade naive regex",
+        "secrets split across concatenation",
+        "env-masquerading (default value committed)",
+        "minified/bundled assets hiding keys"
+      ],
+      "crown_jewels": [
+        "cloud credentials (AWS/GCP/Azure)",
+        "database credentials",
+        "JWT signing keys",
+        "payment/provider API tokens"
+      ],
+      "payout_min": 500,
+      "payout_max": 10000,
+      "typical_payout": "$500\u2013$10K"
+    },
+    {
+      "id": "llm_injection",
+      "name": "LLM Prompt Injection",
+      "cwe": "CWE-77",
+      "real_world": "Untrusted text reaches an LLM call (chat/completion/invoke) without a prompt-injection boundary, letting the input override instructions, leak the system prompt, or steer the model into a privileged action.",
+      "detection_signatures": [
+        "an LLM provider call (openai/anthropic/langchain/llm) with request input in scope",
+        "no visible system-prompt boundary or output filtering"
+      ],
+      "chain_templates": [],
+      "references": [
+        "CWE-77",
+        "OWASP LLM01:2025 Prompt Injection"
+      ],
+      "bypass_techniques": [
+        "delimiter/role confusion to escape the system prompt",
+        "translation/encoding attacks to hide instructions",
+        "context overflow to displace earlier constraints",
+        "indirect injection via fetched documents (RAG)"
+      ],
+      "crown_jewels": [
+        "the system prompt itself",
+        "tool/function-calling surfaces",
+        "RAG-retrieved data",
+        "privileged actions (email/send/pay) gated on model output"
+      ],
+      "validation": [
+        "RUN-TWICE RULE \u2014 the extraction/injection must reproduce token-for-token across two fresh sessions (filter out model confabulation)",
+        "NON-GUESSABLE ANCHOR \u2014 it must leak an actual verifiable internal key, endpoint URL, or cross-tenant data, not a plausible guess",
+        "OOB PROOF \u2014 tool-use or markdown exfiltration must produce a verifiable callback log on your listener"
+      ],
+      "payout_min": 500,
+      "payout_max": 10000,
+      "typical_payout": "$500\u2013$10K"
+    },
+    {
+      "id": "graphql_exposure",
+      "name": "GraphQL Introspection / Playground Exposure",
+      "cwe": "CWE-200",
+      "real_world": "GraphQL introspection or a playground is left enabled in production, exposing the full schema (every query/mutation/field) and enabling interactive querying for recon.",
+      "detection_signatures": [
+        "introspection/playground/graphiql set true in a production-reachable config"
+      ],
+      "chain_templates": [
+        "graphql_idor_to_data_theft",
+        "graphql_batching_to_credential_stuffing"
+      ],
+      "references": [
+        "CWE-200",
+        "OWASP API2:2023 Broken Authentication"
+      ],
+      "bypass_techniques": [
+        "alternate introspection queries when the standard one is blocked",
+        "field suggestion / error messages leaking the schema",
+        "aliasing + batching to brute endpoints"
+      ],
+      "crown_jewels": [
+        "the full schema (every query/mutation/field)",
+        "hidden/admin-only fields",
+        "mutation endpoints for destructive actions"
+      ],
+      "payout_min": 500,
+      "payout_max": 5000,
+      "typical_payout": "$500\u2013$5K"
+    },
+    {
+      "id": "oauth_misconfig",
+      "name": "OAuth Redirect URI Misconfiguration",
+      "cwe": "CWE-601",
+      "real_world": "An OAuth redirect_uri/callback is fed by request input with no static allowlist, letting an attacker redirect the authorization code or token to an attacker-controlled endpoint.",
+      "detection_signatures": [
+        "redirect_uri/callback fed by request input",
+        "no allowlist/whitelist validation nearby"
+      ],
+      "chain_templates": [
+        "oauth_redirect_bypass",
+        "open_redirect_to_oauth_theft"
+      ],
+      "references": [
+        "CWE-601",
+        "OWASP A07:2021 Identification and Authentication Failures"
+      ],
+      "bypass_techniques": [
+        "path/subdomain confusion on the allowlist",
+        "missing or weak state parameter",
+        "authorization-code replay",
+        "OAuth mix-up between IdP and client"
+      ],
+      "crown_jewels": [
+        "the authorization code",
+        "access/refresh tokens",
+        "account-linking flows"
+      ],
+      "payout_min": 500,
+      "payout_max": 5000,
+      "typical_payout": "$500\u2013$5K"
+    },
+    {
+      "id": "grpc_reflection",
+      "name": "gRPC Reflection Exposed",
+      "cwe": "CWE-200",
+      "real_world": "gRPC server reflection is enabled, enumerating every service and method to any caller and leaking the API contract.",
+      "detection_signatures": [
+        "enable_server_reflection / RegisterReflectionService in production code"
+      ],
+      "chain_templates": [],
+      "references": [
+        "CWE-200"
+      ],
+      "bypass_techniques": [
+        "grpcurl / reflection API enumeration",
+        "proto extraction to reconstruct the contract",
+        "unauthenticated method invocation once enumerated"
+      ],
+      "crown_jewels": [
+        "the full API contract (every service/method)",
+        "hidden/internal methods",
+        "input schemas for fuzzing"
+      ],
+      "payout_min": 200,
+      "payout_max": 2000,
+      "typical_payout": "$200\u2013$2K"
+    },
+    {
+      "id": "dependency_confusion",
+      "cwe": "CWE-427",
+      "real_world": "Attacker publishes an internal package name (e.g. company-utils) on the public registry with a higher version; the build resolves it and pulls malicious code into CI/deploy.",
+      "detection_signatures": [
+        "--index-url / --extra-index-url pointing at a public registry (pypi.org/npmjs.org/rubygems.org) in a manifest or build file",
+        "a scoped package (@company/pkg) referenced with no private registry pinned"
+      ],
+      "chain_templates": [],
+      "references": [
+        "CWE-427",
+        "CWE-494",
+        "Microsoft 2021 dependency-confusion research"
+      ],
+      "bypass_techniques": [
+        "scoped-name squatting (npm @scope is not reserved unless registered)",
+        "version pinning (>=0.0.1) so a higher attacker version wins",
+        "typo/prefix confusion for internal-only names",
+        "PEP 503 private-index fallback to public PyPI"
+      ],
+      "crown_jewels": [
+        "the CI/CD build pipeline",
+        "artifact/deploy credentials baked into the build",
+        "the internal package name registry (what to squat)"
+      ],
+      "payout_min": 1000,
+      "payout_max": 20000,
+      "typical_payout": "$1K\u2013$20K"
+    },
+    {
+      "id": "ml_supply_chain",
+      "cwe": "CWE-502",
+      "real_world": "A poisoned model file (pickle) hosted at a URL or uploaded by a user is loaded via torch.load/joblib.load without the safe flag \u2192 arbitrary code execution on load.",
+      "detection_signatures": [
+        "torch.load(...) without weights_only=True",
+        "joblib.load(...) / keras.models.load_model(...) / np.load(...allow_pickle=True) on an untrusted path/URL"
+      ],
+      "chain_templates": [],
+      "references": [
+        "CWE-502",
+        "OWASP ML02:2025 Data Poisoning",
+        "PyTorch weights_only default change (2.6)"
+      ],
+      "bypass_techniques": [
+        "model file masquerading as a benign artifact (weights.pt with a pickle payload)",
+        "indirect load: download via URL then load locally",
+        "np.load allow_pickle=True with a crafted .npy"
+      ],
+      "crown_jewels": [
+        "the model-serving host (RCE on load)",
+        "training data / weights",
+        "the inference API surface"
+      ],
+      "payout_min": 1000,
+      "payout_max": 20000,
+      "typical_payout": "$1K\u2013$20K"
+    },
+    {
+      "id": "rust_unsafe",
+      "cwe": "CWE-119",
+      "real_world": "A Rust library uses std::mem::transmute to reinterpret an attacker-influenced value as a reference, or builds a slice via from_raw_parts with a caller-supplied length, producing out-of-bounds access / use-after-free inside an unsafe block.",
+      "detection_signatures": [
+        "std::mem::transmute(...)",
+        "MaybeUninit::assume_init()",
+        "from_raw_parts(ptr, len)",
+        "ptr::copy / ptr::copy_nonoverlapping / ptr::read / ptr::write",
+        "from_utf8_unchecked / unreachable_unchecked"
+      ],
+      "chain_templates": [],
+      "references": [
+        "CWE-119",
+        "CWE-787",
+        "CWE-416",
+        "Rust Foundation \u2014 Unsafe Rust in the Wild",
+        "guardsarm/rust-memory-safety-examples",
+        "doc.rust-lang.org/rustc/exploit-mitigations.html"
+      ],
+      "bypass_techniques": [
+        "transmute to a larger/smaller layout to defeat the borrow checker",
+        "from_raw_parts with an attacker-controlled length",
+        "unsafe + raw pointer arithmetic past the bounds",
+        "FFI (extern C) without validating C-side lengths"
+      ],
+      "crown_jewels": [
+        "any host RCE / memory corruption",
+        "the unsafe block's invariants (what must hold for soundness)",
+        "FFI boundaries (the highest-yield audit surface)"
+      ],
+      "payout_min": 500,
+      "payout_max": 10000,
+      "typical_payout": "$500\u2013$10K"
+    },
+    {
+      "id": "rust_format_string",
+      "cwe": "CWE-134",
+      "real_world": "A server logs or prints a user-supplied string as the format argument \u2014 println!(user_input) \u2014 so the attacker's format specifiers (positional args, width/precision) read or corrupt memory.",
+      "detection_signatures": [
+        "format!(var) / println!(var) / print!(var) / eprintln!(var) with a VARIABLE as the format string (not a literal)"
+      ],
+      "chain_templates": [],
+      "references": [
+        "CWE-134",
+        "OWASP WSTG-INPV-13 Format String Injection",
+        "yevh/rust-security-handbook (injection attack prevention)",
+        "StackHawk \u2014 Rust command injection examples"
+      ],
+      "bypass_techniques": [
+        "width/precision specifiers to read past the intended argument",
+        "positional args ({0} {1} ...) to reach unintended arguments",
+        "indirect format via a helper that passes user input straight into format!"
+      ],
+      "crown_jewels": [
+        "the formatting arguments on the stack",
+        "any panic path that formats attacker input",
+        "logging/telemetry that echoes request data"
+      ],
+      "payout_min": 500,
+      "payout_max": 5000,
+      "typical_payout": "$500\u2013$5K"
+    },
+    {
+      "id": "jwt_alg_confusion",
+      "name": "JWT Algorithm Confusion (RS256 -> HS256)",
+      "cwe": "CWE-347",
+      "severity": "critical",
+      "signature": "alg-dispatch verifier accepting RS256 AND HS256 with public/shared HMAC key",
+      "chains": [
+        "jwt"
+      ],
+      "references": [
+        "CVE-2015-9235",
+        "OWASP ASVS V3.5.2"
+      ],
+      "real_world": "A hand-written JWT verifier dispatches on the token's alg header and accepts BOTH RS256 (asymmetric) and HS256 (symmetric HMAC), with the HS256 secret derived from the RSA public key. Setting alg=HS256 and signing with the public key forges a valid token.",
+      "detection_signatures": [
+        "alg-dispatch verifier accepting RS256 AND HS256",
+        "createHmac('sha256', <publicKey>) alongside createVerify('RSA-SHA256')",
+        "pyjwt decode(..., algorithms=['HS256','RS256'])"
+      ],
+      "chain_templates": [
+        "jwt_alg_confusion_forgery",
+        "jwt_algorithm_confusion"
+      ],
+      "bypass_techniques": [
+        "public-key-to-HMAC confusion",
+        "kid/jku header injection to point the verifier at attacker keys",
+        "alg:none / empty signature when the verifier also accepts it"
+      ],
+      "crown_jewels": [
+        "the RSA public key (published at /.well-known/jwks.json)",
+        "admin role claims overridden by token claims",
+        "treasury/admin endpoints gated only by a role claim"
+      ],
+      "payout_min": 1000,
+      "payout_max": 10000,
+      "typical_payout": "$1K\u2013$10K"
+    },
+    {
+      "id": "cache_deception",
+      "name": "Web Cache Deception",
+      "cwe": "CWE-525",
+      "severity": "high",
+      "signature": "reverse-proxy caches static-extension URLs with a cookie-less cache key over a session-authenticated backend",
+      "chains": [
+        "cache_deception"
+      ],
+      "references": [
+        "CWE-525",
+        "Omer Gil \u2014 Web Cache Deception Attack",
+        "OWASP WSTG-ATHN-03"
+      ],
+      "real_world": "A reverse proxy caches static-extension URLs (.css/.js/.png) with a cache key that omits the session cookie, while a backend route (often a greedy regex like /account(/.*)?) serves per-session private data for those URLs. An attacker submits a victim-visited URL, the bot's private response is cached, then re-fetched anonymously.",
+      "detection_signatures": [
+        "proxy_cache_key without $cookie over a session-authenticated backend",
+        "location ~* \\.(css|js|png|...) with proxy_cache",
+        "greedy backend route regex + static-extension passthrough"
+      ],
+      "chain_templates": [
+        "cache_deception"
+      ],
+      "bypass_techniques": [
+        "append a static extension to an authenticated path",
+        "path delimiters (; / ..) that still match the route regex",
+        "cache-key normalization differences (trailing slash, percent-encoding)"
+      ],
+      "crown_jewels": [
+        "per-session private profile/account JSON",
+        "api_key / session tokens in the cached body",
+        "any victim-session data cached under a static-extension URL"
+      ],
+      "payout_min": 1000,
+      "payout_max": 10000,
+      "typical_payout": "$1K\u2013$10K"
+    },
+    {
+      "id": "cors_misconfiguration",
+      "name": "CORS Misconfiguration",
+      "cwe": "CWE-942",
+      "severity": "high",
+      "signature": "Access-Control-Allow-Origin reflects the request Origin (or is *) while credentials are allowed",
+      "chains": [
+        "cors_misconfig_data_theft",
+        "cors_misconfig_to_session_theft"
+      ],
+      "references": [
+        "CWE-942",
+        "OWASP WSTG-CLNT-01",
+        "PortSwigger \u2014 CORS vulnerability with basic origin reflection"
+      ],
+      "real_world": "A server echoes the request Origin header into Access-Control-Allow-Origin while also sending Access-Control-Allow-Credentials: true. Any website the victim visits can then make credentialed requests and read the victim's authenticated responses cross-origin (session theft, account data exfil).",
+      "detection_signatures": [
+        "Access-Control-Allow-Origin = request Origin (reflected)",
+        "Access-Control-Allow-Origin: * + Access-Control-Allow-Credentials: true",
+        "allow_origins=[\"*\"] + allow_credentials=True (Flask/Django CORS)"
+      ],
+      "chain_templates": [
+        "cors_misconfig_data_theft",
+        "cors_misconfig_to_session_theft"
+      ],
+      "bypass_techniques": [
+        "null origin (sandboxed iframe) reflected",
+        "subdomain of the attacker reflected by a naive suffix/prefix check",
+        "Origin with the target as a suffix (evil.com-target.com)"
+      ],
+      "crown_jewels": [
+        "authenticated JSON API responses",
+        "session/CSRF tokens",
+        "account settings + PII"
+      ],
+      "payout_min": 500,
+      "payout_max": 5000,
+      "typical_payout": "$500\u2013$5K"
+    },
+    {
+      "id": "xss",
+      "name": "Cross-Site Scripting (XSS)",
+      "cwe": "CWE-79",
+      "severity": "high",
+      "signature": "user-controlled input reaches a DOM/JS sink (innerHTML / dangerouslySetInnerHTML / document.write / .html / eval)",
+      "chains": [
+        "xss_to_account_takeover"
+      ],
+      "references": [
+        "CWE-79",
+        "OWASP WSTG-INPV-02",
+        "PortSwigger \u2014 DOM-based XSS"
+      ],
+      "real_world": "A DOM sink (innerHTML, document.write, dangerouslySetInnerHTML, jQuery .html(), eval) is fed user-controlled input without sanitization/encoding. The injected script runs in the victim's origin, stealing cookies, hijacking the session, or exfiltrating data.",
+      "detection_signatures": [
+        "dangerouslySetInnerHTML={{__html: <var>}}",
+        "element.innerHTML = <var>",
+        "document.write(<var>) / .html(<var>) with a request/location source nearby"
+      ],
+      "chain_templates": [
+        "xss_to_account_takeover"
+      ],
+      "bypass_techniques": [
+        "context-specific encoding (HTML/attribute/JS/URL) mismatches",
+        "DOM clobbering (form/iframe name overrides)",
+        "CSP bypass via nonce reuse / unsafe-inline gaps"
+      ],
+      "crown_jewels": [
+        "session cookies (document.cookie)",
+        "admin panel actions via CSRF tokens",
+        "victim PII in the DOM"
+      ],
+      "payout_min": 500,
+      "payout_max": 5000,
+      "typical_payout": "$500\u2013$5K"
+    },
+    {
+      "id": "subdomain_takeover",
+      "name": "Subdomain Takeover",
+      "cwe": "CWE-404",
+      "severity": "high",
+      "signature": "a DNS CNAME/AliasTarget points at a service that can be claimed by an attacker (GitHub Pages/S3/Heroku/\u2026)",
+      "chains": [
+        "subdomain_takeover",
+        "subdomain_takeover_to_cookie_theft"
+      ],
+      "references": [
+        "CWE-404",
+        "OWASP WSTG-CONFIG-10",
+        "Can I Take Over XYZ (EdOverflow)"
+      ],
+      "real_world": "A dangling DNS record (CNAME/AliasTarget) points to a service the org no longer owns (e.g. a deleted GitHub Pages repo, S3 bucket, or Heroku app). An attacker re-registers that name and serves arbitrary content from the victim's subdomain \u2014 phishing, cookie theft via a parent-domain cookie, and same-origin attacks.",
+      "detection_signatures": [
+        "CNAME/AliasTarget/DNSName -> *.github.io / *.herokuapp.com / *.amazonaws.com / \u2026",
+        "aws_route53_record type=CNAME with an unclaimed service target"
+      ],
+      "chain_templates": [
+        "subdomain_takeover",
+        "subdomain_takeover_to_cookie_theft"
+      ],
+      "bypass_techniques": [
+        "check the CNAME resolves to an NXDOMAIN / 'not found' / unclaimed page",
+        "verify via the service's provisioning page (GitHub 404 'repo not found')"
+      ],
+      "crown_jewels": [
+        "wildcard-scoped parent-domain cookies",
+        "subdomains of SSO/portal/main domains",
+        "email-deliverability subdomains (SPF/DKIM trust)"
+      ],
+      "payout_min": 500,
+      "payout_max": 5000,
+      "typical_payout": "$500\u2013$5K"
+    },
+    {
+      "id": "command_injection",
+      "name": "OS Command Injection",
+      "cwe": "CWE-78",
+      "real_world": "User input is interpolated into a shell command (system/exec/popen/subprocess) without argument escaping. Attackers append ; | && $(...) to run arbitrary commands, from id/whoami probes to full reverse shells.",
+      "detection_signatures": [
+        "raw input concatenated into a shell/exec sink",
+        "no escapeshellarg / argument-array / shlex.quote",
+        "user-controlled parameter into os.system / subprocess / exec"
+      ],
+      "chain_templates": [
+        "command_injection_os_cmd"
+      ],
+      "references": [
+        "CWE-78",
+        "OWASP A03:2021 Injection"
+      ],
+      "bypass_techniques": [
+        "command separators ; | && || for chained commands",
+        "$(...) and backtick substitution to bypass keyword filters",
+        "newline / IFS-based argument splitting",
+        "URL + hex encoding of payloads",
+        "base64-encode the payload, then decode + execute"
+      ],
+      "crown_jewels": [
+        "shell access (reverse shell / bind shell)",
+        "credential files (config, .env, id_rsa)",
+        "database dumps",
+        "internal network pivoting"
+      ],
+      "severity": "critical",
+      "payout_min": 1000,
+      "payout_max": 15000,
+      "typical_payout": "$1K\u2013$15K"
+    }
+  ]
+}

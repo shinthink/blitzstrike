@@ -51,15 +51,15 @@ export function validateRelease(): ReleaseValidation {
 
   // 3. git tag (soft — this repo uses a single rolling tag; informational)
   try {
-    const tag = execSync("git describe --tags --abbrev=0", { cwd: ROOT, encoding: "utf8" }).trim();
+    const tag = execSync("git describe --tags --abbrev=0", { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
     checks.push({ name: "Git tag", ok: tag === `v${VERSION}`, detail: tag, soft: true });
   } catch {
-    checks.push({ name: "Git tag", ok: true, detail: "unavailable (no git)", soft: true });
+    checks.push({ name: "Git tag", ok: true, detail: "unavailable (no git/tags)", soft: true });
   }
 
   // 4. npm registry version (soft — may lag behind staged publishes)
   try {
-    const published = execSync("npm view blitzstrike version", { encoding: "utf8", timeout: 8000 }).trim();
+    const published = execSync("npm view blitzstrike version", { encoding: "utf8", timeout: 8000, stdio: ["ignore", "pipe", "ignore"] }).trim();
     checks.push({ name: "npm registry version", ok: published === VERSION, detail: published, soft: true });
   } catch {
     checks.push({ name: "npm registry version", ok: true, detail: "unavailable (offline)", soft: true });

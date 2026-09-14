@@ -10,7 +10,7 @@
  *     an AI agent assigning a high score.
  *   - Lifecycle is strict and machine-readable.
  */
-import { Evidence, makeEvidence } from "./evidence.js";
+import { Evidence, makeEvidence, type EvidenceType } from "./evidence.js";
 import { assertFindingInvariants } from "./invariants.js";
 import { recordAudit } from "./audit.js";
 
@@ -214,15 +214,21 @@ export interface MakeFindingInput {
   chainId?: string | null;
   chainName?: string;
   status?: FindingStatus;
+  /** Evidence attached at creation — a finding must never be created empty
+   * when the producer already holds the observed artifact (headers, URL,
+   * response body). Each entry becomes a redacted SHA-256-tagged record. */
+  evidence?: Array<{ type: EvidenceType; description: string; content?: string }>;
 }
 
-/** Create a canonical finding. Default status = detected (hypothesis-pending). */
+/** Create a canonical finding. Default status = detected (hypothesis-pending).
+ * Evidence passed in `input.evidence` is attached immediately so the finding is
+ * never born empty when the producer holds the observed artifact. */
 export function makeFinding(input: MakeFindingInput): Finding {
   const now = new Date().toISOString();
   const status = input.status ?? "detected";
   const factors = confidenceFactorsFor(input);
   const confidence = computeConfidence(factors);
-  const finding: Finding = {
+  let finding: Finding = {
     id: nextFindingId(),
     status,
     title: input.title,
@@ -245,6 +251,16 @@ export function makeFinding(input: MakeFindingInput): Finding {
     remediation: {},
     timestamps: { created: now, updated: now },
   };
+  if (input.evidence?.length) {
+    for (const e of input.evidence) {
+      const ev = makeEvidence({
+        type: e.type,
+        description: e.description,
+        artifacts: e.content ? [{ name: "artifact", kind: "evidence", content: e.content }] : [],
+      });
+      finding = attachEvidence(finding, ev);
+    }
+  }
   recordAudit("finding_created", { tool: "eagle-eye", target: input.target.host ?? input.target.endpoint, result: status, correlationId: finding.id });
   return finding;
 }

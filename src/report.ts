@@ -10,6 +10,10 @@ import type { Finding } from "./finding.js";
 import { dedupFindings } from "./dedup.js";
 import { findingWriteup } from "./writeup.js";
 import { cvssAssess, type CvssInput } from "./cvss.js";
+import { complianceSummary } from "./compliance.js";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 
 /** Default CVSS v3.1 metric set per severity band (fallback when a finding has
  *  no explicit CVSS computed), so every finding carries a score AND a vector. */
@@ -49,17 +53,22 @@ export interface ReportSummary {
   confirmed: number;
   false_positives: number;
   evidence_artifacts: number;
+  /** Findings with zero evidence records — evidence-first violations. */
+  evidence_less_findings: number;
 }
 
 function summarize(findings: Finding[]): ReportSummary {
   const byStatus: Record<string, number> = {};
   const bySeverity: Record<string, number> = {};
   let evidenceArtifacts = 0;
+  let evidenceLess = 0;
   for (const f of findings) {
     byStatus[f.status ?? "detected"] = (byStatus[f.status ?? "detected"] ?? 0) + 1;
     const sev = f.classification?.severity ?? "informational";
     bySeverity[sev] = (bySeverity[sev] ?? 0) + 1;
-    evidenceArtifacts += f.evidence?.reduce((n, e) => n + (e.artifacts?.length ?? 0), 0) ?? 0;
+    const arts = f.evidence?.reduce((n, e) => n + (e.artifacts?.length ?? 0), 0) ?? 0;
+    evidenceArtifacts += arts;
+    if ((f.evidence ?? []).length === 0) evidenceLess += 1;
   }
   const groups = dedupFindings(findings);
   return {
@@ -70,6 +79,7 @@ function summarize(findings: Finding[]): ReportSummary {
     confirmed: byStatus["confirmed"] ?? 0,
     false_positives: byStatus["false_positive"] ?? 0,
     evidence_artifacts: evidenceArtifacts,
+    evidence_less_findings: evidenceLess,
   };
 }
 
@@ -107,6 +117,15 @@ export function reportMarkdown(findings: Finding[], opts: ReportOptions = {}): s
   }
   lines.push(`Detailed findings, reproduction steps, impact, and remediation follow in section 5.`);
   lines.push("");
+
+  if (summary.evidence_less_findings > 0) {
+    const evLess = findings.filter((f) => (f.evidence ?? []).length === 0).map((f) => f.id).join(", ");
+    lines.push(
+      `> ⚠️ **Evidence-first violation:** **${summary.evidence_less_findings}** finding(s) carry NO evidence artifacts (${evLess}). ` +
+      `Detection is not proof — every finding must carry the observed artifact (headers, URL, response body). Attach evidence via finding_attach_evidence before finalizing.`,
+    );
+    lines.push("");
+  }
 
   // 2. Scope
   lines.push("## 2. Scope");
@@ -203,8 +222,32 @@ export function reportMarkdown(findings: Finding[], opts: ReportOptions = {}): s
     });
   }
 
-  // 6. Recommendations
-  lines.push("## 6. Recommendations");
+  // 6. Compliance Mapping — the frameworks a CISO/auditor must answer to.
+  lines.push("## 6. Compliance Mapping");
+  lines.push("");
+  const comp = complianceSummary(findings.map((f) => f.classification?.cwe ?? null));
+  if (comp.total_mapped === 0) {
+    lines.push("No CWE-tagged findings to map.");
+  } else {
+    lines.push("Maps each finding's CWE to OWASP Top 10 (2021), OWASP ASVS v4.0, PCI DSS v4.0, ISO 27001:2022 (Annex A), and NIST SP 800-53.");
+    lines.push("");
+    for (const m of comp.mappings) {
+      lines.push(`- **${m.cwe}** ${m.name}`);
+      if (m.owasp_top10) lines.push(`  - OWASP Top 10: \`${m.owasp_top10}\``);
+      if (m.asvs.length) lines.push(`  - ASVS v4.0: \`${m.asvs.join(", ")}\``);
+      if (m.pci.length) lines.push(`  - PCI DSS v4.0: \`${m.pci.join(", ")}\``);
+      if (m.iso.length) lines.push(`  - ISO 27001:2022: \`${m.iso.join(", ")}\``);
+      if (m.nist.length) lines.push(`  - NIST 800-53: \`${m.nist.join(", ")}\``);
+    }
+    if (comp.total_unmapped > 0) {
+      lines.push("");
+      lines.push(`_${comp.total_unmapped} finding(s) had no CWE and were not mapped._`);
+    }
+  }
+  lines.push("");
+
+  // 7. Recommendations
+  lines.push("## 7. Recommendations");
   lines.push("");
   if (findings.length === 0) {
     lines.push("No findings — no remediation required.");
@@ -218,8 +261,8 @@ export function reportMarkdown(findings: Finding[], opts: ReportOptions = {}): s
   }
   lines.push("");
 
-  // 7. Appendix — hypotheses + false positives
-  lines.push("## 7. Appendix");
+  // 8. Appendix — hypotheses + false positives
+  lines.push("## 8. Appendix");
   lines.push("");
   if (hypotheses.length) {
     lines.push("### Unverified hypotheses (kept for follow-up)");
@@ -250,4 +293,176 @@ export function reportJson(findings: Finding[], opts: ReportOptions = {}): strin
     integrity: sha256(JSON.stringify({ summary, findings })),
   };
   return JSON.stringify(payload, null, 2);
+}
+
+// ---------------------------------------------------------------------------
+// Persistence — write the report to a `reports/` directory so an engagement
+// produces an on-disk .md/.json deliverable, not just an in-memory string.
+// ---------------------------------------------------------------------------
+
+const REPORT_DIR = process.env.BLITZSTRIKE_REPORT_DIR ?? join(homedir(), ".blitzstrike", "reports");
+
+/** Sanitize a title/scope into a filename-safe slug. */
+function slugify(s: string): string {
+  const slug = s
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/[^a-z0-9.-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/\./g, "_")
+    .slice(0, 60);
+  return slug || "engagement";
+}
+
+/** Write the report content to the reports dir. Returns the on-disk path. */
+export function saveReport(content: string, opts: ReportOptions & { format?: "markdown" | "json" } = {}): { path: string; dir: string; filename: string } {
+  mkdirSync(REPORT_DIR, { recursive: true });
+  const slug = slugify(opts.scope ?? opts.title ?? "engagement");
+  const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const ext = opts.format === "json" ? "json" : "md";
+  const filename = `${slug}-${ts}.${ext}`;
+  const path = join(REPORT_DIR, filename);
+  writeFileSync(path, content, "utf8");
+  return { path, dir: REPORT_DIR, filename };
+}
+
+// ---------------------------------------------------------------------------
+// Per-finding, per-scope reports — the HackerOne-grade deliverable where EACH
+// finding is its own report file, organized under a per-scope directory:
+//
+//   reports/<scope_slug>/
+//     findings/<severity>_<vuln_slug>.md   (one HackerOne-grade report per finding)
+//     SUMMARY.md                            (index of all findings)
+//     metadata.json                         (structured, automation-friendly)
+//
+// This keeps a clean findings/ dir (valid findings only) separate from evidence,
+// and matches the bug-bounty convention of one submission per vulnerability.
+// ---------------------------------------------------------------------------
+
+const PRIORITY: Record<string, string> = { critical: "P1", high: "P2", medium: "P3", low: "P4", informational: "P5" };
+
+function findingSlug(title: string): string {
+  return title.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60) || "finding";
+}
+
+/** A single HackerOne-grade finding report (markdown). */
+export function findingReport(f: Finding): string {
+  const w = findingWriteup(f);
+  const sev = f.classification?.severity ?? "informational";
+  const cwe = f.classification?.cwe ?? "";
+  const cweName = f.classification?.cwe_name ?? "";
+  const target = [f.target?.host, f.target?.endpoint].filter(Boolean).join("");
+  const cvss = f.classification?.cvss_score != null ? ` — CVSS ${f.classification.cvss_score}` : "";
+
+  const lines: string[] = [];
+  lines.push(`# ${f.title}`);
+  lines.push("");
+  lines.push("| Field | Value |");
+  lines.push("|-------|-------|");
+  lines.push(`| **Severity** | ${sev} (${PRIORITY[sev] ?? "P4"})${cvss} |`);
+  if (cwe) lines.push(`| **CWE** | ${cwe}${cweName ? ` — ${cweName}` : ""} |`);
+  lines.push(`| **Status** | ${f.status} |`);
+  if (target) lines.push(`| **Target** | ${target} |`);
+  if (f.chain?.name) lines.push(`| **Attack chain** | ${f.chain.name} |`);
+  lines.push("");
+  lines.push("## Summary");
+  lines.push("");
+  lines.push(w.description);
+  lines.push("");
+  lines.push("## Root Cause");
+  lines.push("");
+  lines.push(w.root_cause);
+  lines.push("");
+  lines.push("## Steps to Reproduce");
+  lines.push("");
+  for (const step of w.reproduction) lines.push(`1. ${step}`);
+  lines.push("");
+  lines.push("## Impact");
+  lines.push("");
+  lines.push(w.impact);
+  lines.push("");
+  lines.push("## Remediation");
+  lines.push("");
+  lines.push(w.remediation);
+  lines.push("");
+  lines.push("## References");
+  lines.push("");
+  for (const ref of w.references) lines.push(`- ${ref}`);
+  lines.push("");
+  if ((f.evidence?.length ?? 0) > 0) {
+    lines.push("## Evidence");
+    lines.push("");
+    for (const ev of f.evidence) {
+      const desc = ev.description ?? ev.type ?? "evidence";
+      lines.push(`- [${ev.type ?? "record"}] ${desc}`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
+/** Write one report file per finding into a per-scope directory + SUMMARY.md +
+ *  metadata.json. Returns the on-disk layout. */
+export function perFindingReports(findings: Finding[], opts: ReportOptions = {}): Record<string, unknown> {
+  const slug = slugify(opts.scope ?? opts.title ?? "engagement");
+  const dir = join(REPORT_DIR, slug);
+  const findingsDir = join(dir, "findings");
+  mkdirSync(findingsDir, { recursive: true });
+
+  const files: Array<{ path: string; filename: string; severity: string; title: string }> = [];
+  for (const f of findings) {
+    const sev = f.classification?.severity ?? "informational";
+    const filename = `${sev}_${findingSlug(f.title)}.md`;
+    const path = join(findingsDir, filename);
+    writeFileSync(path, findingReport(f), "utf8");
+    files.push({ path, filename, severity: sev, title: f.title });
+  }
+
+  // SUMMARY.md — an index of every per-finding report.
+  const bySeverity: Record<string, number> = {};
+  for (const f of findings) {
+    const s = f.classification?.severity ?? "informational";
+    bySeverity[s] = (bySeverity[s] ?? 0) + 1;
+  }
+  const summaryLines: string[] = [];
+  summaryLines.push(`# ${opts.title ?? "Engagement"} — Findings Summary`);
+  summaryLines.push("");
+  if (opts.scope) summaryLines.push(`**Scope:** ${opts.scope}`);
+  summaryLines.push(`**Total findings:** ${findings.length}`);
+  summaryLines.push("");
+  summaryLines.push("| Severity | Count |");
+  summaryLines.push("|----------|-------|");
+  for (const [s, n] of Object.entries(bySeverity).sort((a, b) => (PRIORITY[a[0]] ?? "P9") < (PRIORITY[b[0]] ?? "P9") ? -1 : 1)) {
+    summaryLines.push(`| ${s} | ${n} |`);
+  }
+  summaryLines.push("");
+  summaryLines.push("| # | Finding | Severity | File |");
+  summaryLines.push("|---|---------|----------|------|");
+  files.forEach((fl, i) => {
+    summaryLines.push(`| ${i + 1} | ${fl.title} | ${fl.severity} | [${fl.filename}](findings/${fl.filename}) |`);
+  });
+  summaryLines.push("");
+  const summaryPath = join(dir, "SUMMARY.md");
+  writeFileSync(summaryPath, summaryLines.join("\n"), "utf8");
+
+  // metadata.json — structured, automation-friendly.
+  const meta = {
+    title: opts.title ?? "Engagement",
+    scope: opts.scope ?? null,
+    version: opts.version ?? null,
+    total_findings: findings.length,
+    by_severity: bySeverity,
+    findings: files.map((fl) => ({ title: fl.title, severity: fl.severity, file: join("findings", fl.filename) })),
+  };
+  const metadataPath = join(dir, "metadata.json");
+  writeFileSync(metadataPath, JSON.stringify(meta, null, 2) + "\n", "utf8");
+
+  return {
+    dir,
+    findings_dir: findingsDir,
+    summary_path: summaryPath,
+    metadata_path: metadataPath,
+    total: findings.length,
+    files,
+  };
 }

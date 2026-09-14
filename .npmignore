@@ -1,0 +1,4 @@
+# Downloaded benchmark plugins (test data, ~900MB) — never publish
+bench/plugins-bench/
+bench/plugins-bench2/
+bench/fp-test/

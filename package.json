@@ -1,6 +1,6 @@
 {
   "name": "blitzstrike",
-  "version": "2.4.4",
+  "version": "2.4.92",
   "description": "Blitz Strike — a universal MCP security-audit toolbelt. BLITZ sweeps the attack surface, EAGLE-EYE traces source-to-sink, STRIKE verifies live. 57 attack chains, 130-tool catalog, intelligence data layer. One server, every agent.",
   "type": "module",
   "bin": {
@@ -14,7 +14,10 @@
     "ROADMAP.md",
     "SECURITY.md",
     "THIRD-PARTY-NOTICES.md",
-    "bench",
+    "bench/corpus",
+    "bench/enterprise",
+    "bench/run-plugin-bench.ts",
+    "bench/run-plugin-bench2.ts",
     "chains.json",
     "dist",
     "docs",

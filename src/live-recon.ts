@@ -12,6 +12,7 @@
  */
 import { detectWaf, techCorrelation, portCorrelation, payloadLookup, templateLookup, type WafDetection } from "./intel.js";
 import { scanSinks, detectSourceLeak, type SinkHit } from "./sinks.js";
+import { researchHeaders } from "./http.js";
 
 const HTTP_TIMEOUT_MS = 20000;
 
@@ -45,7 +46,7 @@ async function httpGet(url: string, opts: { redirect?: "follow" | "manual" | "er
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { signal: controller.signal, redirect: opts.redirect ?? "follow" });
+    const res = await fetch(url, { signal: controller.signal, redirect: opts.redirect ?? "follow", headers: researchHeaders() });
     const body = await res.text();
     const headers: Record<string, string> = {};
     res.headers.forEach((v, k) => { headers[k] = v; });
@@ -302,6 +303,50 @@ export function extractVersion(headers: Record<string, string>, body: string): A
   return out;
 }
 
+/** Tech/framework detection from headers, cookies, then body (in that order).
+ *  Header + cookie signals are high-confidence (the server tells you what it is);
+ *  body regex is a fallback. Avoid over-broad body tokens that false-positive
+ *  (e.g. `_token` / `csrf-token` are generic, NOT Laravel-specific). */
+export function detectTech(headers: Record<string, string>, body: string): string[] {
+  const techs = new Set<string>();
+  const low = (s: string | undefined) => (s ?? "").toLowerCase();
+  const powered = low(headers["x-powered-by"]);
+  const server = low(headers["server"]);
+  const cookies = low(headers["set-cookie"]);
+  const generator = low(headers["x-generator"]);
+
+  // --- header signals (authoritative) ---
+  if (/express|node\b|nodejs/i.test(powered)) techs.add("nodejs");
+  if (/^php\b|^php\//i.test(powered)) techs.add("php");
+  if (/asp\.net/i.test(powered) || (headers["x-aspnet-version"] ?? "")) techs.add("aspnet");
+  if (/werkzeug/i.test(server)) techs.add("flask");
+  if (/drupal/i.test(generator)) techs.add("drupal");
+
+  // --- cookie signals (authoritative) ---
+  if (/laravel_session|xsrf-token/i.test(cookies)) techs.add("laravel");
+  if (/phpsessid/i.test(cookies)) techs.add("php");
+  if (/connect\.sid/i.test(cookies)) techs.add("nodejs");
+  if (/csrftoken/i.test(cookies) && /sessionid/i.test(cookies)) techs.add("django");
+  if (/rack\.session/i.test(cookies)) techs.add("rails");
+
+  // --- body signals (fallback; refined to avoid generic-token false positives) ---
+  const bodySig: Array<[RegExp, string]> = [
+    [/wp-content|wp-includes|wp-json/i, "wordpress"], [/wp-login\.php|wp-admin/i, "wordpress"],
+    [/powered by joomla|com_content/i, "joomla"],
+    [/laravel_session|xsrf-token|\blaravel\b/i, "laravel"],
+    [/react|__NEXT_DATA__|next\/static/i, "nextjs"], [/angular|ng-version/i, "angular"],
+    [/vue|__vue__|v-data/i, "vue"], [/django|csrftoken|__debug__/i, "django"],
+    [/ruby on rails|rails/i, "rails"], [/asp\.net|__VIEWSTATE|__EVENTVALIDATION/i, "aspnet"],
+    [/phpBB|phpbb/i, "phpbb"], [/mybb|mybb/i, "mybb"], [/drupal|Drupal\.settings/i, "drupal"],
+    [/magento|Mage\./i, "magento"], [/shopify|cdn\.shopify/i, "shopify"],
+    [/grafana|kibana|elastic/i, "grafana-kibana"], [/node\.js|express/i, "nodejs"],
+    [/flask|werkzeug/i, "flask"], [/spring|actuator/i, "spring"],
+  ];
+  for (const [re, t] of bodySig) if (re.test(body)) techs.add(t);
+
+  return [...techs];
+}
+
 // ---------------------------------------------------------------------------
 // Intel correlation + guidance
 // ---------------------------------------------------------------------------
@@ -372,19 +417,8 @@ export async function liveRecon(target: string, includeActive = false): Promise<
   // 2. WAF
   const waf = detectWaf(root.headers, root.body);
 
-  // 3. tech + version
-  const techSig: Array<[RegExp, string]> = [
-    [/wp-content|wp-includes|wp-json/i, "wordpress"], [/wp-login\.php|wp-admin/i, "wordpress"],
-    [/powered by joomla|com_content/i, "joomla"], [/laravel|_token|csrf-token/i, "laravel"],
-    [/react|__NEXT_DATA__|next\/static/i, "nextjs"], [/angular|ng-version/i, "angular"],
-    [/vue|__vue__|v-data/i, "vue"], [/django|csrftoken|__debug__/i, "django"],
-    [/ruby on rails|rails/i, "rails"], [/asp\.net|__VIEWSTATE|__EVENTVALIDATION/i, "aspnet"],
-    [/phpBB|phpbb/i, "phpbb"], [/mybb|mybb/i, "mybb"], [/drupal|Drupal\.settings/i, "drupal"],
-    [/magento|Mage\./i, "magento"], [/shopify|cdn\.shopify/i, "shopify"],
-    [/grafana|kibana|elastic/i, "grafana-kibana"], [/node\.js|express/i, "nodejs"],
-    [/flask|werkzeug/i, "flask"], [/spring|actuator/i, "spring"],
-  ];
-  const techs = [...new Set(techSig.filter(([re]) => re.test(root.body)).map(([, t]) => t))];
+  // 3. tech detection — header/cookie signals (high confidence) FIRST, then body.
+  const techs = detectTech(root.headers, root.body);
   const versions = extractVersion(root.headers, root.body);
 
   // 4. crawler + robots + sitemap

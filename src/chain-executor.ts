@@ -15,7 +15,7 @@
  * Target-agnostic: works for SQLi, SSRF, SSTI, LFI, JWT, deserialization, ... —
  * whatever chain the finding maps to, the deterministic parts get executed.
  */
-import { strikeVerify, type StrikeVerdict } from "./strike.js";
+import { strikeVerify, verifyFileRead, type StrikeVerdict } from "./strike.js";
 import { crackHash } from "./hash.js";
 import { scanSinks, detectSourceLeak, type SinkHit } from "./sinks.js";
 import { toolForHint, runCatalogTool } from "./catalog.js";
@@ -48,6 +48,10 @@ export interface ChainStepResult {
 // dispatches to the matching finding-level tool.
 const BLITZ_FINDING_TOOLS: Record<string, (f: Finding) => Promise<Record<string, unknown>> | Record<string, unknown>> = {
   strike_verify: verifyFinding,
+  verify_file_read: fileReadFinding,
+  path_traversal: fileReadFinding, // chain alias -> arbitrary-file-read verification
+  lfi: fileReadFinding, // chain alias -> arbitrary-file-read verification
+  file_read: fileReadFinding, // chain alias -> arbitrary-file-read verification
   crack_hash: crackFinding,
   hashcat: crackFinding, // chain alias -> crack
   hashid: crackFinding, // chain alias -> crack
@@ -81,9 +85,20 @@ function findingUrl(f: Finding): string {
   return (f.target?.host ?? "") + (f.target?.endpoint ?? "");
 }
 
+/** Classify a finding as an arbitrary-file-read / path-traversal hypothesis
+ * (CWE-22 / LFI / file read) so it routes to the file-read verifier instead of
+ * the generic reflection verifier. */
+function isFileReadFinding(f: Finding): boolean {
+  const text = `${f.classification?.cwe ?? ""} ${f.classification?.cwe_name ?? ""} ${f.sink?.type ?? ""} ${f.chain?.id ?? ""} ${f.chain?.name ?? ""} ${f.title ?? ""}`.toLowerCase();
+  return /(cwe-?22|path.?traversal|arbitrary.?file|file.?read|directory.?traversal|lfi|\btraversal\b)/.test(text);
+}
+
 async function verifyFinding(f: Finding): Promise<Record<string, unknown>> {
   const url = findingUrl(f);
   const param = f.source?.name ?? "q";
+  // Route file-read / path-traversal hypotheses to the file-read verifier
+  // (marker file vs non-existent control) instead of the reflection verifier.
+  if (isFileReadFinding(f)) return fileReadFinding(f);
   const v: StrikeVerdict = await strikeVerify({ url, method: "GET", param });
   return {
     status: v.status,
@@ -92,6 +107,18 @@ async function verifyFinding(f: Finding): Promise<Record<string, unknown>> {
     bypass: v.bypass,
     leaked_sinks: (v.leaked_sinks ?? []) as SinkHit[],
   };
+}
+
+/** Verify an arbitrary-file-read / path-traversal finding by reading a marker
+ * file vs a non-existent negative control (POST body or query param). */
+async function fileReadFinding(f: Finding): Promise<Record<string, unknown>> {
+  const url = findingUrl(f);
+  if (!url) return { executed: false, note: "no target URL on finding" };
+  const srcType = (f.source?.type ?? "").toLowerCase();
+  const bodyRaw = /(body|post|raw)/.test(srcType);
+  const method = bodyRaw ? "POST" : "GET";
+  const verdict = await verifyFileRead({ url, method, bodyRaw, param: f.source?.name });
+  return { verify_kind: "file_read", ...verdict };
 }
 
 async function crackFinding(f: Finding): Promise<Record<string, unknown>> {

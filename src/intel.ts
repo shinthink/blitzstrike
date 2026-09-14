@@ -7,6 +7,9 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { empiricalPrior } from "./intelligence.js";
+import { patternLookup } from "./patterns.js";
+import { canonicalId } from "./synonyms.js";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const INTEL = join(ROOT, "intelligence");
@@ -330,7 +333,86 @@ const TECH_HINTS: Record<string, string[]> = {
   nextjs: ["ssrf", "idor"],
 };
 
-export function attackPlan(target: string, tech: string[] = [], params: string[] = []): Record<string, unknown> {
+export type AttackMode = "full" | "quick" | "stealth";
+
+/** Passive vectors (recon/config/header checks — no active attack payload) for `stealth` mode. */
+const STEALTH_VECTORS = new Set<string>([
+  "cors_misconfiguration", "jwt", "open_redirect", "idor", "auth_bypass",
+  "rest_api_auth", "debug_mode", "actuator_exposure", "viewstate", "xmlrpc",
+]);
+
+/** Estimated wall-clock seconds per vector, derived from its operation class
+ *  (passive/config < injection scan < deep/manual). Unknown vectors default to 180s. */
+const VECTOR_TIME: Record<string, number> = {
+  // passive / config checks (fast)
+  cors_misconfiguration: 90, jwt: 90, open_redirect: 120, debug_mode: 90,
+  actuator_exposure: 90, viewstate: 120, xmlrpc: 120, rest_api_auth: 120,
+  // injection scans (medium)
+  xss: 180, sql_injection: 180, ssti: 180, ssrf: 180, command_injection: 180,
+  path_traversal: 180, lfi: 180, nosql_injection: 180, mass_assignment: 180,
+  prototype_pollution: 180,
+  // deep / multi-step (slower)
+  xxe: 240, file_upload: 240, deserialization: 240, pickle_deserialization: 240,
+  // manual authorization / logic (slowest)
+  idor: 300, auth_bypass: 300, business_logic: 360, upload_rce: 300,
+  wp_plugin_audit: 600,
+};
+const DEFAULT_VECTOR_TIME = 180;
+
+/** Deterministic relevance PRIOR: priority 1 = directly-implied, 4 = generic baseline.
+ *  P = clamp(0.85 - 0.15*(priority-1), 0.25, 0.85), then upgraded by the EMPIRICAL
+ *  hit-rate from the intelligence ledger (Bayesian posterior). This is a PLANNING
+ *  prior, NOT the evidence-backed confidence (computeConfidence). */
+function successProbability(priority: number, vector: string, tech: string): number {
+  const formula = Math.round(Math.min(0.85, Math.max(0.25, 0.85 - 0.15 * (priority - 1))) * 100) / 100;
+  return empiricalPrior(vector, tech, formula);
+}
+
+function estimateTime(vector: string): number {
+  return VECTOR_TIME[vector] ?? DEFAULT_VECTOR_TIME;
+}
+
+/** Typical bug-bounty payout fallback for vectors that are NOT a detector class
+ *  (xss / business_logic / open_redirect / …). Detector classes read their range
+ *  from patterns.json (payout_min/max). [min, max] USD. */
+const PAYOUT_FALLBACK: Record<string, [number, number]> = {
+  xss: [500, 5000],
+  command_injection: [1000, 10000],
+  open_redirect: [300, 3000],
+  cors_misconfiguration: [300, 3000],
+  business_logic: [500, 10000],
+  lfi: [1000, 10000],
+  nosql_injection: [1000, 15000],
+  pickle_deserialization: [5000, 30000],
+  upload_rce: [500, 10000],
+  auth_bypass: [1000, 10000],
+  idor: [500, 5000],
+  wp_plugin_audit: [500, 10000],
+  xmlrpc: [300, 3000],
+  rest_api_auth: [500, 5000],
+  debug_mode: [200, 2000],
+  actuator_exposure: [500, 5000],
+  viewstate: [1000, 5000],
+};
+
+function fmtUsd(v: number): string {
+  return v >= 1000 ? `$${v / 1000}K` : `$${v}`;
+}
+
+/** Resolve a vector's typical payout range. Detector classes go through the
+ *  pattern library (authoritative); non-detector vectors fall back to
+ *  PAYOUT_FALLBACK; unknown vectors return null (no bounty signal). */
+function payoutFor(vector: string): { min: number; max: number; display: string } | null {
+  const pat = patternLookup(canonicalId(vector));
+  if (pat && pat.payout_min != null && pat.payout_max != null) {
+    return { min: pat.payout_min, max: pat.payout_max, display: pat.typical_payout ?? `${fmtUsd(pat.payout_min)}–${fmtUsd(pat.payout_max)}` };
+  }
+  const fb = PAYOUT_FALLBACK[vector];
+  if (fb) return { min: fb[0], max: fb[1], display: `${fmtUsd(fb[0])}–${fmtUsd(fb[1])}` };
+  return null;
+}
+
+export function attackPlan(target: string, tech: string[] = [], params: string[] = [], mode: AttackMode = "full"): Record<string, unknown> {
   const data = loadJson<AttackVectorsData>("attack_vectors");
   const totalCategories = data?.categories.length ?? 0;
   const plan: Array<{ vector: string; priority: number; reason: string; tool: string; source: string }> =
@@ -356,18 +438,36 @@ export function attackPlan(target: string, tech: string[] = [], params: string[]
     for (const h of hints) add(h, 2, `tech '${t}' suggests ${h}`, "technique_lookup / read_skill", "tech");
   }
 
-  const sorted = plan.sort((a, b) => a.priority - b.priority || a.vector.localeCompare(b.vector));
+  let sorted = plan.sort((a, b) => a.priority - b.priority || a.vector.localeCompare(b.vector));
+
+  // Mode filtering (after sort, before numbering) — full keeps everything.
+  if (mode === "quick") sorted = sorted.filter((p) => p.priority <= 2);
+  else if (mode === "stealth") sorted = sorted.filter((p) => STEALTH_VECTORS.has(p.vector));
+
+  const totalTime = sorted.reduce((s, p) => s + estimateTime(p.vector), 0);
+  const techKey = (tech[0] ?? "unknown").toLowerCase();
+
   return {
     target,
+    mode,
     taxonomy: { total_categories: totalCategories, total_vectors_here: sorted.length },
-    plan: sorted.map((p, i) => ({
-      order: i + 1,
-      vector: p.vector,
-      priority: p.priority,
-      reason: p.reason,
-      tool: p.tool,
-      source: p.source,
-    })),
+    plan: sorted.map((p, i) => {
+      const sp = successProbability(p.priority, p.vector, techKey);
+      const payout = payoutFor(p.vector);
+      return {
+        order: i + 1,
+        vector: p.vector,
+        priority: p.priority,
+        success_probability: sp,
+        typical_payout: payout?.display ?? null,
+        expected_value_usd: payout ? Math.round(sp * (payout.min + payout.max) / 2) : null,
+        estimated_time_sec: estimateTime(p.vector),
+        reason: p.reason,
+        tool: p.tool,
+        source: p.source,
+      };
+    }),
+    total_estimated_time_sec: totalTime,
   };
 }
 

@@ -7,6 +7,9 @@
  */
 import { createHash } from "node:crypto";
 import { VERSION } from "./version.js";
+import { redactSecrets } from "./secrets.js";
+
+export { redactSecrets, REDACTION_PATTERNS } from "./secrets.js";
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -56,37 +59,8 @@ export interface Evidence {
 }
 
 // ---------------------------------------------------------------------------
-// Secret redaction (§6)
+// Secret redaction (§6) — patterns + logic live in secrets.ts (single source).
 // ---------------------------------------------------------------------------
-
-const REDACTION_PATTERNS: Array<[RegExp, string]> = [
-  // Authorization / bearer tokens
-  [/(authorization\s*[:=]\s*)(bearer\s+)?[A-Za-z0-9._~+/=-]{8,}/gi, "$1$2[REDACTED]"],
-  [/(api[_-]?key\s*[:=]\s*)["']?[A-Za-z0-9._-]{16,}["']?/gi, "$1[REDACTED]"],
-  [/(access[_-]?token\s*[:=]\s*)["']?[A-Za-z0-9._-]{16,}["']?/gi, "$1[REDACTED]"],
-  [/(secret\s*[:=]\s*)["']?[A-Za-z0-9._/-]{16,}["']?/gi, "$1[REDACTED]"],
-  [/(password\s*[:=]\s*)["']?[^"'\s,}&]{4,}["']?/gi, "$1[REDACTED]"],
-  [/(passwd\s*[:=]\s*)["']?[^"'\s,}&]{4,}["']?/gi, "$1[REDACTED]"],
-  [/(private[_-]?key\s*[:=]\s*)["']?[A-Za-z0-9+/=_-]{16,}["']?/gi, "$1[REDACTED]"],
-  [/(session\s*[:=]\s*)["']?[A-Za-z0-9._-]{12,}["']?/gi, "$1[REDACTED]"],
-  [/(cookie\s*[:=]\s*)["']?[A-Za-z0-9._-]{12,}["']?/gi, "$1[REDACTED]"],
-  [/(set-cookie\s*:\s*)[^\r\n]+/gi, "$1[REDACTED]"],
-  // AWS / generic secret keys
-  [/AKIA[0-9A-Z]{16}/g, "[REDACTED]"],
-  [/ghp_[A-Za-z0-9]{20,}/g, "[REDACTED]"],
-  [/github_pat_[A-Za-z0-9_]{20,}/g, "[REDACTED]"],
-  [/sk-[A-Za-z0-9]{20,}/g, "[REDACTED]"],
-  [/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, "[REDACTED]"],
-];
-
-/** Redact secrets from arbitrary text before persistence/report/log/context. */
-export function redactSecrets(text: string): string {
-  let out = text;
-  for (const [re, repl] of REDACTION_PATTERNS) {
-    out = out.replace(re, repl);
-  }
-  return out;
-}
 
 /** Whether the text contains a recognizable RAW secret (used by the invariant layer).
  *  Implemented as "does redaction change it" — deterministic and does NOT flag
