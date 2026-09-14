@@ -9,7 +9,11 @@
  *                         hash/secret (PHP `0e` hash collision auth bypass).
  *   - mass_assignment   — `extract()`/`parse_str()` of request data without a
  *                         safe flag (variable injection → LFI/RCE/auth bypass).
+ *   - wrong_sanitizer   — a value sanitized for context X reaching a sink that
+ *                         requires context Y (the security-state lattice).
  */
+import { detectWrongSanitizer } from "./security-state.js";
+
 const SOURCE_TOKENS = /\$_(GET|POST|REQUEST|COOKIE|FILES|SERVER)\b|\$request->|\$req->|request\.(get|input|query|post|data|body|headers|cookies|params)|getParameter\(|req\.(query|body|params|headers|cookies)/;
 
 function lines(code: string): string[] {
@@ -31,7 +35,8 @@ export type ComplexBugType =
   | "path_confusion"
   | "ssrf"
   | "xxe"
-  | "ssti";
+  | "ssti"
+  | "wrong_sanitizer";
 
 export interface ComplexFinding {
   file: string;
@@ -144,6 +149,7 @@ export function detectComplexBugs(code: string, file: string): ComplexFinding[] 
   detectSsrF(code, file, out);
   detectXxe(code, file, out);
   detectSsti(code, file, out);
+  out.push(...detectWrongSanitizer(code, file));
   // Dedup by (type, line): a loose-comparison `==` also appearing in a comment
   // or a sink token matched twice would otherwise surface as duplicates.
   const seen = new Set<string>();
@@ -221,6 +227,11 @@ function detectPathConfusion(code: string, file: string, out: ComplexFinding[]):
     if (!SOURCE_TOKENS.test(l) && !SOURCE_TOKENS.test(scope)) continue;
     // A canonicalization/normalization call nearby is a (weak) defense — skip it.
     if (/\b(basename|realpath|canonicalPath|getCanonicalPath|normalize|resolve|toRealPath)\s*\(/i.test(scope + "\n" + l)) continue;
+    // Whitelist lookup `$allowed[$p]` — the user var is an array index, not a raw path.
+    if (/\$[A-Za-z_]\w*\s*\[\s*\$[A-Za-z_]\w*\s*\]/.test(scope + "\n" + l)) continue;
+    // A URL literal ("https://…") means this is a URL fetch (SSRF's domain), not a
+    // file path — path traversal doesn't apply to scheme:// URLs.
+    if (/["'][^"']*:\/\/[^"']*["']/.test(scope + "\n" + l)) continue;
     out.push({
       file,
       line: ln,
@@ -247,6 +258,9 @@ function detectSsrF(code: string, file: string, out: ComplexFinding[]): void {
     if (!SOURCE_TOKENS.test(l) && !SOURCE_TOKENS.test(scope)) continue;
     // A host allowlist / scheme check / basename() nearby is a (weak) defense — skip it.
     if (/(allowlist|whitelist|in_array|preg_match|parse_url|startsWith\(["']https?|endsWith\(["']|basename|realpath|normalize)/i.test(scope + "\n" + l)) continue;
+    // A fixed scheme+host literal ("https://api.example.com/" + input) means the host
+    // is NOT attacker-controlled (only the path/query is) — constrained, not SSRF.
+    if (/["'][^"']*:\/\/[^"']*["']/.test(scope + "\n" + l)) continue;
     out.push({
       file,
       line: ln,

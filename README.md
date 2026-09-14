@@ -347,6 +347,9 @@ Edit `chains.json` to add knowledge — never hardcode in source.
 |---|---|---|
 | `FOFA_EMAIL` | For `fofa_search` | FOFA account email |
 | `FOFA_KEY` | For `fofa_search` | FOFA API key |
+| `H1_USERNAME` | Optional | Your HackerOne username. When set, every outbound security-testing request carries `X-HackerOne-Research: <username>` so targets/triagers can identify you (responsible-disclosure convention). |
+| `BLITZSTRIKE_HOME` | Optional | Override the home directory (default `~/.blitzstrike`). |
+| `BLITZSTRIKE_DATA` | Optional | Override the data-cache directory (default `~/.blitzstrike/data`). |
 
 All other tools need no credentials.
 

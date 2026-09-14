@@ -12,6 +12,7 @@
  */
 import { detectWaf, techCorrelation, portCorrelation, payloadLookup, templateLookup, type WafDetection } from "./intel.js";
 import { scanSinks, detectSourceLeak, type SinkHit } from "./sinks.js";
+import { researchHeaders } from "./http.js";
 
 const HTTP_TIMEOUT_MS = 20000;
 
@@ -45,7 +46,7 @@ async function httpGet(url: string, opts: { redirect?: "follow" | "manual" | "er
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), HTTP_TIMEOUT_MS);
   try {
-    const res = await fetch(url, { signal: controller.signal, redirect: opts.redirect ?? "follow" });
+    const res = await fetch(url, { signal: controller.signal, redirect: opts.redirect ?? "follow", headers: researchHeaders() });
     const body = await res.text();
     const headers: Record<string, string> = {};
     res.headers.forEach((v, k) => { headers[k] = v; });

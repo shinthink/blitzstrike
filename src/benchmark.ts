@@ -8,16 +8,21 @@
  * The corpus lives in bench/corpus/*.md (label + code). Each entry is a
  * deterministic, self-contained fixture so results are reproducible.
  */
-import { readFileSync, readdirSync, writeFileSync, rmSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync, rmSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
 import { analyzeTaintUniversal } from "./universal-taint.js";
 import "./adapters.js";
 import { analyzeDataFlow2 } from "./eagle2.js";
+import { detectComplexBugs } from "./complex-bugs.js";
+import { detectRouteConfusion } from "./route-confusion.js";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const CORPUS = join(ROOT, "bench", "corpus");
+/** Writable corpus dir for SELF-HARDENING: verified false-positives captured from
+ *  live engagements land here (the package corpus is read-only). */
+const CAPTURED_CORPUS_DIR = process.env.BLITZSTRIKE_CORPUS_DIR ?? join(homedir(), ".blitzstrike", "corpus");
 
 export interface CorpusEntry {
   id: string;
@@ -25,6 +30,10 @@ export interface CorpusEntry {
   /** true = SHOULD produce a finding; false = safe, must NOT. */
   vulnerable: boolean;
   sink_type?: string;
+  /** Which detector this entry exercises (default taint). */
+  detector?: "taint" | "complex_bugs" | "route_confusion";
+  /** Optional human note (e.g. why this was a false positive). */
+  note?: string;
   code: string;
 }
 
@@ -41,12 +50,14 @@ function parseCorpusFile(path: string): CorpusEntry | null {
   let language = "php";
   let vulnerable = true;
   let sinkType: string | undefined;
+  let detector: CorpusEntry["detector"];
+  let note: string | undefined;
   let code = "";
   let inCode = false;
   let codeLang = "";
 
   for (const line of lines) {
-    const m = line.match(/^\s*-\s*(id|language|vulnerable|sink_type)\s*:\s*(.+)$/i);
+    const m = line.match(/^\s*-\s*(id|language|vulnerable|sink_type|detector|note)\s*:\s*(.+)$/i);
     if (!inCode && m) {
       const key = m[1].toLowerCase();
       const val = m[2].trim();
@@ -54,6 +65,8 @@ function parseCorpusFile(path: string): CorpusEntry | null {
       else if (key === "language") language = val.toLowerCase();
       else if (key === "vulnerable") vulnerable = val === "true";
       else if (key === "sink_type") sinkType = val;
+      else if (key === "detector") detector = val as CorpusEntry["detector"];
+      else if (key === "note") note = val;
       continue;
     }
     const start = line.match(/^```(\w*)/);
@@ -67,21 +80,53 @@ function parseCorpusFile(path: string): CorpusEntry | null {
   }
 
   if (!id) id = path.split("/").pop()!.replace(/\.md$/, "");
-  return { id, language: language || codeLang || "php", vulnerable, sink_type: sinkType, code: code.trim() };
+  return { id, language: language || codeLang || "php", vulnerable, sink_type: sinkType, detector, note, code: code.trim() };
 }
 
-export function loadCorpus(): CorpusEntry[] {
-  let entries: CorpusEntry[] = [];
+/** Load entries from one directory (returns [] if missing/empty). */
+function loadDir(dir: string): CorpusEntry[] {
+  const entries: CorpusEntry[] = [];
   try {
-    for (const f of readdirSync(CORPUS)) {
+    for (const f of readdirSync(dir)) {
       if (!f.endsWith(".md")) continue;
-      const e = parseCorpusFile(join(CORPUS, f));
+      const e = parseCorpusFile(join(dir, f));
       if (e) entries.push(e);
     }
   } catch {
-    entries = [];
+    /* dir missing — fine */
   }
   return entries;
+}
+
+export function loadCorpus(): CorpusEntry[] {
+  // Package corpus (read-only) + captured false-positives (self-hardening, writable).
+  return [...loadDir(CORPUS), ...loadDir(CAPTURED_CORPUS_DIR)];
+}
+
+/** SELF-HARDENING: append a VERIFIED false-positive to the writable corpus, so the
+ *  next benchmark run measures whether the detector still flags it (precision drop
+ *  = the FP is still unfixed). Returns the on-disk path + the parsed entry. */
+export function captureFalsePositive(input: { code: string; language: string; detector?: CorpusEntry["detector"]; note?: string; sink_type?: string }): { path: string; entry: CorpusEntry } {
+  mkdirSync(CAPTURED_CORPUS_DIR, { recursive: true });
+  const slug = (input.note ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "captured";
+  const id = `fp-${slug}-${Date.now().toString(36)}`;
+  const ext = { php: "php", javascript: "js", typescript: "ts", python: "py", java: "java", js: "js" }[input.language.toLowerCase()] ?? input.language;
+  const lines = [
+    `- id: ${id}`,
+    `- language: ${input.language.toLowerCase()}`,
+    `- vulnerable: false`,
+    input.detector ? `- detector: ${input.detector}` : null,
+    input.sink_type ? `- sink_type: ${input.sink_type}` : null,
+    input.note ? `- note: ${input.note}` : null,
+    "",
+    "```" + ext,
+    input.code,
+    "```",
+  ].filter((l) => l !== null) as string[];
+  const path = join(CAPTURED_CORPUS_DIR, `${id}.md`);
+  writeFileSync(path, lines.join("\n") + "\n", "utf8");
+  const entry: CorpusEntry = { id, language: input.language.toLowerCase(), vulnerable: false, detector: input.detector, note: input.note, sink_type: input.sink_type, code: input.code };
+  return { path, entry };
 }
 
 export interface BenchmarkResult {
@@ -93,6 +138,18 @@ export interface BenchmarkResult {
 }
 
 function detect(entry: CorpusEntry): { detected: boolean; sinkKind?: string } {
+  // Route-confusion detector (regex/heuristic — its own class).
+  if (entry.detector === "route_confusion") {
+    const f = detectRouteConfusion(entry.code, "bench." + entry.language);
+    if (f.length > 0) return { detected: true, sinkKind: f[0].type };
+    return { detected: false };
+  }
+  // Complex-bugs detector (deserialization/type-juggling/SSRF/…).
+  if (entry.detector === "complex_bugs") {
+    const f = detectComplexBugs(entry.code, "bench." + entry.language);
+    if (f.length > 0) return { detected: true, sinkKind: f[0].type };
+    return { detected: false };
+  }
   const lang = entry.language;
   // php uses the AST engine; others use the universal engine by extension
   if (lang === "php") {
@@ -131,6 +188,28 @@ export function runBenchmark(): Record<string, unknown> {
   const falsePositiveRate = fp + tn > 0 ? fp / (fp + tn) : 0;
   const precision = tp + fp > 0 ? tp / (tp + fp) : 0;
 
+  // Per-detector breakdown — the precision metric that matters for tuning.
+  const byDetector: Record<string, Record<string, number>> = {};
+  for (const r of results) {
+    const d = r.entry.detector ?? "taint";
+    byDetector[d] = byDetector[d] ?? { tp: 0, tn: 0, fp: 0, fn: 0, total: 0 };
+    byDetector[d][r.outcome] += 1;
+    byDetector[d].total += 1;
+  }
+  const detectorMetrics = Object.fromEntries(
+    Object.entries(byDetector).map(([d, m]) => {
+      const p = m.tp + m.fp > 0 ? m.tp / (m.tp + m.fp) : 0;
+      const rec = m.tp + m.fn > 0 ? m.tp / (m.tp + m.fn) : 0;
+      const f1 = p + rec > 0 ? (2 * p * rec) / (p + rec) : 0;
+      return [d, { ...m, precision: Number(p.toFixed(3)), recall: Number(rec.toFixed(3)), f1: Number(f1.toFixed(3)) }];
+    }),
+  );
+
+  // SELF-HARDENING: captured false-positives and whether the detector STILL flags
+  // them. still_flagged = the FP is unfixed (detector needs a suppression).
+  const captured = results.filter((r) => r.entry.id.startsWith("fp-"));
+  const capturedStillFlagged = captured.filter((r) => r.outcome === "fp");
+
   return {
     total_cases: total,
     tp,
@@ -140,6 +219,13 @@ export function runBenchmark(): Record<string, unknown> {
     detection_rate: Number(detectionRate.toFixed(3)),
     false_positive_rate: Number(falsePositiveRate.toFixed(3)),
     precision: Number(precision.toFixed(3)),
-    results: results.map((r) => ({ id: r.entry.id, language: r.entry.language, outcome: r.outcome, sink: r.sink_kind })),
+    by_detector: detectorMetrics,
+    captured_false_positives: {
+      total: captured.length,
+      still_flagged: capturedStillFlagged.length,
+      fixed: captured.length - capturedStillFlagged.length,
+      entries: captured.map((r) => ({ id: r.entry.id, detector: r.entry.detector ?? "taint", outcome: r.outcome, note: r.entry.note ?? null, still_flagged: r.outcome === "fp" })),
+    },
+    results: results.map((r) => ({ id: r.entry.id, language: r.entry.language, detector: r.entry.detector ?? "taint", outcome: r.outcome, sink: r.sink_kind })),
   };
 }

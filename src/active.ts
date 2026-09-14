@@ -6,6 +6,7 @@
  * authorizes it.
  */
 import { detectWaf, techCorrelation, type WafDetection, type TechCorrelationResult } from "./intel.js";
+import { researchHeaders } from "./http.js";
 
 const TIMEOUT_MS = 20000;
 
@@ -13,7 +14,7 @@ async function httpFetch(url: string, init?: RequestInit): Promise<{ status: num
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(url, { ...init, signal: controller.signal, redirect: "follow" });
+    const res = await fetch(url, { ...init, signal: controller.signal, redirect: "follow", headers: { ...researchHeaders(), ...((init?.headers ?? {}) as Record<string, string>) } });
     const body = await res.text();
     const headers: Record<string, string> = {};
     res.headers.forEach((v, k) => { headers[k] = v; });

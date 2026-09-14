@@ -50,7 +50,7 @@ async function main(): Promise<void> {
     return;
   }
   if (args[0] === "doctor") {
-    runDoctor();
+    await runDoctor();
     return;
   }
   if (args[0] === "install") {

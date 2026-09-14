@@ -42,6 +42,7 @@ import {
   runCatalogTool,
   installAllTools,
 } from "./catalog.js";
+import { researchHeaders } from "./http.js";
 import {
   remember as _remember,
   memoryLookup as _memoryLookup,
@@ -84,7 +85,7 @@ import {
 import { activeScan } from "./active.js";
 import { startEngagement as _startEngagement, setPhase as _setPhase, trackHypothesis as _trackHypothesis, engagementStatus as _engagementStatus } from "./engagement.js";
 import { analyzeChangedFiles as _analyzeChangedFiles } from "./incremental.js";
-import { makeFinding, transition as _transition, canTransition as _canTransition, computeConfidence as _computeConfidence, confidenceLevel as _confidenceLevel, setConfidenceWeights as _setConfidenceWeights, getConfidenceWeights as _getConfidenceWeights, attachEvidence as _attachEvidence, type FindingStatus, type FindingTarget, type Severity, type Finding } from "./finding.js";
+import { makeFinding, transition as _transition, canTransition as _canTransition, LIFECYCLE_TRANSITIONS as _LIFECYCLE, computeConfidence as _computeConfidence, confidenceLevel as _confidenceLevel, setConfidenceWeights as _setConfidenceWeights, getConfidenceWeights as _getConfidenceWeights, attachEvidence as _attachEvidence, type FindingStatus, type FindingTarget, type Severity, type Finding } from "./finding.js";
 import { makeEvidence as _makeEvidence, redactSecrets as _redactSecrets, type EvidenceType } from "./evidence.js";
 import { traceDataFlow, groupVariants } from "./dataflow.js";
 import { analyzeTaint, taintTree } from "./taint.js";
@@ -94,6 +95,7 @@ import { listFrameworks, detectFramework, frameworkProfile, scanFramework } from
 import { browserValidate, type BrowserCheck } from "./browser.js";
 import { browserAgent, detectAuthForm, browserDiagnostics, browserClose, type BrowserOp } from "./browser-agent.js";
 import { driveChromeDevtools } from "./devtools.js";
+import { checkMcpServers } from "./mcp-status.js";
 import { analyzeTaintUniversal, detectLanguage, listLanguages } from "./universal-taint.js";
 import { detectRouteConfusion } from "./route-confusion.js";
 import { detectComplexBugs } from "./complex-bugs.js";
@@ -102,11 +104,15 @@ import { nextSteps } from "./guidance.js";
 import { scanSinks, detectSourceLeak } from "./sinks.js";
 import { crackHash } from "./hash.js";
 import { liveRecon } from "./live-recon.js";
-import { strikeVerify, resolveFinding as _resolveFinding, type StrikeVerdict } from "./strike.js";
+import { strikeVerify, verifyFileRead, resolveFinding as _resolveFinding, type StrikeVerdict } from "./strike.js";
 import { cvssAssess, type CvssInput } from "./cvss.js";
 import { dedupFindings, uniqueFindings } from "./dedup.js";
-import { reportMarkdown, reportJson } from "./report.js";
-import { runBenchmark } from "./benchmark.js";
+import { reportMarkdown, reportJson, saveReport } from "./report.js";
+import { runBenchmark, captureFalsePositive } from "./benchmark.js";
+import { recordVerdict, sinkToVector, hitRates, topVectors, queryIntel } from "./intelligence.js";
+import { complianceMap, complianceSummary } from "./compliance.js";
+import { createObligation, nextObligation as _nextObligation, dischargeObligation as _dischargeObligation, listObligations as _listObligations, openCount as _openCount } from "./obligations.js";
+import { analyzeSecurityState } from "./security-state.js";
 import { runEnterpriseBenchmark } from "./enterprise-benchmark.js";
 import { coverageMatrix } from "./coverage.js";
 import { checkLatestVersion } from "./update.js";
@@ -125,26 +131,32 @@ export function createServer(): McpServer {
         "- Call run_engagement(target) — or run_autonomous(target) to also get escalation paths. ONE call runs the whole engagement (recon -> sweep -> checks -> report).\\n" +
         "- NEVER do manual live_recon / blitz_scan first, and never fall back to manual probing. Manual tools are ONLY for follow-up AFTER run_engagement, or when the user names a specific sub-step.\\n\\n" +
         "RULES (never violate):\\n" +
-        "- A hit is a HYPOTHESIS; live verification (marker + negative control) is the verdict. Never report unverified.\\n" +
+        "- A hit is a HYPOTHESIS; live verification (marker + negative control) is the verdict. Never report unverified.\n" +
+        "- run_engagement / run_autonomous return status DETECTED (NOT \"complete\") — that is the signal to VERIFY. After detection you MUST strike_verify (or verify_file_read for CWE-22, drive_devtools for DOM/JS precision) on each finding, then generate_report. Detection without verification is NOT a deliverable.\n" +
         "- scope_check is intel-only, never gates. No scope = proceed (repo disclaimer carries responsibility). No authorization gate — hunt the target you are given.\\n" +
         "- strike_verify + live checks AUTO-attempt WAF bypass. Don't report 'needs bypass' without re-probing.\\n" +
-        "- NEVER ask 'should I continue?' / 'say the word' / 'want me to pursue' / 'next?' — that is a hard violation. Execute the full chain autonomously until COMPLETE. Pause only: destructive/DoS consent, external block (OTP/cred), or COMPLETE.\\n" +
-        "- One hard stop: malicious/third-party infra ('find the actor') -> static + takedown only.\\n\\n" +
+        "- NEVER ask 'should I continue?' / 'say the word' / 'want me to pursue' / 'next?' — that is a hard violation. Execute the full chain autonomously until COMPLETE. COMPLETE means every lead verified/blocked AND every reachable chain step executed or blocked (no deferred escalations). Pause only: destructive/DoS consent, external block (OTP/cred), or genuine COMPLETE.\\n" +
+        "- One hard stop: malicious/third-party infra ('find the actor') -> static + takedown only.\\n" +
+        "- FINDING LIFECYCLE (stateful — never loop stateless tools): advance findings via finding_create -> strike_verify -> strike_resolve. finding_transition now takes a FULL finding JSON + target status and RETURNS the updated finding (pass the object, never a status string); a bad move returns 'illegal transition' + the legal next states. confidence_score is DETERMINISTIC (same factors -> same score) — call it ONCE, never retry; it changes nothing. SELF-HARDENING: when a finding is verified false_positive, call capture_false_positive(code, language, detector, note) with the triggering code so the detector gets more precise every engagement. PROOF-OBLIGATION LOOP (the structure, not a prompt): every pending hypothesis is an OPEN obligation. Drive the engagement as a single-decision loop — next_obligation() -> run the ONE test it names -> discharge_obligation(id, status=verified|refuted|blocked). COMPLETE is gated on zero open obligations (obligations().complete); generate_report warns while any remain. You hold NO plan in your head — the ledger is the single source of truth for what work remains.\\n\\n" +
         "CHAIN DECISIONS (a confirmed finding is the START, not the end):\\n" +
         "- For each confirmed finding, enumerate follow-ups with list_chains + chain_links: ESCALATE (what it becomes), CHAIN (compose with other findings), BYPASS, PIVOT (new surface now reachable).\\n" +
         "- Ask the chain-aware question: 'I found X -> what can I NOW read / do / access?' e.g. SQLi -> query the DB for credentials AND for the Werkzeug console PIN / secrets / source; LFI -> read configs, keys, PIN inputs; cred dump -> crack offline -> authenticate -> privileged actions.\\n" +
         "- Every follow-up is a HYPOTHESIS — verify each before it enters the report. Don't stop at 'found SQLi'; follow where the chain leads.\\n" +
         "- EXECUTE follow-ups NOW, not as 'next phase': any leaked source/error -> scan_leaked_source(text) to enumerate sinks (eval/exec/SECRET_KEY/creds) then exploit each; dumped hashes -> crack_hash(hash) now; hidden-content IDOR -> test the direct route. A 'next chain' you write is a TODO — run it, never leave it as a recommendation.\\n\\n" +
+        "- DOCTRINE — 'if you can continue, why not? if possible, why not try?': a chain step you CAN execute is one you MUST execute. A PREREQUISITE is a chain step, NOT a separate engagement — e.g. a CORS->session-theft chain needing 'a foothold on any subdomain (XSS / dangling-DNS takeover)' means CHECK for it NOW: resolve every allowlisted subdomain and test each for dangling delegation (NXDOMAIN, unclaimed S3/bucket, dangling SaaS CNAME) + probe for XSS — do NOT write 'dangling-DNS audit is the next engagement'. Declaring COMPLETE while a reachable chain step is deferred is a violation.\\n\\n" +
         "DELIVERABLE + PERSISTENCE (recon is INPUT, not output):\n" +
         "- The deliverable is a HackerOne-grade FINDING report via generate_report, NEVER a hand-written recon/surface map. Recon is input; confirmed findings are the output.\n" +
         "- After recon, VERIFY every lead before it enters the report: strike_verify (marker + negative control) for HTTP, browser_validate for DOM/JS. A lead is a HYPOTHESIS until verified.\n" +
         "- A hard block (Cloudflare/WAF/IP-block/captcha) is NOT the end: mark the finding blocked + note the required vantage (residential / authorized / correct-SNI / --resolve direct-to-origin), then CONTINUE to the next lead (origin bypass, non-prod cluster, mobile APK, subdomain).\n" +
-        "- Keep trying every lead until each is verified or blocked, THEN generate_report. Never deliver a bare surface map.\n\n" +
+        "- Keep trying every lead AND every chain step until each is verified/executed or blocked, THEN generate_report. Never deliver a bare surface map, and never stop at 'found X' when X enables more.\n\n" +
         "TWO PATHS:\\n" +
         "- Source path on disk -> blitz_scan / taint_file / eagle_eye2 (static).\\n" +
         "- Live URL -> live_recon / active_scan / strike_verify (web-hunting).\\n\\n" +
         "DEEPEN A FINDING: attack_plan(target, tech, params) to get the prioritized vector plan (decide what to test next with data); list_chains (escalation), chain_links (compose), technique_lookup(cls), payload_lookup, bypass_lookup (blocked). Phase doctrine: read_skill(bs-orchestrate-engagement | bs-web-hunting | bs-source-audit | bs-verify-finding). Campaign plan: read_playbook(target-type). On any failure call retry_guidance(signal) / model_fallback(signal) before giving up.\n" +
-        "KNOWLEDGE BASE (discover, don't guess): skillLookup(topic) / listSkills for the 40 attack-path + hunting skills (ap-*, hp-*, bs-*); list_attack_vectors / attack_vectors(cat) for the 34-category vector taxonomy; taxonomy(kind) for OWASP/CWE/ASVS/API-top-10; read_playbook(type) for the 17 campaign playbooks; list_manuals / read_tool_manual for 317 tool references; list_tools / run_catalog_tool for the 141-tool catalog. Every tool, skill, and data layer is reachable from these.\n" +
+        "KNOWLEDGE BASE (discover, don't guess): skillLookup(topic) / listSkills for the 40 attack-path + hunting skills (ap-*, hp-*, bs-*); list_attack_vectors / attack_vectors(cat) for the 34-category vector taxonomy; taxonomy(kind) for OWASP/CWE/ASVS/API-top-10; read_playbook(type) for the 17 campaign playbooks; list_manuals / read_tool_manual for 317 tool references; list_tools / run_catalog_tool for the 141-tool catalog. Every tool, skill, and data layer is reachable from these. CROSS-TARGET INTELLIGENCE: strike_resolve auto-records confirmed/false_positive verdicts into the empirical ledger; query it with intelligence(action=hit_rates/top_vectors) so a new target on a known tech inherits historical hit-rates (attack_plan already blends them into success_probability).\n" +
+        "PRECISION ANALYSIS — chrome-devtools MCP is MANDATORY, not optional:\n" +
+        "- When a lead needs DOM/JS precision — DOM-XSS sink execution, AJAX endpoint + payload interception, JS runtime errors, redirect chains, SSO/token flow, or anything a static HTML glance cannot prove — call drive_devtools(target). It spawns chrome-devtools-mcp and drives a REAL headless browser (navigate -> list_network_requests -> list_console_messages -> evaluate_script), giving reproducible evidence instead of a guess.\n" +
+        "- Before calling it, check_mcp() to confirm the browser MCP is available; if not, blitzstrike install-tools or npm i -g chrome-devtools-mcp. Never substitute eyeballing minified JS or a static sink guess when a live browser can PROVE it. This is the precision + consistency layer.\n" +
         "EXTERNAL MCP SERVERS (verified, connect them — NOT one-shot CLIs): chrome-devtools-mcp (29 tools: list_network_requests/get_network_request for raw HTTP interception, list_console_messages for JS errors + DOM-XSS, evaluate_script to run JS, take_screenshot) -> stdio chrome-devtools-mcp --headless --chromeArg=--no-sandbox --chromeArg=--disable-gpu (as root/container this is MANDATORY or the browser crashes; add --proxyServer http://127.0.0.1:8080 to route through Burp, --acceptInsecureCerts for bad TLS). burp-suite-mcp (proxy history + active scan + repeater) -> NOT npm: build the JAR (git clone https://github.com/PortSwigger/mcp-server.git && cd mcp-server && ./gradlew embedProxyJar), load it in Burp Extensions, then connect the client to http://127.0.0.1:9876 (SSE) or the stdio proxy java -jar mcp-proxy-all.jar --sse-url http://127.0.0.1:9876.",
     },
   );
@@ -315,6 +327,53 @@ export function createServer(): McpServer {
   );
 
   server.registerTool(
+    "verify_file_read",
+    {
+      title: "Verify arbitrary file read / path traversal (marker file vs negative control)",
+      description:
+        "STRIKE: deterministic verification of an arbitrary-file-read / path-traversal hypothesis (CWE-22). Reads a marker file (/etc/passwd) vs a non-existent negative-control path and compares: confirmed (marker returns file content, control does not) / unconfirmed (indistinguishable or gated by auth) / blocked (unreachable). Supports raw POST body (bodyRaw=true) or a named query/body param. Never leaves a bare hypothesis — always returns a verdict + reason.",
+      inputSchema: {
+        url: z.string().describe("Target URL (e.g. the file-read endpoint)"),
+        method: z.enum(["GET", "POST"]).optional().describe("HTTP method (default POST)"),
+        param: z.string().optional().describe("Query/body param name that carries the path (default 'path')"),
+        bodyRaw: z.boolean().optional().describe("Treat the raw POST body as the filesystem path (default false)"),
+        headers: z.string().optional().describe("JSON object of extra headers"),
+        markerPath: z.string().optional().describe("Marker file to read (default /etc/passwd)"),
+        timeout: z.number().int().optional().describe("Timeout seconds (default 15)"),
+      },
+    },
+    async ({ url, method, param, bodyRaw, headers, markerPath, timeout }) => {
+      let hdrs: Record<string, string> = {};
+      try { hdrs = headers ? JSON.parse(headers) : {}; } catch { /* ignore */ }
+      const verdict = await verifyFileRead({
+        url,
+        method: method ?? "POST",
+        param,
+        bodyRaw: bodyRaw ?? false,
+        headers: hdrs,
+        markerPath,
+        timeoutMs: timeout ? timeout * 1000 : undefined,
+      });
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            ...verdict,
+            next_steps: [
+              `Verdict: ${verdict.status} — ${verdict.reason}`,
+              verdict.status === "confirmed"
+                ? "Confirmed arbitrary file read. Record with finding_create + attach the marker/control evidence."
+                : verdict.status === "blocked"
+                  ? "Blocked. Target unreachable — retry or re-check scope."
+                  : "Unconfirmed. The response is gated (auth/session) or the file is not read — obtain a low-priv session and re-run with a valid session, or mark the finding unconfirmed with this evidence.",
+            ],
+          }),
+        }],
+      };
+    },
+  );
+
+  server.registerTool(
     "strike_resolve",
     {
       title: "Resolve a finding from a STRIKE verdict",
@@ -331,6 +390,18 @@ export function createServer(): McpServer {
       try { f = JSON.parse(finding); } catch { return { content: [{ type: "text", text: JSON.stringify({ error: "invalid finding JSON" }) }] }; }
       try { v = JSON.parse(verdict); } catch { return { content: [{ type: "text", text: JSON.stringify({ error: "invalid verdict JSON" }) }] }; }
       const updated = _resolveFinding(f, v);
+      // EMPIRICAL PRIOR: record the verified verdict into the intelligence ledger
+      // so hit-rates feed back into attack_plan's success_probability (Bayesian).
+      const outcome = v.status === "confirmed" ? "confirmed" : v.status === "false_positive" ? "false_positive" : null;
+      if (outcome) {
+        recordVerdict({
+          vector: sinkToVector(f.sink?.type ?? ""),
+          outcome,
+          severity: f.classification?.severity,
+          target: f.target?.host ?? f.target?.endpoint,
+          cvss: f.classification?.cvss_score,
+        });
+      }
       return { content: [{ type: "text", text: JSON.stringify(updated) }] };
     },
   );
@@ -350,7 +421,7 @@ export function createServer(): McpServer {
       let body = text ?? "";
       if (url && !body) {
         try {
-          const r = await fetch(url, { redirect: "follow" });
+          const r = await fetch(url, { redirect: "follow", headers: researchHeaders() });
           body = await r.text();
         } catch {
           return { content: [{ type: "text", text: JSON.stringify({ error: "fetch failed", url }) }] };
@@ -724,6 +795,20 @@ export function createServer(): McpServer {
   );
 
   server.registerTool(
+    "check_mcp",
+    {
+      title: "Check external MCP integrations (chrome-devtools-mcp + burp-suite-mcp)",
+      description:
+        "Verify every external MCP integration is actually present/connected: chrome-devtools-mcp (stdio — installed or npx auto-install) and burp-suite-mcp (SSE — only alive when Burp is running with the extension loaded). Returns availability + fix hints, so you know before you need them.",
+      inputSchema: {},
+    },
+    async () => {
+      const status = await checkMcpServers();
+      return { content: [{ type: "text", text: JSON.stringify({ mcp_servers: status }) }] };
+    },
+  );
+
+  server.registerTool(
     "install_all_tools",
     {
       title: "Install every catalog tool at once",
@@ -984,15 +1069,81 @@ export function createServer(): McpServer {
     {
       title: "Prioritized attack-vector plan for a target",
       description:
-        "DECISION: return the prioritized attack-vector plan for a target — the vectors to test (injection vectors always listed, then param/tech hints add + reprioritize), each with a reason and the specific tool. Call this AFTER run_engagement recon to decide what to test next with data instead of guessing.",
+        "DECISION: return the prioritized attack-vector plan for a target — the vectors to test (injection vectors always listed, then param/tech hints add + reprioritize), each with a reason, the specific tool, a DERIVED success_probability (relevance prior) and estimated_time_sec. Pass mode: full (all vectors) / quick (priority<=2 only) / stealth (passive/config vectors only). Call this AFTER run_engagement recon to decide what to test next with data instead of guessing.",
       inputSchema: {
         target: z.string().describe("Target URL/host"),
         tech: z.array(z.string()).optional().describe("Detected technologies (from recon)"),
         params: z.array(z.string()).optional().describe("Discovered input parameters (from recon)"),
+        mode: z.enum(["full", "quick", "stealth"]).optional().describe("Plan mode: full (default) / quick (top-priority only) / stealth (passive vectors only)"),
       },
     },
-    async ({ target, tech, params }) => {
-      return { content: [{ type: "text", text: JSON.stringify(_attackPlan(target, tech ?? [], params ?? [])) }] };
+    async ({ target, tech, params, mode }) => {
+      return { content: [{ type: "text", text: JSON.stringify(_attackPlan(target, tech ?? [], params ?? [], (mode as "full" | "quick" | "stealth") ?? "full")) }] };
+    },
+  );
+
+  server.registerTool(
+    "intelligence",
+    {
+      title: "Query the empirical intelligence ledger",
+      description:
+        "INTELLIGENCE: query the cross-engagement empirical ledger — hit-rates per (vector, tech), top vectors for a tech, or raw query. Verdicts are recorded AUTOMATICALLY by strike_resolve (confirmed/false_positive). Use this to learn what historically worked on a tech BEFORE planning, so a new Laravel target inherits the hit-rates of past Laravel engagements.",
+      inputSchema: {
+        action: z.enum(["hit_rates", "top_vectors", "query"]).describe("hit_rates (aggregate) / top_vectors (ranked for a tech) / query (raw filter)"),
+        tech: z.string().optional().describe("Tech/framework filter (e.g. flask, laravel, wordpress)"),
+        vector: z.string().optional().describe("Vector filter (e.g. sql_injection)"),
+        outcome: z.string().optional().describe("Outcome filter (confirmed/false_positive)"),
+      },
+    },
+    async ({ action, tech, vector, outcome }) => {
+      const out =
+        action === "hit_rates" ? hitRates(tech)
+        : action === "top_vectors" ? topVectors(tech ?? "unknown", 10)
+        : queryIntel({ vector, tech, outcome });
+      return { content: [{ type: "text", text: JSON.stringify(out) }] };
+    },
+  );
+
+  server.registerTool(
+    "compliance",
+    {
+      title: "Map CWE(s) to compliance frameworks",
+      description:
+        "COMPLIANCE: map a CWE (or a JSON array of CWEs from findings) to OWASP Top 10 (2021), OWASP ASVS v4.0, PCI DSS v4.0, ISO 27001:2022 Annex A, and NIST SP 800-53. Pass a single `cwe` for one mapping, or `cwes` (JSON array) for an aggregate summary. Tells a CISO/auditor which controls a finding violates.",
+      inputSchema: {
+        cwe: z.string().optional().describe("A single CWE id (e.g. CWE-89 or 89)"),
+        cwes: z.string().optional().describe("JSON array of CWE ids for an aggregate summary"),
+      },
+    },
+    async ({ cwe, cwes }) => {
+      if (cwes) {
+        let arr: string[];
+        try { arr = JSON.parse(cwes); } catch { return { content: [{ type: "text", text: JSON.stringify({ error: "invalid cwes JSON" }) }] }; }
+        return { content: [{ type: "text", text: JSON.stringify(complianceSummary(arr)) }] };
+      }
+      const m = complianceMap(cwe ?? "");
+      if (!m) {
+        return { content: [{ type: "text", text: JSON.stringify({ error: "CWE not in the compliance table", cwe, hint: "supported ids: 79, 89, 78, 94, 918, 611, 502, 22, 601, 434, 942, 287, 1336, 915, 1321, 352, 319, 693, 200, 862, 639, 640, 798, 327, 306" }) }] };
+      }
+      return { content: [{ type: "text", text: JSON.stringify(m) }] };
+    },
+  );
+
+  server.registerTool(
+    "security_state",
+    {
+      title: "Analyze a sanitizer flow (security-state lattice)",
+      description:
+        "SECURITY-STATE: given a value's sanitizer/validator functions + the sink type it reaches, return the deterministic verdict — vulnerable (wrong-context sanitization / pseudo-sanitizer / raw taint) or safe (correct context / validated). This is the step beyond binary taint: it catches 'sanitized for X but used in a Y sink'. The lattice is data-driven, no guesses.",
+      inputSchema: {
+        sanitizers: z.string().optional().describe("JSON array of sanitizer/validator function names applied to the value (e.g. [\"sanitize_text_field\"])"),
+        sink_type: z.string().describe("Sink type: sql_execution, code_execution, command_execution, deserialization, file_operations, redirect, html_render"),
+      },
+    },
+    async ({ sanitizers, sink_type }) => {
+      let arr: string[] = [];
+      try { arr = sanitizers ? JSON.parse(sanitizers) : []; } catch { return { content: [{ type: "text", text: JSON.stringify({ error: "invalid sanitizers JSON" }) }] }; }
+      return { content: [{ type: "text", text: JSON.stringify(analyzeSecurityState({ sanitizers: arr, sinkType: sink_type })) }] };
     },
   );
 
@@ -1217,7 +1368,57 @@ export function createServer(): McpServer {
       },
     },
     async ({ sink, status }) => {
-      return { content: [{ type: "text", text: JSON.stringify(_trackHypothesis(sink, status)) }] };
+      const tracked = _trackHypothesis(sink, status);
+      // PROOF-OBLIGATION: a pending hypothesis is an OPEN debt that must be
+      // discharged (verified/refuted/blocked) before the engagement is complete.
+      if ((status ?? "pending") === "pending") {
+        createObligation({ claim: sink, correlation_id: String((tracked as { id?: string })?.id ?? "") });
+      }
+      return { content: [{ type: "text", text: JSON.stringify(tracked) }] };
+    },
+  );
+
+  server.registerTool(
+    "next_obligation",
+    {
+      title: "Get the next open proof obligation",
+      description:
+        "PROOF-OBLIGATION (single-decision loop): return the top OPEN hypothesis that still needs verification + the exact deterministic test to discharge it. The LLM asks, executes that one test, then calls discharge_obligation. Never plan from scratch — the ledger is the single source of truth for what work remains.",
+      inputSchema: {},
+    },
+    async () => {
+      return { content: [{ type: "text", text: JSON.stringify(_nextObligation()) }] };
+    },
+  );
+
+  server.registerTool(
+    "discharge_obligation",
+    {
+      title: "Discharge a proof obligation",
+      description:
+        "PROOF-OBLIGATION: mark an open obligation as verified (evidence-backed), refuted (false positive), or blocked. Pass the obligation id (from next_obligation) OR a correlation_id. verified means you ran strike_verify and the marker reflected + negative control inert. When the last obligation is discharged the engagement is COMPLETE.",
+      inputSchema: {
+        id: z.string().optional().describe("Obligation id (from next_obligation / obligations)"),
+        correlation_id: z.string().optional().describe("Correlation id (a finding/hypothesis id)"),
+        status: z.enum(["verified", "refuted", "blocked"]).describe("Outcome of the verification"),
+        note: z.string().optional().describe("Short note (e.g. evidence reference)"),
+      },
+    },
+    async ({ id, correlation_id, status, note }) => {
+      return { content: [{ type: "text", text: JSON.stringify(_dischargeObligation({ id, correlation_id, status, note })) }] };
+    },
+  );
+
+  server.registerTool(
+    "obligations",
+    {
+      title: "List all proof obligations",
+      description:
+        "PROOF-OBLIGATION: list the obligation ledger — open/verified/refuted/blocked counts + the open obligations. The `complete` flag is the deterministic gate: an engagement is NOT complete while open > 0.",
+      inputSchema: {},
+    },
+    async () => {
+      return { content: [{ type: "text", text: JSON.stringify(_listObligations()) }] };
     },
   );
 
@@ -1435,7 +1636,7 @@ export function createServer(): McpServer {
     {
       title: "Create a canonical finding",
       description:
-        "FINDINGS: create a canonical, evidence-first finding. Severity describes impact; confidence (deterministic) describes certainty. Default status=detected (hypothesis-pending).",
+        "FINDINGS: create a canonical, evidence-first finding. Severity describes impact; confidence (deterministic) describes certainty. Default status=detected (hypothesis-pending). Pass `evidence` (JSON array of {type, description, content}) to attach observed artifacts AT CREATION — a finding must never be born empty when you already hold the artifact (headers, URL, response body).",
       inputSchema: {
         title: z.string().describe("Finding title"),
         target_type: z.string().optional().describe("Target type (web/api/source/mobile/network/other)"),
@@ -1448,9 +1649,14 @@ export function createServer(): McpServer {
         sink_type: z.string().describe("Sink type (e.g. sql_execution, command_execution, file_operations)"),
         sink_symbol: z.string().optional().describe("Sink symbol (e.g. '->query(')"),
         chain_id: z.string().optional().describe("Escalation chain id"),
+        evidence: z.string().optional().describe("JSON array of evidence entries: [{type, description, content?}] — attached at creation (redacted + SHA-256 tagged)"),
       },
     },
-    async ({ title, target_type, host, endpoint, severity, cwe, source_type, source_name, sink_type, sink_symbol, chain_id }) => {
+    async ({ title, target_type, host, endpoint, severity, cwe, source_type, source_name, sink_type, sink_symbol, chain_id, evidence }) => {
+      let evs: Array<{ type: string; description: string; content?: string }> = [];
+      if (evidence) {
+        try { evs = JSON.parse(evidence); } catch { return { content: [{ type: "text", text: JSON.stringify({ error: "invalid evidence JSON" }) }] }; }
+      }
       const f = makeFinding({
         title,
         target: { type: (target_type as FindingTarget["type"]) ?? "web", host, endpoint },
@@ -1460,25 +1666,71 @@ export function createServer(): McpServer {
         sink: { type: sink_type, symbol: sink_symbol },
         chainId: chain_id ?? null,
         status: "detected",
+        evidence: evs as Array<{ type: EvidenceType; description: string; content?: string }>,
       });
-      return { content: [{ type: "text", text: JSON.stringify(f) }] };
+      const empty = (f.evidence ?? []).length === 0;
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            ...f,
+            _warning: empty ? "finding created with NO evidence — if you hold the observed artifact (headers/URL/body), attach it now via `evidence` or finding_attach_evidence" : undefined,
+          }),
+        }],
+      };
     },
   );
 
   server.registerTool(
     "finding_transition",
     {
-      title: "Advance a finding lifecycle",
+      title: "Advance a finding lifecycle (STATEFUL)",
       description:
-        "FINDINGS: advance a finding through its strict lifecycle (detected->triaged->hypothesis->validating->confirmed). Rejects illegal transitions.",
+        "FINDINGS: advance a canonical Finding through its lifecycle (detected->triaged->hypothesis->validating->confirmed) and RETURN the updated finding. STATEFUL — pass the FULL finding JSON (from finding_create / run_engagement), not a status string. Rejects illegal transitions with the legal next states. Confirmed is terminal. To confirm FROM a live verdict use strike_resolve instead.",
       inputSchema: {
-        status: z.string().describe("Current status"),
+        finding: z.string().describe("JSON of the canonical Finding object (from finding_create / run_engagement)"),
         to: z.string().describe("Target status (triaged/hypothesis/validating/confirmed/false_positive/rejected/blocked/out_of_scope)"),
       },
     },
-    async ({ status, to }) => {
-      const ok = _canTransition(status as FindingStatus, to as FindingStatus);
-      return { content: [{ type: "text", text: JSON.stringify({ from: status, to, legal: ok }) }] };
+    async ({ finding, to }) => {
+      let f: Finding;
+      try { f = JSON.parse(finding); } catch { return { content: [{ type: "text", text: JSON.stringify({ error: "invalid finding JSON — pass the full Finding object, not a status string" }) }] }; }
+      const from = f.status ?? "detected";
+      if (!_canTransition(from, to as FindingStatus)) {
+        return { content: [{ type: "text", text: JSON.stringify({ error: `illegal transition ${from} -> ${to}`, from, legal_next: _LIFECYCLE[from] ?? [] }) }] };
+      }
+      const updated = _transition(f, to as FindingStatus);
+      const terminal = (_LIFECYCLE[updated.status] ?? []).length === 0;
+      return {
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            ...updated,
+            transition: `${from} -> ${updated.status}`,
+            ...(terminal ? { hint: "TERMINAL state reached. A 'confirmed' claim must be evidence-backed (strike_verify -> strike_resolve); otherwise treat it as unverified. Then generate_report." } : { next: _LIFECYCLE[updated.status] ?? [] }),
+          }),
+        }],
+      };
+    },
+  );
+
+  server.registerTool(
+    "capture_false_positive",
+    {
+      title: "Capture a verified false positive (self-hardening)",
+      description:
+        "SELF-HARDENING: record a VERIFIED false positive (a code pattern the detector flagged but live verification ruled out) into the writable benchmark corpus, so the next run_benchmark measures whether the detector STILL flags it. Pass the triggering CODE + language + detector + a short note. Every capture makes the detector more precise — close the loop, never just discard a refuted lead.",
+      inputSchema: {
+        code: z.string().describe("The code snippet that triggered the false detection"),
+        language: z.string().describe("Language: php/javascript/typescript/python/java"),
+        detector: z.enum(["taint", "complex_bugs", "route_confusion"]).optional().describe("Which detector flagged it"),
+        note: z.string().optional().describe("Short note on why it was a false positive"),
+        sink_type: z.string().optional().describe("The sink type the detector claimed"),
+      },
+    },
+    async ({ code, language, detector, note, sink_type }) => {
+      const r = captureFalsePositive({ code, language, detector: detector as "taint" | "complex_bugs" | "route_confusion" | undefined, note, sink_type });
+      return { content: [{ type: "text", text: JSON.stringify({ saved: r.path, id: r.entry.id, hint: "Captured as a safe corpus entry. Re-run run_benchmark — if it shows still_flagged, that detector needs a suppression." }) }] };
     },
   );
 
@@ -1487,7 +1739,7 @@ export function createServer(): McpServer {
     {
       title: "Compute deterministic confidence",
       description:
-        "FINDINGS: compute a deterministic weighted confidence score (static/data-flow/reachability/preconditions/validation/negative-control). Never an AI opinion.",
+        "FINDINGS: compute a deterministic weighted confidence score (static/data-flow/reachability/preconditions/validation/negative-control). Never an AI opinion. DETERMINISTIC — identical inputs give the identical score, so never retry with the same factors. The score does NOT change a finding; use strike_resolve (finding + verdict) to attach a confidence + advance the lifecycle.",
       inputSchema: {
         static_analysis: z.boolean().optional(),
         data_flow: z.boolean().optional(),
@@ -1499,7 +1751,7 @@ export function createServer(): McpServer {
     },
     async (factors) => {
       const score = _computeConfidence(factors);
-      return { content: [{ type: "text", text: JSON.stringify({ score, level: _confidenceLevel(score) }) }] };
+      return { content: [{ type: "text", text: JSON.stringify({ score, level: _confidenceLevel(score), note: "deterministic — same factors = same score; do not retry. Attach to a finding via strike_resolve." }) }] };
     },
   );
 
@@ -1698,9 +1950,9 @@ export function createServer(): McpServer {
   server.registerTool(
     "complex_scan",
     {
-      title: "Complex-bug scan (deserialization / type juggling / mass assignment / prototype pollution / CRLF / path confusion / SSRF / XXE / SSTI)",
+      title: "Complex-bug scan (deserialization / type juggling / mass assignment / prototype pollution / CRLF / path confusion / SSRF / XXE / SSTI / wrong-context sanitization)",
       description:
-        "Complex-bug detection beyond taint: deserialization→POP gadget chain (unserialize + magic method), type juggling (loose ==/!= vs hash/secret), mass assignment (extract/parse_str without a safe flag), prototype pollution (unsafe merge of request data), CRLF/header injection (user input into a header), path confusion (user input into a file path without canonicalization), SSRF (user-controlled URL with no host allowlist), XXE (user XML parsed without disabling entities), and SSTI (user input into a template render with no sandbox).",
+        "Complex-bug detection beyond taint: deserialization→POP gadget chain (unserialize + magic method), type juggling (loose ==/!= vs hash/secret), mass assignment (extract/parse_str without a safe flag), prototype pollution (unsafe merge of request data), CRLF/header injection (user input into a header), path confusion (user input into a file path without canonicalization), SSRF (user-controlled URL with no host allowlist), XXE (user XML parsed without disabling entities), SSTI (user input into a template render with no sandbox), and wrong-context sanitization (a value sanitized for context X reaching a sink that needs Y — e.g. sanitize_text_field() into a SQL query).",
       inputSchema: { path: z.string().describe("Source file path") },
     },
     async ({ path }) => {
@@ -2036,9 +2288,17 @@ export function createServer(): McpServer {
     async ({ findings, format, title, scope }) => {
       let list: Finding[];
       try { list = JSON.parse(findings); } catch { return { content: [{ type: "text", text: JSON.stringify({ error: "invalid JSON" }) }] }; }
+      const fmt = format ?? "markdown";
       const opts = { title, scope, version: VERSION };
-      const out = (format ?? "markdown") === "json" ? reportJson(list, opts) : reportMarkdown(list, opts);
-      return { content: [{ type: "text", text: out }] };
+      const out = fmt === "json" ? reportJson(list, opts) : reportMarkdown(list, opts);
+      // Persist to the reports dir — an engagement must produce an on-disk .md/.json deliverable.
+      const saved = saveReport(out, { title, scope, version: VERSION, format: fmt });
+      // PROOF-OBLIGATION GATE: an engagement is NOT complete while open proof debt remains.
+      const open = _openCount();
+      const gate = open > 0
+        ? `\n\n⚠ PROOF-OBLIGATION GATE: ${open} open obligation(s) remain unverified. Discharge them (next_obligation -> strike_verify -> discharge_obligation) before declaring the engagement complete.\n`
+        : "";
+      return { content: [{ type: "text", text: `Report saved to: ${saved.path}\n\n${out}${gate}` }] };
     },
   );
 

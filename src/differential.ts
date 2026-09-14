@@ -16,7 +16,7 @@
 import { writeFileSync, rmSync, mkdtempSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { analyzeDataFlow2 } from "./eagle2.js";
 import { analyzeTaintUniversal, detectLanguage } from "./universal-taint.js";
 import "./adapters.js";
@@ -273,7 +273,7 @@ const SOURCE_EXTS = [".php", ".phtml", ".php5", ".js", ".mjs", ".ts", ".tsx", ".
 export function analyzeGitDiff(repo: string, base = "HEAD~1", head = "HEAD"): GitDiffResult {
   const git = (args: string) => {
     try {
-      return execSync(`git ${args}`, { cwd: repo, encoding: "utf8", maxBuffer: 50 * 1024 * 1024 }).trim();
+      return execFileSync("git", args.split(/\s+/).filter(Boolean), { cwd: repo, encoding: "utf8", maxBuffer: 50 * 1024 * 1024 }).trim();
     } catch {
       return "";
     }

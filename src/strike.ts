@@ -22,6 +22,7 @@
 import { redactSecrets, sha256, type MakeEvidenceInput } from "./evidence.js";
 import { confirmFinding, rejectFinding, transition, type Finding, type FindingStatus } from "./finding.js";
 import { scanSinks, detectSourceLeak, type SinkHit } from "./sinks.js";
+import { researchHeaders } from "./http.js";
 
 const DEFAULT_TIMEOUT_MS = 15000;
 
@@ -38,7 +39,7 @@ async function httpRequest(url: string, method: "GET" | "POST", data?: string, h
     const res = await fetch(url, {
       method,
       body: method === "POST" ? data : undefined,
-      headers: { "User-Agent": "blitzstrike/1.0", ...(headers ?? {}) },
+      headers: { "User-Agent": "blitzstrike/1.0", ...researchHeaders(), ...(headers ?? {}) },
       signal: controller.signal,
       redirect: "follow",
     });
@@ -245,9 +246,93 @@ export async function strikeVerify(input: StrikeVerifyInput): Promise<StrikeVerd
   };
 }
 
+export interface FileReadVerifyInput {
+  url: string;
+  method?: "GET" | "POST";
+  /** Inject the path as a named query parameter (default "path"). */
+  param?: string;
+  /** Treat the raw request body as the filesystem path (POST body = path). */
+  bodyRaw?: boolean;
+  headers?: Record<string, string>;
+  /** Marker file to read (default /etc/passwd). */
+  markerPath?: string;
+  timeoutMs?: number;
+}
+
+export interface FileReadVerdict {
+  status: "confirmed" | "unconfirmed" | "blocked";
+  file_read: boolean;
+  marker_file_content: boolean;
+  control_file_content: boolean;
+  marker_status: number;
+  control_status: number;
+  marker_preview: string;
+  control_preview: string;
+  reason: string;
+}
+
+function buildFileReadRequest(url: string, path: string, param?: string, bodyRaw?: boolean): { url: string; data?: string } {
+  if (bodyRaw) return { url, data: path };
+  return { url: inject(url, path, param ?? "path") };
+}
+
+/** Verify an arbitrary-file-read / path-traversal hypothesis DETERMINISTICALLY:
+ * read a marker file (/etc/passwd) and a non-existent negative-control path,
+ * then compare. A file read is CONFIRMED only when the marker returns file
+ * content and the control does not — never from reasoning alone. When both
+ * requests return an identical gate (e.g. a 500 auth wall), the verdict is
+ * unconfirmed with an explicit reason instead of leaving a bare hypothesis. */
+export async function verifyFileRead(input: FileReadVerifyInput): Promise<FileReadVerdict> {
+  const method = input.method ?? "POST";
+  const markerPath = input.markerPath ?? "/etc/passwd";
+  const controlPath = `/bs-nonexistent-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+  const timeoutMs = input.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  const markerReq = buildFileReadRequest(input.url, markerPath, input.param, input.bodyRaw);
+  const controlReq = buildFileReadRequest(input.url, controlPath, input.param, input.bodyRaw);
+
+  const markerResp = await httpRequest(markerReq.url, method, markerReq.data, input.headers, timeoutMs);
+  const controlResp = await httpRequest(controlReq.url, method, controlReq.data, input.headers, timeoutMs);
+
+  // Canonical /etc/passwd signature: the leading "root:x:0:0:" line.
+  const passwdRe = /(^|\n)root:[x*!][^:]*:0:0:/m;
+  const markerFile = passwdRe.test(markerResp.body);
+  const controlFile = passwdRe.test(controlResp.body);
+
+  let status: FileReadVerdict["status"];
+  let reason: string;
+  if (markerResp.status === 0 && controlResp.status === 0) {
+    status = "blocked";
+    reason = "both marker and control requests failed — target unreachable";
+  } else if (markerFile && !controlFile) {
+    status = "confirmed";
+    reason = "marker file (/etc/passwd) content returned while the non-existent negative control did not — arbitrary file read confirmed";
+  } else if (markerFile && controlFile) {
+    status = "unconfirmed";
+    reason = "marker and negative control both returned passwd-like content — indistinguishable from a fixed response";
+  } else if (markerResp.status === controlResp.status && markerResp.body === controlResp.body) {
+    status = "unconfirmed";
+    reason = `marker and control returned identical responses (HTTP ${markerResp.status}) — likely an auth/session gate; file read not reachable without credentials`;
+  } else {
+    status = "unconfirmed";
+    reason = "marker file content not returned — arbitrary file read could not be demonstrated live";
+  }
+
+  return {
+    status,
+    file_read: markerFile && !controlFile,
+    marker_file_content: markerFile,
+    control_file_content: controlFile,
+    marker_status: markerResp.status,
+    control_status: controlResp.status,
+    marker_preview: redactSecrets(markerResp.body.slice(0, 300)),
+    control_preview: redactSecrets(controlResp.body.slice(0, 300)),
+    reason,
+  };
+}
+
 /** Resolve a canonical finding from a STRIKE verdict, advancing its lifecycle. */
 export function resolveFinding(finding: Finding, verdict: StrikeVerdict): Finding {
-  // hypothesis -> validating (a validation was performed)
   let f: Finding = finding;
   if (f.status === "hypothesis") {
     f = transition(f, "validating");

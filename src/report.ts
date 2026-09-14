@@ -10,6 +10,10 @@ import type { Finding } from "./finding.js";
 import { dedupFindings } from "./dedup.js";
 import { findingWriteup } from "./writeup.js";
 import { cvssAssess, type CvssInput } from "./cvss.js";
+import { complianceSummary } from "./compliance.js";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 
 /** Default CVSS v3.1 metric set per severity band (fallback when a finding has
  *  no explicit CVSS computed), so every finding carries a score AND a vector. */
@@ -49,17 +53,22 @@ export interface ReportSummary {
   confirmed: number;
   false_positives: number;
   evidence_artifacts: number;
+  /** Findings with zero evidence records — evidence-first violations. */
+  evidence_less_findings: number;
 }
 
 function summarize(findings: Finding[]): ReportSummary {
   const byStatus: Record<string, number> = {};
   const bySeverity: Record<string, number> = {};
   let evidenceArtifacts = 0;
+  let evidenceLess = 0;
   for (const f of findings) {
     byStatus[f.status ?? "detected"] = (byStatus[f.status ?? "detected"] ?? 0) + 1;
     const sev = f.classification?.severity ?? "informational";
     bySeverity[sev] = (bySeverity[sev] ?? 0) + 1;
-    evidenceArtifacts += f.evidence?.reduce((n, e) => n + (e.artifacts?.length ?? 0), 0) ?? 0;
+    const arts = f.evidence?.reduce((n, e) => n + (e.artifacts?.length ?? 0), 0) ?? 0;
+    evidenceArtifacts += arts;
+    if ((f.evidence ?? []).length === 0) evidenceLess += 1;
   }
   const groups = dedupFindings(findings);
   return {
@@ -70,6 +79,7 @@ function summarize(findings: Finding[]): ReportSummary {
     confirmed: byStatus["confirmed"] ?? 0,
     false_positives: byStatus["false_positive"] ?? 0,
     evidence_artifacts: evidenceArtifacts,
+    evidence_less_findings: evidenceLess,
   };
 }
 
@@ -107,6 +117,15 @@ export function reportMarkdown(findings: Finding[], opts: ReportOptions = {}): s
   }
   lines.push(`Detailed findings, reproduction steps, impact, and remediation follow in section 5.`);
   lines.push("");
+
+  if (summary.evidence_less_findings > 0) {
+    const evLess = findings.filter((f) => (f.evidence ?? []).length === 0).map((f) => f.id).join(", ");
+    lines.push(
+      `> ⚠️ **Evidence-first violation:** **${summary.evidence_less_findings}** finding(s) carry NO evidence artifacts (${evLess}). ` +
+      `Detection is not proof — every finding must carry the observed artifact (headers, URL, response body). Attach evidence via finding_attach_evidence before finalizing.`,
+    );
+    lines.push("");
+  }
 
   // 2. Scope
   lines.push("## 2. Scope");
@@ -203,8 +222,32 @@ export function reportMarkdown(findings: Finding[], opts: ReportOptions = {}): s
     });
   }
 
-  // 6. Recommendations
-  lines.push("## 6. Recommendations");
+  // 6. Compliance Mapping — the frameworks a CISO/auditor must answer to.
+  lines.push("## 6. Compliance Mapping");
+  lines.push("");
+  const comp = complianceSummary(findings.map((f) => f.classification?.cwe ?? null));
+  if (comp.total_mapped === 0) {
+    lines.push("No CWE-tagged findings to map.");
+  } else {
+    lines.push("Maps each finding's CWE to OWASP Top 10 (2021), OWASP ASVS v4.0, PCI DSS v4.0, ISO 27001:2022 (Annex A), and NIST SP 800-53.");
+    lines.push("");
+    for (const m of comp.mappings) {
+      lines.push(`- **${m.cwe}** ${m.name}`);
+      if (m.owasp_top10) lines.push(`  - OWASP Top 10: \`${m.owasp_top10}\``);
+      if (m.asvs.length) lines.push(`  - ASVS v4.0: \`${m.asvs.join(", ")}\``);
+      if (m.pci.length) lines.push(`  - PCI DSS v4.0: \`${m.pci.join(", ")}\``);
+      if (m.iso.length) lines.push(`  - ISO 27001:2022: \`${m.iso.join(", ")}\``);
+      if (m.nist.length) lines.push(`  - NIST 800-53: \`${m.nist.join(", ")}\``);
+    }
+    if (comp.total_unmapped > 0) {
+      lines.push("");
+      lines.push(`_${comp.total_unmapped} finding(s) had no CWE and were not mapped._`);
+    }
+  }
+  lines.push("");
+
+  // 7. Recommendations
+  lines.push("## 7. Recommendations");
   lines.push("");
   if (findings.length === 0) {
     lines.push("No findings — no remediation required.");
@@ -218,8 +261,8 @@ export function reportMarkdown(findings: Finding[], opts: ReportOptions = {}): s
   }
   lines.push("");
 
-  // 7. Appendix — hypotheses + false positives
-  lines.push("## 7. Appendix");
+  // 8. Appendix — hypotheses + false positives
+  lines.push("## 8. Appendix");
   lines.push("");
   if (hypotheses.length) {
     lines.push("### Unverified hypotheses (kept for follow-up)");
@@ -250,4 +293,35 @@ export function reportJson(findings: Finding[], opts: ReportOptions = {}): strin
     integrity: sha256(JSON.stringify({ summary, findings })),
   };
   return JSON.stringify(payload, null, 2);
+}
+
+// ---------------------------------------------------------------------------
+// Persistence — write the report to a `reports/` directory so an engagement
+// produces an on-disk .md/.json deliverable, not just an in-memory string.
+// ---------------------------------------------------------------------------
+
+const REPORT_DIR = process.env.BLITZSTRIKE_REPORT_DIR ?? join(homedir(), ".blitzstrike", "reports");
+
+/** Sanitize a title/scope into a filename-safe slug. */
+function slugify(s: string): string {
+  const slug = s
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/[^a-z0-9.-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/\./g, "_")
+    .slice(0, 60);
+  return slug || "engagement";
+}
+
+/** Write the report content to the reports dir. Returns the on-disk path. */
+export function saveReport(content: string, opts: ReportOptions & { format?: "markdown" | "json" } = {}): { path: string; dir: string; filename: string } {
+  mkdirSync(REPORT_DIR, { recursive: true });
+  const slug = slugify(opts.scope ?? opts.title ?? "engagement");
+  const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const ext = opts.format === "json" ? "json" : "md";
+  const filename = `${slug}-${ts}.${ext}`;
+  const path = join(REPORT_DIR, filename);
+  writeFileSync(path, content, "utf8");
+  return { path, dir: REPORT_DIR, filename };
 }

@@ -5,6 +5,364 @@ All notable changes to Blitz Strike are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.4.33] — 2026-09-14
+
+### Added — Security-State Lattice (beyond binary taint)
+
+- New `src/security-state.ts`: models each value's SECURITY STATE
+  (clean < whitelisted < validated < sanitized(context) < tainted) instead of
+  binary tainted/not. A sink declares the minimum context it accepts.
+- `detectWrongSanitizer` (wired into `complex_scan`/`blitz_file`) finds the
+  complex bug class binary taint misses: a value sanitized for context X
+  reaching a sink that needs Y (e.g. `sanitize_text_field()` into a SQL query),
+  and pseudo-sanitizers (`base64_encode()`/`trim()` misused as escaping).
+- New `security_state` tool: deterministic verdict for a sanitizer flow.
+- Data-driven tables (sanitizers, pseudo-sanitizers, sink requirements) —
+  the lattice is data, not guesses.
+
+## [2.4.32] — 2026-09-14
+
+### Removed
+
+- Dropped a vendor-specific detection template and genericized planning
+  wording in the changelog so no third-party product name appears in public
+  artifacts (repo, changelog, or npm tarball).
+
+## [2.4.31] — 2026-09-14
+
+### Fixed — full CWE coverage in the compliance table (self-audit)
+
+- Added 6 CWEs that detectors/writeups can emit but were missing from the
+  compliance mapping: CWE-90 (LDAP), CWE-93 (CRLF/response-splitting), CWE-98
+  (PHP RFI), CWE-347 (JWT signature), CWE-643 (XPath), CWE-644 (header
+  injection). Every CWE the codebase references now maps to a framework.
+
+## [2.4.30] — 2026-09-14
+
+### Added — Proof-Obligation Engine (structure by construction)
+
+- New `src/obligations.ts`: append-only obligation ledger — every hypothesis
+  is an OPEN proof debt that must be discharged (verified/refuted/blocked).
+- New tools: `next_obligation` (single-decision loop: return the top open
+  obligation + the exact test), `discharge_obligation` (verified/refuted/
+  blocked), `obligations` (ledger + deterministic `complete` gate).
+- `engagement_track` (pending) now auto-creates an obligation; `generate_report`
+  is GATED — it warns while open proof debt remains.
+- System prompt: the LLM drives the engagement as a single-decision loop; it
+  holds no plan in its head — the ledger is the single source of truth.
+
+## [2.4.29] — 2026-09-14
+
+### Added — Enterprise compliance mapping (CWE -> frameworks)
+
+- New `src/compliance.ts`: data-driven mapping of 25 web/app CWEs to OWASP
+  Top 10 (2021), OWASP ASVS v4.0, PCI DSS v4.0, ISO 27001:2022 Annex A, and
+  NIST SP 800-53.
+- New `compliance` tool: map a single CWE or an aggregate list.
+- `generate_report` now emits a "## 6. Compliance Mapping" section — a CISO/
+  auditor can see which controls every finding violates, not just a CVSS.
+
+## [2.4.28] — 2026-09-14
+
+### Added — Enterprise Empirical Intelligence Ledger (LOOP 2, cross-target)
+
+- New `src/intelligence.ts`: append-only JSONL ledger
+  (`~/.blitzstrike/intelligence.jsonl`) that records VERIFIED verdicts
+  (confirmed/false_positive) as (vector, tech) outcomes — the enterprise
+  layer that makes Blitz Strike COMPOUND across engagements.
+- `strike_resolve` now auto-records every confirmed/false_positive verdict
+  into the ledger (sink type -> attack-vector name via sinkToVector).
+- `attack_plan`'s success_probability is now a Bayesian posterior: the formula
+  prior is upgraded by the empirical hit-rate (Beta-binomial, prior strength
+  K=5), falling back tech-specific -> any-tech -> formula. A new Laravel target
+  inherits the hit-rates of past Laravel engagements.
+- New `intelligence` tool: query hit-rates / top-vectors / raw ledger.
+- System prompt: cross-target intelligence directive.
+
+## [2.4.27] — 2026-09-14
+
+### Added — SELF-HARDENING loop (false-positives -> corpus -> benchmark)
+
+- New `capture_false_positive` tool: records a VERIFIED false positive (code +
+  language + detector + note) into a writable corpus (`~/.blitzstrike/corpus/`,
+  override `BLITZSTRIKE_CORPUS_DIR`). Every engagement makes the detector more
+  precise — never just discard a refuted lead.
+- `loadCorpus` now merges the package corpus (read-only) + the captured
+  corpus (writable), so the next `run_benchmark` measures whether a captured
+  FP is fixed (tn) or still_flagged (fp).
+- `run_benchmark` reports a `captured_false_positives` section: total /
+  still_flagged / fixed + per-entry outcome.
+- System prompt: verified false positives must be captured for self-hardening.
+
+## [2.4.26] — 2026-09-14
+
+### Added — derived success_probability + estimated_time + plan modes
+
+- `attack_plan` now returns, per vector, a DERIVED success_probability
+  (relevance prior: clamp(0.85 - 0.15*(priority-1), 0.25, 0.85) — priority 1 =
+  0.85 down to priority 4 = 0.40) and estimated_time_sec (from an
+  operation-class table: passive/config < injection < deep/manual), plus a
+  total_estimated_time_sec.
+- New `mode` param: full (all vectors) / quick (priority<=2) / stealth
+  (passive/config vectors only) — objective-based planning, DERIVED (not
+  hardcoded 0.8/0.9 guesses).
+- success_probability is a PLANNING prior, deliberately distinct from the
+  evidence-backed confidence (computeConfidence) — documented in the tool.
+
+## [2.4.25] — 2026-09-14
+
+### Doctrine — "if you can continue, why not? if possible, why not try?"
+
+- Added an explicit chain-execution DOCTRINE to the system prompt: a chain
+  step you CAN execute is one you MUST execute now. A PREREQUISITE (e.g. a
+  CORS->session-theft chain needing "a foothold on any subdomain") is a chain
+  step, NOT a "next engagement" — check for dangling DNS / XSS now, don't
+  defer it.
+- Tightened the completion rule: COMPLETE means every lead verified/blocked
+  AND every reachable chain step executed or blocked (no deferred
+  escalations); declaring COMPLETE with a reachable chain step deferred is a
+  violation.
+
+## [2.4.24] — 2026-09-14
+
+### Fixed — LLM finding-lifecycle loop (opencode "repeated failures")
+
+- `finding_transition` was STATELESS (returned `{legal: bool}` for a status
+  string), so an agent calling it to "advance a finding" saw no state change
+  and looped, tripping opencode's "Continue after repeated failures" gate.
+- Now STATEFUL: pass the full finding JSON + target status and it returns the
+  UPDATED finding (detected->triaged->hypothesis->validating->confirmed),
+  with the legal next states, a clear "illegal transition" error, and an
+  explicit TERMINAL-state hint.
+- `confidence_score` response now carries a "deterministic — do not retry"
+  note and points to strike_resolve for stateful advancement.
+- Added a FINDING LIFECYCLE directive to the system prompt (finding_create ->
+  strike_verify -> strike_resolve; never loop stateless tools).
+
+## [2.4.23] — 2026-09-14
+
+### Precision — false-positive reduction + per-detector benchmark
+
+- Fixed 6 false-positive patterns in the heuristic detectors (complex-bugs +
+  route-confusion): canonicalized include (`basename`/`realpath`), whitelist
+  lookup (`$allowed[$p]`), batch-forwarding WITH an auth re-check, anchored
+  validation regex (`preg_match('/^[a-z]+$/')`), constrained SSRF (fixed
+  `scheme://` host literal), and URL literals in the path-confusion detector.
+- Extended the benchmark to measure per-detector precision/recall/F1 (taint +
+  complex_bugs + route_confusion) with 28 new labelled fixtures.
+- Corpus now at 137 cases: **precision 1.0 / recall 1.0 / F1 1.0, 0 FP, 0 FN**
+  across all three detectors.
+
+## [2.4.22] — 2026-09-14
+
+### Added — on-disk report persistence (reports/ folder)
+
+- `generate_report` now WRITES the HackerOne-grade markdown/JSON report to
+  `~/.blitzstrike/reports/<scope-slug>-<timestamp>.md` (override via
+  `BLITZSTRIKE_REPORT_DIR`) and returns the saved path — an engagement now
+  produces an on-disk deliverable, not just an in-memory string.
+- `run_engagement` / `run_autonomous` also persist their inline report to the
+  same folder (report.report.saved).
+
+## [2.4.21] — 2026-09-14
+
+### Security — eliminate the last shell-interpolation sites
+
+- `hasCommand` (catalog) + `which` (cli) checked `command -v ${cmd}` with
+  `shell: true`. Hardened: the command is now passed as a positional `$1` to
+  `sh -c 'command -v "$1"'` — zero user-controlled shell text anywhere.
+- Full re-audit: 0 remaining `shell: true` + dynamic/interpolated argument.
+  The 8 remaining `shell: true` calls all run STATIC, trusted commands
+  (catalog install/check strings), never user input.
+
+## [2.4.20] — 2026-09-14
+
+### Security — command-injection fixes (self-audit)
+
+- CRITICAL: `run_catalog_tool` built a shell string (`args.join(" ")` + `shell: true`)
+  from the target — an attacker-controlled target with shell metacharacters
+  (`evil.com; rm -rf /`) executed arbitrary commands. Now runs the tool directly
+  (`spawnSync(args[0], args.slice(1))`, no shell) — the target is a literal argv.
+- MEDIUM: `diff_analyze` / `incremental_scan` / `worktree` interpolated
+  user-controlled git refs + branch/path into `execSync` (shell). Now use
+  `execFileSync("git", [...])` — no shell interpretation.
+
+## [2.4.19] — 2026-09-14
+
+### Added — unit tests for 5 deep modules + off-by-one fix
+
+- 25 new hermetic checks: chain-executor dispatch (scan/crack/defer), memory
+  lifecycle (remember/dedup/lookup/forget), complex-bugs (deserialization /
+  type-juggling / mass-assignment / prototype-pollution / SSRF / SSTI / XXE),
+  route-confusion (dynamic dispatch/method/include/batch), universal-taint
+  (PHP command-injection + sanitizer suppression + language detection).
+- Fixed an off-by-one in `detectBatchForwarding`: a single-line
+  `foreach (...) { forward(...); }` was missed because the body scan skipped the
+  `foreach` line itself.
+
+## [2.4.18] — 2026-09-14
+
+### Fixed — catalog placeholder installs (full audit)
+
+- 3 Go tools that had a placeholder install now install for real:
+  cloudfox / ligolo-ng (`go install …@latest`), gophish (`go build`).
+- 4 GUI/C2/versioned tools (havoc, ghidra, cutter, velociraptor) + burp-suite-mcp
+  are now flagged `installable: false` — bulk-install reports them as "manual
+  (install by hand)" instead of failing on a fake "download from github releases".
+- `ensureTool` / `ensure_tool` now return `action: manual` + the note for these
+  tools instead of attempting the placeholder command.
+
+## [2.4.17] — 2026-09-14
+
+### Added — auto-provision toolchains + non-interactive installs
+
+- Preflight now AUTO-PROVISIONS missing build toolchains (go, cargo, meson, ninja)
+  instead of only warning — `install-tools` installs them via apt before the
+  mass install, so `go install` / `meson build` / `ninja` no longer fail.
+- All install commands now run with stdin closed (non-interactive) — prompts like
+  metasploit's "Overwrite? (y/N)" can no longer hang the run; `yes |` is piped
+  where an interactive confirm is required.
+
+## [2.4.16] — 2026-09-14
+
+### Added — auto-fallback install (toolchain provision + pip fallback)
+
+- `go install` / `cargo install` tools now auto-provision the missing toolchain
+  (`apt-get install golang-go` / `cargo`) before installing — no more
+  "go: not found" / "cargo: not found" failures (provisioned once per run).
+- `pip install --break-system-packages` now falls back to `pip install --user`
+  when the flag is unsupported (pip < 23.0 on older distros) — no more
+  "no such option: --break-system-packages".
+
+## [2.4.15] — 2026-09-14
+
+### Fixed — detection → verification loop now unmissable
+
+- `run_engagement` / `run_autonomous` now return `status: DETECTED` (was
+  `COMPLETE`), signalling that verification is the NEXT mandatory step instead
+  of implying the job is done with unverified hypotheses.
+- System prompt adds a hard rule: after detection you MUST `strike_verify` /
+  `verify_file_read` / `drive_devtools` each finding before `generate_report`.
+- New generic `verify-phase` playbook (read_playbook) — verdict recipe
+  (confirmed/false-positive/unconfirmed/blocked), tool mapping, no-babysitting
+  rules — so any engagement can load the verify doctrine on demand.
+
+## [2.4.14] — 2026-09-14
+
+### Added — mandatory devtools-MCP precision directive
+
+- System prompt now mandates: when a lead needs DOM/JS precision (DOM-XSS sink
+  execution, AJAX interception, JS runtime errors, redirect chains, SSO/token
+  flow), the LLM MUST call `drive_devtools` (spawns chrome-devtools-mcp + drives
+  a real headless browser) instead of eyeballing static HTML — the precision +
+  consistency layer. Includes a `check_mcp` preflight step.
+
+## [2.4.13] — 2026-09-14
+
+### Improved — live install progress
+
+- `install-tools` streams a real-time `[done/total]` counter per tool completion,
+  so a long bulk install is visibly progressing instead of appearing stuck.
+
+## [2.4.12] — 2026-09-14
+
+### Improved — install-tools failure diagnostics
+
+- `install-tools` now reports the REASON for every failed tool (last stderr/stdout
+  lines) instead of a bare `Failed: …` list.
+- Preflight reports missing toolchains (go/java/python/cargo/meson/ninja/make/gcc)
+  + the `apt install` line to fix them before the mass install.
+- Per-tool install budget raised 120s → 300s so cold-cache `go install` /
+  `pip install` of large tools (nuclei, amass, httpx, metasploit, …) no longer
+  time out.
+
+## [2.4.11] — 2026-09-14
+
+### Fixed — bulk-install no longer pollutes the caller's cwd
+
+- `install-tools` / `install_all_tools` now run every install command in a fixed
+  tools directory (`~/.blitzstrike/tools`, override `BLITZSTRIKE_TOOLS_DIR`), so
+  `git clone`-style tools (massdns, phpggc, radare2, testssl.sh, …) no longer
+  land in whatever directory you happened to run from.
+- Added those cloned tool dirs to `.gitignore`.
+- `blitzstrike install` now prints a hint pointing to `blitzstrike install-tools`
+  for the full 140-tool catalog.
+
+## [2.4.10] — 2026-09-14
+
+### Added — auto-install external MCP servers to every agent
+
+- chrome-devtools-mcp is now flagged `installable` in the catalog: `install-tools`
+  / `install_all_tools` provision it (npm i -g) instead of skipping all MCP
+  servers. burp-suite-mcp stays skipped (GUI/daemon — build + run manually).
+- `blitzstrike install` (register to every agent) now also auto-installs
+  chrome-devtools-mcp so all agents can drive a real browser immediately.
+
+### Fixed — doctor git stderr leak
+
+- `validateRelease` suppresses git/npm stderr, so `blitzstrike doctor` no longer
+  prints a stray `fatal: not a git repository` / `No tags can describe` line when
+  run outside a git checkout.
+
+## [2.4.9] — 2026-09-14
+
+### Added — evidence-first enforcement (findings are never born empty)
+
+- `makeFinding` + `finding_create` now accept `evidence` at creation — a finding
+  can carry its observed artifact (headers/URL/response) the moment it is
+  created, instead of relying on a separate attach call that gets skipped.
+- `finding_create` warns when a finding is created with no evidence.
+- `reportMarkdown` now flags evidence-less findings with an explicit
+  "Evidence-first violation" block (ids listed) — detection without proof is
+  surfaced instead of silently shipped.
+
+## [2.4.8] — 2026-09-14
+
+### Added — MCP integration health checks
+
+- New `checkMcpServers` (`src/mcp-status.ts`): verifies external MCP
+  integrations are actually present/connected — chrome-devtools-mcp (stdio:
+  binary or npx auto-install) and burp-suite-mcp (SSE: alive only when Burp is
+  running with the extension loaded).
+- `blitzstrike doctor` now reports both MCP servers with availability + fix hints.
+- New MCP tool `check_mcp` to probe MCP integration status on demand.
+
+## [2.4.7] — 2026-09-14
+
+### Added — deterministic arbitrary-file-read verification (no bare hypotheses)
+
+- New `verifyFileRead` (STRIKE): verifies a CWE-22 / path-traversal / LFI
+  hypothesis by reading a marker file (`/etc/passwd`) vs a non-existent
+  negative-control path, then comparing. Confirmed only when the marker returns
+  file content and the control does not — never from reasoning alone.
+- Supports raw POST body (`bodyRaw`) and named query/body param injection.
+- New MCP tool `verify_file_read` + chain hints `verify_file_read` /
+  `path_traversal` / `lfi` / `file_read` route to it; `strike_verify` now
+  auto-routes file-read findings to the file-read verifier.
+- A gated endpoint (e.g. identical 500 auth wall) now returns an explicit
+  `unconfirmed` verdict with reason instead of leaving a bare hypothesis.
+
+## [2.4.6] — 2026-09-14
+
+### Added — chrome-devtools-mcp auto-install (npx zero-install fallback)
+
+- `drive_devtools` / `browser_devtools` now auto-fetch chrome-devtools-mcp via
+  `npx -y chrome-devtools-mcp@latest` when no global binary is present — no
+  manual `npm i -g` required. (burp-suite-mcp still can't be auto-installed:
+  it's a Java/GUI app that must be built + run manually.)
+
+## [2.4.5] — 2026-09-14
+
+### Added — responsible-disclosure header (X-HackerOne-Research)
+
+- New `H1_USERNAME` env var: when set, every outbound security-testing request
+  (STRIKE verification, live recon, active scan, advanced checks, leak-source
+  fetch) carries `X-HackerOne-Research: <username>` so targets/triagers can
+  identify the researcher.
+- `src/http.ts` central helper (`researchHeaders` / `withResearchHeaders` /
+  `h1Username`); injected across strike, live-recon, active, orchestrator, server.
+- `blitzstrike doctor` now reports the HackerOne research-header status.
+
 ## [2.4.4] — 2026-09-14
 
 ### Added — automated publishing via npm trusted publishing (OIDC)
