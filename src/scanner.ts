@@ -21,7 +21,6 @@ export const SINKS: Record<string, string> = {
   "eval(": "RCE (code execution)",
   "assert(": "RCE (code execution, PHP <8)",
   "system(": "RCE (command execution)",
-  "exec(": "RCE (command execution)",
   "shell_exec(": "RCE (command execution)",
   "passthru(": "RCE (command execution)",
   "proc_open(": "RCE (command execution)",
@@ -60,6 +59,31 @@ export const SINKS: Record<string, string> = {
   "printf(": "XSS (reflected output)",
   "header(": "Open redirect / header injection",
   "wp_redirect(": "Open redirect",
+  // --- Node.js ---
+  "child_process.exec(": "RCE (command execution)",
+  "child_process.spawn(": "RCE (command execution)",
+  "child_process.execSync(": "RCE (command execution)",
+  "child_process.execFile(": "RCE (command execution)",
+  "sqlx::query(&format!": "SQL injection (runtime string-built query)",
+  "sqlx::query_as(&format!": "SQL injection (runtime string-built query)",
+  "sequelize.query(": "SQL injection (raw query)",
+  "knex.raw(": "SQL injection (raw query)",
+  // --- Python ---
+  "subprocess.run(": "RCE (command execution)",
+  "subprocess.call(": "RCE (command execution)",
+  "subprocess.Popen(": "RCE (command execution)",
+  "subprocess.check_output(": "RCE (command execution)",
+  "os.system(": "RCE (command execution)",
+  "os.popen(": "RCE (command execution)",
+  "requests.get(": "SSRF (unvalidated URL fetch)",
+  "requests.post(": "SSRF (unvalidated URL fetch)",
+  "requests.put(": "SSRF (unvalidated URL fetch)",
+  "urllib.request.urlopen(": "SSRF (unvalidated URL fetch)",
+  "urllib.urlopen(": "SSRF (unvalidated URL fetch)",
+  "httpx.get(": "SSRF (unvalidated URL fetch)",
+  "render_template_string(": "SSTI (server-side template injection)",
+  "jinja2.Template(": "SSTI (server-side template injection)",
+  "Template(": "SSTI (server-side template injection)",
 };
 
 export const AUTH_GATES = [
@@ -91,15 +115,43 @@ const TARGET_EXTS = new Set([
   ".cjs",
   ".ts",
   ".tsx",
+  // more languages
+  ".rb",
+  ".go",
+  ".rs",
+  ".cs",
+  ".c",
+  ".h",
+  ".cpp",
+  ".cc",
+  ".hpp",
+  ".sh",
+  ".bash",
+  ".sol",
+  // config / manifests (cache_deception, dependency_confusion, oauth/grpc, etc.)
+  ".conf",
+  ".config",
+  ".nginx",
+  ".json",
+  ".yaml",
+  ".yml",
+  ".toml",
+  ".xml",
+  ".properties",
+  ".gradle",
+  ".proto",
+  ".env",
+  ".txt",
 ]);
 
 const SKIP_PARTS = new Set(["vendor", "node_modules", ".git", "tests", "test"]);
+// Only genuinely-third-party dirs are skipped. `lib` / `libraries` / `libs` are
+// NOT skipped: many plugins (a migration plugin, a file-manager's bundled library)
+// keep their OWN code under `lib/`, and skipping it silently MISSES the whole
+// plugin (a false-negative worse than any false positive).
 const LIB_PARTS = new Set([
-  "lib",
-  "libraries",
   "third-party",
   "third_party",
-  "libs",
 ]);
 
 function escapeRegExp(s: string): string {
@@ -118,7 +170,7 @@ function lineno(text: string, pos: number): number {
  *  preserving character positions and line numbers so `lineno` stays accurate.
  *  A sink token inside a comment or string is not a real function call, so the
  *  breadth scanner must not report it. */
-function stripComments(text: string): string {
+export function stripComments(text: string): string {
   const out = text.split("");
   const n = text.length;
   let i = 0;
@@ -142,6 +194,57 @@ function stripComments(text: string): string {
       }
       if (i < n) out[i] = " "; // closing quote
       i++;
+      continue;
+    }
+    if ((c === "/" && nc === "/") || c === "#") {
+      while (i < n && text[i] !== "\n") {
+        out[i] = " ";
+        i++;
+      }
+      continue;
+    }
+    if (c === "/" && nc === "*") {
+      out[i] = " ";
+      out[i + 1] = " ";
+      i += 2;
+      while (i < n && !(text[i] === "*" && text[i + 1] === "/")) {
+        if (text[i] !== "\n") out[i] = " ";
+        i++;
+      }
+      if (i < n) {
+        out[i] = " ";
+        out[i + 1] = " ";
+        i += 2;
+      }
+      continue;
+    }
+    i++;
+  }
+  return out.join("");
+}
+
+/** Strip comments but PRESERVE string literals. Used for matching endpoint
+ *  hooks (`wp_ajax_nopriv_*`, `register_rest_route`, …) that always appear
+ *  inside a quoted string — the string-blanking variant would erase them. */
+export function stripCommentsOnly(text: string): string {
+  const out = text.split("");
+  const n = text.length;
+  let i = 0;
+  while (i < n) {
+    const c = text[i];
+    const nc = text[i + 1];
+    if (c === "'" || c === '"') {
+      const q = c;
+      i++;
+      while (i < n && text[i] !== q) {
+        if (text[i] === "\\") {
+          i++;
+          if (i < n) i++;
+          continue;
+        }
+        i++;
+      }
+      if (i < n) i++; // closing quote
       continue;
     }
     if ((c === "/" && nc === "/") || c === "#") {
@@ -252,13 +355,17 @@ export function scanFile(path: string): ScanResult {
   // Match sinks/hooks against comment-stripped source so a sink token inside a
   // comment (e.g. "// use extract($_REQUEST)") is not reported as a hit.
   const code = stripComments(text);
+  // Endpoint hooks live INSIDE string literals (add_action('wp_ajax_nopriv_…'),
+  // register_rest_route('…')), so they must be matched against a comment-only
+  // strip that PRESERVES strings — the string-blanking strip would erase them.
+  const codeKeepStrings = stripCommentsOnly(text);
 
   const endpoints: EndpointHit[] = [];
   for (const hook of NOPRIV_HOOKS) {
     const re = new RegExp(escapeRegExp(hook), "g");
     let m: RegExpExecArray | null;
-    while ((m = re.exec(code)) !== null) {
-      endpoints.push({ hook, line: lineno(code, m.index) });
+    while ((m = re.exec(codeKeepStrings)) !== null) {
+      endpoints.push({ hook, line: lineno(codeKeepStrings, m.index) });
     }
   }
 

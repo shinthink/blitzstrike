@@ -5,13 +5,82 @@
  * breadth layer: broad coverage (many tools + many playbooks) without the
  * harness bloat, because MCP tools already provide the execution surface.
  */
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync, readdirSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { homedir } from "node:os";
 import { spawnSync, spawn } from "node:child_process";
 import { manualForTool } from "./manuals.js";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
+
+/** Fixed directory where `git clone`-style installs land (so a bulk install
+ * never pollutes the caller's cwd). Relative clone/build commands run here. */
+const TOOLS_DIR = process.env.BLITZSTRIKE_TOOLS_DIR ?? join(homedir(), ".blitzstrike", "tools");
+
+/** Toolchains that some install commands implicitly require, with the one-shot
+ * command that provisions them when missing (auto-fallback, not a hard error). */
+const TOOLCHAIN_INSTALL: Record<string, string> = {
+  go: "apt-get install -y golang-go",
+  cargo: "apt-get install -y cargo",
+  meson: "apt-get install -y meson",
+  ninja: "apt-get install -y ninja-build",
+};
+
+/** Auto-provision every missing build toolchain (go/cargo/meson/ninja) so
+ * `go install` / `cargo install` / `meson build` / `ninja` don't fail with
+ * "not found". Returns the list that were missing and got provisioned. */
+export function provisionMissingToolchains(): string[] {
+  const missing: string[] = [];
+  for (const [tc, inst] of Object.entries(TOOLCHAIN_INSTALL)) {
+    if (hasCommand(tc)) continue;
+    missing.push(tc);
+    spawnSync(inst, { shell: true, timeout: 300000, stdio: ["ignore", "pipe", "pipe"] });
+  }
+  return missing;
+}
+
+function hasCommand(cmd: string): boolean {
+  // `command -v` is a shell builtin; pass cmd as a positional ($1) so it is never
+  // interpolated into the shell text — even a metacharacter-laden cmd stays literal.
+  return spawnSync("sh", ["-c", 'command -v "$1" >/dev/null 2>&1', "sh", cmd], { timeout: 8000 }).status === 0;
+}
+
+/** Detect which toolchain an install command implicitly needs from its prefix. */
+function requiredToolchain(cmd: string): string | null {
+  if (/^\s*go\s+install\b/.test(cmd)) return "go";
+  if (/^\s*cargo\s+(install|build)\b/.test(cmd)) return "cargo";
+  return null;
+}
+
+/** Provision a missing toolchain (apt), so `go install`/`cargo install` succeed
+ * instead of failing with "go: not found". Provisioned once per process. */
+const _provisioned = new Set<string>();
+function provisionToolchain(cmd: string): void {
+  const tc = requiredToolchain(cmd);
+  if (!tc || hasCommand(tc) || _provisioned.has(tc)) return;
+  _provisioned.add(tc);
+  const inst = TOOLCHAIN_INSTALL[tc];
+  if (!inst) return;
+  spawnSync(inst, { shell: true, timeout: 300000 });
+}
+
+/** Run one install command with two automatic fallbacks:
+ *  1. provision the required toolchain (go/cargo) if it is missing;
+ *  2. for pip, retry with `--user` when `--break-system-packages` is unsupported
+ *     (pip < 23.0 on older distros). */
+function runInstallCommand(cmd: string, timeoutMs: number): { status: number | null; output: string } {
+  provisionToolchain(cmd);
+  let r = spawnSync(cmd, { shell: true, timeout: timeoutMs, cwd: TOOLS_DIR, stdio: ["ignore", "pipe", "pipe"] });
+  let output = `${r.stdout?.toString() ?? ""}${r.stderr?.toString() ?? ""}`;
+  if (r.status !== 0 && /--break-system-packages/.test(cmd)) {
+    const alt = cmd.replace(/--break-system-packages/g, "--user");
+    const r2 = spawnSync(alt, { shell: true, timeout: timeoutMs, cwd: TOOLS_DIR, stdio: ["ignore", "pipe", "pipe"] });
+    if (r2.status === 0) r = r2;
+    output = `${output}\n${r2.stdout?.toString() ?? ""}${r2.stderr?.toString() ?? ""}`;
+  }
+  return { status: r.status, output };
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -40,6 +109,12 @@ export interface ToolEntry {
   homepage?: string;
   /** MCP-server connection string (npx/SSE/stdio) when this tool is an MCP server, not a one-shot CLI. */
   serve?: string;
+  /** When false: this tool needs MANUAL setup (GUI app, C2 framework, versioned
+   * binary) — bulk-install reports it as skipped, not failed. true for one-shot
+   * installable MCP servers (chrome-devtools-mcp); absent = default installable. */
+  installable?: boolean;
+  /** Why a tool is manual (surfaced in install-tools skip report). */
+  note?: string;
 }
 
 export interface SkillEntry {
@@ -184,6 +259,11 @@ export function ensureTool(name: string): Record<string, unknown> {
     return { found: false, query: name, suggestions: tools.slice(0, 5).map((x) => x.name) };
   }
 
+  // Manual tool (GUI/C2/versioned) — never auto-install, report the note.
+  if (t.installable === false) {
+    return { name: t.name, installed: false, action: "manual", note: t.note ?? "manual install (GUI/C2/versioned — install by hand)" };
+  }
+
   // check installed: the reliable "not installed" signal is exit 127
   // (command not found from the shell). Any other exit code means the binary
   // EXISTS and RAN — even if it returned 1/2/255 on a help/version flag.
@@ -198,14 +278,15 @@ export function ensureTool(name: string): Record<string, unknown> {
   if (!cmd) {
     return { name: t.name, installed: false, action: "none", note: `no install command for ${platform}` };
   }
-  const r = spawnSync(cmd, { shell: true, timeout: 120000 });
-  const ok = r.status === 0;
+  mkdirSync(TOOLS_DIR, { recursive: true });
+  const { status, output } = runInstallCommand(cmd, 300000);
+  const ok = status === 0;
   return {
     name: t.name,
     installed: ok,
     action: "install",
     command: cmd,
-    output: (r.stdout?.toString() ?? "").slice(-400) || (r.stderr?.toString() ?? "").slice(-400),
+    output: output.slice(-400),
   };
 }
 
@@ -286,7 +367,9 @@ export function runCatalogTool(hint: string, target: string, extraFlags: string[
 
   const args = buildCatalogCommand(t, target, extraFlags);
 
-  const r = spawnSync(args.join(" "), { shell: true, timeout: 90000, maxBuffer: 1024 * 1024 });
+  // Run the tool DIRECTLY (no shell) so the target is a literal argv element —
+  // a malicious target (`example.com; rm -rf /`) must NOT be interpreted by a shell.
+  const r = spawnSync(args[0], args.slice(1), { timeout: 90000, maxBuffer: 1024 * 1024 });
   const out = (r.stdout?.toString() ?? "") || (r.stderr?.toString() ?? "");
   return {
     found: true,
@@ -301,11 +384,15 @@ export function runCatalogTool(hint: string, target: string, extraFlags: string[
 /** Async variant of ensureTool — checks + installs a tool without blocking the
  * event loop, so bulk installs can run in parallel. The shell returns 127 for
  * "command not found" (the reliable not-installed signal). */
-export function ensureToolAsync(name: string, timeoutMs = 120000): Promise<Record<string, unknown>> {
+export function ensureToolAsync(name: string, timeoutMs = 300000): Promise<Record<string, unknown>> {
   return new Promise((resolve) => {
     const t = loadTools().find((x) => x.name.toLowerCase() === name.toLowerCase());
     if (!t) {
       resolve({ found: false, query: name });
+      return;
+    }
+    if (t.installable === false) {
+      resolve({ name: t.name, installed: false, action: "manual", note: t.note ?? "manual install (GUI/C2/versioned — install by hand)" });
       return;
     }
     const check = spawn(t.check_installed.command, { shell: true, timeout: 15000 });
@@ -322,7 +409,9 @@ export function ensureToolAsync(name: string, timeoutMs = 120000): Promise<Recor
         resolve({ name: t.name, installed: false, action: "none", note: "no install command for this platform" });
         return;
       }
-      const inst = spawn(cmd, { shell: true, timeout: timeoutMs });
+      mkdirSync(TOOLS_DIR, { recursive: true });
+      provisionToolchain(cmd);
+      const inst = spawn(cmd, { shell: true, timeout: timeoutMs, cwd: TOOLS_DIR, stdio: ["ignore", "pipe", "pipe"] });
       let out = "";
       inst.stdout?.on("data", (d: Buffer) => {
         out += d.toString();
@@ -332,20 +421,40 @@ export function ensureToolAsync(name: string, timeoutMs = 120000): Promise<Recor
       });
       inst.on("error", (e) => resolve({ name: t.name, installed: false, action: "install", error: String(e) }));
       inst.on("close", (icode) => {
-        resolve({ name: t.name, installed: icode === 0, action: "install", command: cmd, output: out.slice(-400) });
+        if (icode === 0) {
+          resolve({ name: t.name, installed: true, action: "install", command: cmd, output: out.slice(-400) });
+          return;
+        }
+        // pip fallback: `--break-system-packages` unsupported on pip < 23 -> retry `--user`.
+        if (/--break-system-packages/.test(cmd)) {
+          const alt = cmd.replace(/--break-system-packages/g, "--user");
+          const r2 = spawn(alt, { shell: true, timeout: timeoutMs, cwd: TOOLS_DIR, stdio: ["ignore", "pipe", "pipe"] });
+          let out2 = "";
+          r2.stdout?.on("data", (d: Buffer) => {
+            out2 += d.toString();
+          });
+          r2.stderr?.on("data", (d: Buffer) => {
+            out2 += d.toString();
+          });
+          r2.on("error", (e) => resolve({ name: t.name, installed: false, action: "install", error: String(e) }));
+          r2.on("close", (i2) => resolve({ name: t.name, installed: i2 === 0, action: "install", command: alt, output: out2.slice(-400) }));
+          return;
+        }
+        resolve({ name: t.name, installed: false, action: "install", command: cmd, output: out.slice(-400) });
       });
     });
   });
 }
 
-/** Install every non-MCP-server catalog tool in parallel (bounded concurrency).
- * MCP servers are reported but not installed (they are connected, not run).
- * Returns a summary + per-tool result. */
+/** Install every catalog tool (including one-shot-installable MCP servers) in
+ * parallel (bounded concurrency). Tools flagged `installable: false` (GUI apps,
+ * C2 frameworks, versioned binaries) are reported but not installed — they need
+ * manual setup. Returns a summary + per-tool result. */
 export async function installAllTools(opts: { concurrency?: number; category?: string; onProgress?: (name: string, ok: boolean) => void } = {}): Promise<Record<string, unknown>> {
   const tools = loadTools();
-  const mcp = tools.filter((t) => t.category === "mcp-server").map((t) => t.name);
+  const skippedManual = tools.filter((t) => t.installable === false).map((t) => t.name);
   const cat = opts.category?.toLowerCase();
-  const targets = tools.filter((t) => t.category !== "mcp-server" && (!cat || t.category === cat));
+  const targets = tools.filter((t) => t.installable !== false && (!cat || t.category === cat));
   const concurrency = Math.max(1, opts.concurrency ?? 4);
 
   const results: Array<Record<string, unknown>> = [];
@@ -369,7 +478,7 @@ export async function installAllTools(opts: { concurrency?: number; category?: s
     installed,
     already_installed: already,
     failed,
-    skipped_mcp_servers: mcp,
+    skipped_manual: skippedManual,
     results,
   };
 }

@@ -1,0 +1,403 @@
+{
+  "$schema": "blitzstrike-variants-v1",
+  "version": "1.0.0",
+  "_comment": "Variant corpus — concrete real-world code shapes per detector class. Each variant is a shape that MUST fire its class's detector. The verification harness sweeps every variant and reports per-class coverage, so a detector that misses a shape surfaces as a false negative. Shapes are generic (language-idiomatic), with no vendor/product framing.",
+  "variants": [
+    {
+      "class": "sql_injection",
+      "code": "$wpdb->query(\"DELETE FROM t WHERE id=\" . $row['id']);",
+      "note": "raw string concat into query"
+    },
+    {
+      "class": "sql_injection",
+      "code": "$r = $db->query(\"SELECT * FROM users WHERE name='\" . $name . \"'\");",
+      "note": "interpolated SELECT"
+    },
+    {
+      "class": "sql_injection",
+      "code": "mysqli_query($c, \"UPDATE t SET x='\" . $x . \"' WHERE id=\" . $id);",
+      "note": "mysqli raw concat"
+    },
+    {
+      "class": "sql_injection",
+      "code": "knex('users').whereRaw('id = ' + userId)",
+      "note": "ORM raw clause"
+    },
+    {
+      "class": "ssrf",
+      "code": "$ch = curl_init($_GET['url']); curl_exec($ch);",
+      "note": "curl to request URL"
+    },
+    {
+      "class": "ssrf",
+      "code": "$r = file_get_contents($_POST['target']);",
+      "note": "file_get_contents request URL"
+    },
+    {
+      "class": "ssrf",
+      "code": "requests.get(request.args.get('url'))",
+      "note": "python requests request URL"
+    },
+    {
+      "class": "ssrf",
+      "code": "axios.get(req.body.url)",
+      "note": "node axios request URL"
+    },
+    {
+      "class": "ssti",
+      "code": "return jinja2.from_string($_GET['tpl']).render()",
+      "note": "jinja from_string request input"
+    },
+    {
+      "class": "ssti",
+      "code": "$twig->render($_GET['tpl']);",
+      "note": "twig render request input"
+    },
+    {
+      "class": "ssti",
+      "code": "return render_template_string(request.args['tpl'])",
+      "note": "flask render_template_string request input"
+    },
+    {
+      "class": "ssti",
+      "code": "new Template($_GET['template'])",
+      "note": "freemarker template request input"
+    },
+    {
+      "class": "xxe",
+      "code": "$xml = $_POST['xml'];\n$x = simplexml_load_string($xml, 'SimpleXMLElement', LIBXML_NOENT);",
+      "note": "simplexml with entity substitution enabled"
+    },
+    {
+      "class": "xxe",
+      "code": "$xml = $_POST['xml'];\n$x = new SimpleXMLElement($xml, LIBXML_NOENT);",
+      "note": "SimpleXMLElement with NOENT"
+    },
+    {
+      "class": "xxe",
+      "code": "DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(request.getParameter('xml'))",
+      "note": "java DOM parse without disabling entities"
+    },
+    {
+      "class": "deserialization",
+      "code": "$o = unserialize($_COOKIE['data']);\nclass A { function __destruct() { system($this->c); } }",
+      "note": "unserialize cookie"
+    },
+    {
+      "class": "deserialization",
+      "code": "obj = pickle.loads(request.data)",
+      "note": "pickle.loads request data"
+    },
+    {
+      "class": "deserialization",
+      "code": "data = yaml.load(request.data)",
+      "note": "unsafe yaml.load"
+    },
+    {
+      "class": "deserialization",
+      "code": "new ObjectInputStream(request.getInputStream()).readObject()",
+      "note": "java readObject"
+    },
+    {
+      "class": "type_juggling",
+      "code": "if ($_POST['token'] == md5($secret)) { login(); }",
+      "note": "loose compare vs md5"
+    },
+    {
+      "class": "type_juggling",
+      "code": "if ($_GET['pwd'] != $stored_hash) { die('no'); }",
+      "note": "loose compare vs hash"
+    },
+    {
+      "class": "type_juggling",
+      "code": "if (strcmp($_POST['pwd'], $hash) == 0) { login(); }",
+      "note": "strcmp array coercion"
+    },
+    {
+      "class": "mass_assignment",
+      "code": "extract($_REQUEST);",
+      "note": "extract request"
+    },
+    {
+      "class": "mass_assignment",
+      "code": "parse_str(file_get_contents('php://input'), $data);",
+      "note": "parse_str raw body"
+    },
+    {
+      "class": "mass_assignment",
+      "code": "foreach ($_POST as $k => $v) { $this->$k = $v; }",
+      "note": "dynamic field binding"
+    },
+    {
+      "class": "mass_assignment",
+      "code": "User.create(req.body)",
+      "note": "model create without allowlist"
+    },
+    {
+      "class": "prototype_pollution",
+      "code": "_.merge(target, req.body)",
+      "note": "lodash merge request body"
+    },
+    {
+      "class": "prototype_pollution",
+      "code": "Object.assign(obj, req.body)",
+      "note": "Object.assign request body"
+    },
+    {
+      "class": "prototype_pollution",
+      "code": "$.extend(true, {}, req.body)",
+      "note": "jquery deep extend request body"
+    },
+    {
+      "class": "crlf_injection",
+      "code": "header(\"Location: \" . $_GET['url']);",
+      "note": "header location request input"
+    },
+    {
+      "class": "crlf_injection",
+      "code": "setcookie('name', $_GET['v']);",
+      "note": "setcookie request value"
+    },
+    {
+      "class": "crlf_injection",
+      "code": "res.setHeader('Location', req.query.url)",
+      "note": "node setHeader request input"
+    },
+    {
+      "class": "path_confusion",
+      "code": "include($_GET['page']);",
+      "note": "include request path"
+    },
+    {
+      "class": "path_confusion",
+      "code": "$c = file_get_contents($_GET['file']);",
+      "note": "file_get_contents request path"
+    },
+    {
+      "class": "path_confusion",
+      "code": "readFile(path.join(base, req.query.file))",
+      "note": "node readFile joined path"
+    },
+    {
+      "class": "path_confusion",
+      "code": "new File(request.getParameter('f'))",
+      "note": "java File request param"
+    },
+    {
+      "class": "wrong_sanitizer",
+      "code": "$x = htmlspecialchars($_GET['q']); $db->query(\"SELECT * FROM t WHERE c='\" . $x . \"'\");",
+      "note": "HTML sanitizer into SQL"
+    },
+    {
+      "class": "wrong_sanitizer",
+      "code": "$x = strip_tags($_GET['q']); mysqli_query($c, \"SELECT * FROM t WHERE c='\" . $x . \"'\");",
+      "note": "strip_tags into SQL"
+    },
+    {
+      "class": "wrong_sanitizer",
+      "code": "$x = esc_html($_GET['q']); $db->query(\"SELECT * FROM t WHERE c='\" . $x . \"'\");",
+      "note": "addslashes into SQL"
+    },
+    {
+      "class": "missing_authz",
+      "code": "add_action('wp_ajax_nopriv_export', 'h'); function h() { update_option('export', $_POST['x']); }",
+      "note": "nopriv handler no capability check"
+    },
+    {
+      "class": "missing_authz",
+      "code": "app.delete('/admin/user/:id', (req, res) => { User.delete(req.params.id); })",
+      "note": "admin route no auth"
+    },
+    {
+      "class": "missing_nonce",
+      "code": "add_action('wp_ajax_del_order', 'h'); function h() { wp_delete_post((int)$_POST['id']); }",
+      "note": "ajax handler state change no nonce"
+    },
+    {
+      "class": "missing_nonce",
+      "code": "add_action('wp_ajax_del', 'h'); function h() { wp_delete_post((int)$_POST['id']); }",
+      "note": "ajax no nonce check"
+    },
+    {
+      "class": "missing_nonce",
+      "code": "add_action('wp_ajax_save', 'h'); function h() { wp_update_post($_POST); }",
+      "note": "ajax handler state change no nonce"
+    },
+    {
+      "class": "missing_nonce",
+      "code": "add_action('wp_ajax_save', 'h'); function h() { update_option('x', $_POST['x']); }",
+      "note": "ajax save no nonce"
+    },
+    {
+      "class": "file_upload",
+      "code": "move_uploaded_file($_FILES['f']['tmp_name'], '/uploads/' . $_FILES['f']['name']);",
+      "note": "move_uploaded_file raw name"
+    },
+    {
+      "class": "file_upload",
+      "code": "wp_upload_bits($_FILES['f']['name'], null, file_get_contents($_FILES['f']['tmp_name']));",
+      "note": "wp_upload_bits raw name"
+    },
+    {
+      "class": "file_upload",
+      "code": "file.save(path.join(uploadDir, req.files.f.name))",
+      "note": "node multer raw name"
+    },
+    {
+      "class": "file_upload",
+      "code": "move_uploaded_file($_FILES['f']['tmp_name'], '/uploads/' . basename($_FILES['f']['name']));",
+      "note": "basename only, no ext whitelist"
+    },
+    {
+      "class": "priv_esc",
+      "code": "$u->set_role($_POST['role']);",
+      "note": "set_role request role"
+    },
+    {
+      "class": "priv_esc",
+      "code": "update_user_meta($id, 'wp_capabilities', $_POST['caps']);",
+      "note": "user meta capabilities request"
+    },
+    {
+      "class": "priv_esc",
+      "code": "$u->add_role($_GET['role']);",
+      "note": "add_role request role"
+    },
+    {
+      "class": "priv_esc",
+      "code": "db.query(\"UPDATE users SET role='\" + $_POST['role'] + \"' WHERE id=\" + $_POST['id'])",
+      "note": "raw role update"
+    },
+    {
+      "class": "hardcoded_secret",
+      "code": "$db_password = \"EXAMPLE_DB_PASSWORD_123\";",
+      "note": "db password literal"
+    },
+    {
+      "class": "hardcoded_secret",
+      "code": "const apiKey = \"EXAMPLE_API_KEY_123456789\";",
+      "note": "api key literal"
+    },
+    {
+      "class": "hardcoded_secret",
+      "code": "$aws_access_key_id = \"EXAMPLE_ACCESS_KEY_123\";",
+      "note": "aws key literal"
+    },
+    {
+      "class": "hardcoded_secret",
+      "code": "JWT_SECRET = \"EXAMPLE_JWT_SIGNING_KEY_123\";",
+      "note": "jwt secret literal"
+    },
+    {
+      "class": "llm_injection",
+      "code": "openai.chat.completions.create(messages=[{'content': req.body.text}])",
+      "note": "openai completion request input"
+    },
+    {
+      "class": "llm_injection",
+      "code": "anthropic.messages.create(prompt=req.body.prompt)",
+      "note": "anthropic prompt request input"
+    },
+    {
+      "class": "llm_injection",
+      "code": "llm.invoke(req.body.query)",
+      "note": "langchain invoke request input"
+    },
+    {
+      "class": "graphql_exposure",
+      "code": "const server = new ApolloServer({ introspection: true });",
+      "note": "apollo introspection on"
+    },
+    {
+      "class": "graphql_exposure",
+      "code": "const server = new ApolloServer({ playground: true });",
+      "note": "apollo playground on"
+    },
+    {
+      "class": "graphql_exposure",
+      "code": "graphqlHTTP({ schema, graphiql: true })",
+      "note": "express-graphql graphiql on"
+    },
+    {
+      "class": "oauth_misconfig",
+      "code": "const redirect_uri = req.query.redirect_uri;",
+      "note": "redirect_uri from query"
+    },
+    {
+      "class": "oauth_misconfig",
+      "code": "$redirect_uri = $_GET['redirect_uri'];",
+      "note": "redirect_uri from request"
+    },
+    {
+      "class": "oauth_misconfig",
+      "code": "const returnUrl = request.params.get('returnUrl');",
+      "note": "returnUrl from request"
+    },
+    {
+      "class": "grpc_reflection",
+      "code": "server.add_service(grpc_reflection_v1alpha.ServerReflectionServicer(...))",
+      "note": "grpc reflection servicer"
+    },
+    {
+      "class": "grpc_reflection",
+      "code": "reflection.enable_server_reflection()",
+      "note": "reflection enabled"
+    },
+    {
+      "class": "grpc_reflection",
+      "code": "grpc_reflection_v1.ReflectionServicer.to_server(server)",
+      "note": "reflection to server"
+    },
+    {
+      "class": "dependency_confusion",
+      "code": "--extra-index-url https://pypi.org/simple",
+      "note": "public PyPI as extra-index (classic confusion vector)",
+      "file": "requirements.txt"
+    },
+    {
+      "class": "dependency_confusion",
+      "code": "\"@company/internal-lib\": \"^1.0.0\"",
+      "note": "scoped internal package, no private registry",
+      "file": "package.json"
+    },
+    {
+      "class": "ml_supply_chain",
+      "code": "model = torch.load(download_path)",
+      "note": "torch.load without weights_only"
+    },
+    {
+      "class": "ml_supply_chain",
+      "code": "clf = joblib.load(uploaded_file)",
+      "note": "joblib.load on an upload"
+    },
+    {
+      "class": "ml_supply_chain",
+      "code": "arr = np.load(path, allow_pickle=True)",
+      "note": "np.load allow_pickle=True"
+    },
+    {
+      "class": "rust_unsafe",
+      "code": "let x: &[u8] = std::mem::transmute(user_data);",
+      "note": "transmute attacker data",
+      "file": "lib.rs"
+    },
+    {
+      "class": "rust_unsafe",
+      "code": "let s = unsafe { std::slice::from_raw_parts(ptr, user_len) };",
+      "note": "from_raw_parts with caller length",
+      "file": "lib.rs"
+    },
+    {
+      "class": "rust_format_string",
+      "code": "println!(user_input);",
+      "note": "variable as format string",
+      "file": "main.rs"
+    },
+    {
+      "class": "rust_format_string",
+      "code": "let s = format!(user_msg);",
+      "note": "format! with variable",
+      "file": "main.rs"
+    }
+  ]
+}

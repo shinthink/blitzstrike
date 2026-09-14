@@ -46,3 +46,10 @@ Blitz Strike is version 1.0. This is where it's headed.
 - Everything wired, nothing decorative. A feature that isn't exercised in the
   flow is removed.
 - License-safe. MIT/Apache-2.0 only for vendored data.
+
+## Release pipeline
+
+Publishing is automated via npm **trusted publishing (OIDC)** — see
+`.github/workflows/release.yml`. No npm token or 2FA is required; push to `main`
+with a bumped `package.json` version and the workflow publishes directly with
+SLSA provenance.

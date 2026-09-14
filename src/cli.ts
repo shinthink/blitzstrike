@@ -10,9 +10,11 @@ import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { loadTools } from "./catalog.js";
+import { loadTools, ensureTool, provisionMissingToolchains } from "./catalog.js";
 import { validateRelease } from "./release.js";
 import { checkDependencies } from "./dependency.js";
+import { h1Username } from "./http.js";
+import { checkMcpServers } from "./mcp-status.js";
 
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 
@@ -24,7 +26,9 @@ export interface DoctorIssue {
 }
 
 function which(cmd: string): boolean {
-  return spawnSync(`command -v ${cmd}`, { shell: true }).status === 0;
+  // `command -v` is a shell builtin; pass cmd as a positional ($1) so it is never
+  // interpolated into the shell text — a metacharacter-laden cmd stays literal.
+  return spawnSync("sh", ["-c", 'command -v "$1" >/dev/null 2>&1', "sh", cmd]).status === 0;
 }
 
 function installedCount(): { total: number; installed: string[]; missing: string[] } {
@@ -33,7 +37,7 @@ function installedCount(): { total: number; installed: string[]; missing: string
   return { total: tools.length, installed, missing: tools.map((t) => t.name).filter((n) => !installed.includes(n)) };
 }
 
-export function runDoctor(): void {
+export async function runDoctor(): Promise<void> {
   console.log("BlitzStrike doctor — environment health check\n");
   const issues: DoctorIssue[] = [];
 
@@ -62,6 +66,14 @@ export function runDoctor(): void {
     fix: fofa ? undefined : "export FOFA_EMAIL=... && export FOFA_KEY=... (enables fofa_search)",
   });
 
+  const h1 = h1Username();
+  issues.push({
+    name: "HackerOne research header",
+    status: h1 ? "ok" : "warn",
+    detail: h1 ? `X-HackerOne-Research: ${h1}` : "H1_USERNAME not set",
+    fix: h1 ? undefined : "export H1_USERNAME=<your-hackerone-username> (adds X-HackerOne-Research to outbound requests)",
+  });
+
   const dataOk = existsSync(join(ROOT, "chains.json")) && existsSync(join(ROOT, "tools-catalog.json"));
   issues.push({
     name: "Data layers (chains + tools-catalog)",
@@ -87,6 +99,18 @@ export function runDoctor(): void {
     detail: deps.safe ? `${deps.total_dependencies} deps, no install scripts` : `${deps.install_scripts.length} install script(s) + ${deps.git_dependencies.length} git dep(s)`,
     fix: deps.safe ? undefined : "remove install-time scripts and git dependencies",
   });
+
+  // External MCP integrations — verify chrome-devtools-mcp + burp-suite-mcp
+  // are actually present/connected, not just catalogued.
+  const mcps = await checkMcpServers();
+  for (const m of mcps) {
+    issues.push({
+      name: `MCP: ${m.name}`,
+      status: m.available ? "ok" : "warn",
+      detail: m.detail,
+      fix: m.fix,
+    });
+  }
 
   const symbol = { ok: "OK  ", warn: "WARN", fail: "FAIL" } as const;
   for (const i of issues) {
@@ -344,6 +368,15 @@ export function runInstall(dryRun = false): void {
 
   console.log(`\nRegistered with ${ok}/${installed.length} agent(s).`);
   console.log("Restart your agent, then call `run_engagement` or any `blitzstrike` tool.");
+
+  // Auto-install the one-shot-installable external MCP server (chrome-devtools-mcp)
+  // so every agent can drive a real browser via Blitz Strike's drive_devtools
+  // immediately. burp-suite-mcp is a GUI app — cannot be auto-installed.
+  console.log("\nExternal MCP servers:");
+  const devtools = ensureTool("chrome-devtools-mcp");
+  console.log(`  ${devtools.installed ? "OK  " : "FAIL"} chrome-devtools-mcp  ${devtools.installed ? "installed (browser MCP ready for all agents)" : (devtools.command ?? "install failed")}`);
+  console.log(`  SKIP burp-suite-mcp  GUI/daemon — build manually (PortSwigger/mcp-server) + load in Burp (connect, not install)`);
+  console.log(`\nTo install ALL 140 catalog tools (139 CLI + chrome-devtools-mcp), run:  blitzstrike install-tools`);
 }
 
 /** Install every catalog tool at once (bulk provisioning). */
@@ -362,18 +395,48 @@ export async function runInstallTools(args: string[]): Promise<void> {
 
   if (dryRun) {
     const tools = loadTools();
-    const mcp = tools.filter((t) => t.category === "mcp-server");
-    const targets = tools.filter((t) => t.category !== "mcp-server" && (!category || t.category === category.toLowerCase()));
-    console.log(`Dry run — would attempt ${targets.length} tool(s); ${mcp.length} MCP server(s) skipped (connect, not install):`);
+    const manual = tools.filter((t) => t.installable === false);
+    const targets = tools.filter((t) => t.installable !== false && (!category || t.category === category.toLowerCase()));
+    console.log(`Dry run — would attempt ${targets.length} tool(s); ${manual.length} manual/skipped (GUI/C2/versioned — install by hand):`);
     for (const t of targets) console.log(`  ${t.category.padEnd(11)} ${t.name}`);
+    for (const t of manual) console.log(`  [skip] ${t.name} — ${t.note ?? "manual install"}`);
     return;
   }
 
   console.log(`Installing catalog tools${category ? ` (category: ${category})` : ""} — concurrency ${concurrency}\n`);
-  const r = await installAllTools({ category, concurrency, onProgress: (name, ok) => console.log(`  ${ok ? "OK  " : "FAIL"} ${name}`) });
+
+  // Preflight: auto-provision missing build toolchains (go/cargo/meson/ninja) so
+  // `go install` / `cargo install` / `meson build` / `ninja` don't fail with "not found".
+  const provisioned = provisionMissingToolchains();
+  if (provisioned.length) {
+    console.log(`Provisioned missing toolchains: ${provisioned.join(", ")}\n`);
+  }
+
+  // Live progress: [done/total] per completion, streamed in real time.
+  const tools = loadTools();
+  const totalTargets = tools.filter((t) => t.installable !== false && (!category || t.category === category.toLowerCase())).length;
+  let done = 0;
+  const r = await installAllTools({
+    category,
+    concurrency,
+    onProgress: (name, ok) => {
+      done += 1;
+      const bar = `[${String(done).padStart(3)}/${String(totalTargets).padStart(3)}]`;
+      process.stdout.write(`  ${bar} ${ok ? "OK  " : "FAIL"} ${name}\n`);
+    },
+  });
   console.log(`\nSummary: ${r.target_count} targets · ${r.installed} newly installed · ${r.already_installed} already present · ${r.failed} failed`);
-  const mcp = r.skipped_mcp_servers as string[];
-  if (mcp.length) console.log(`Skipped MCP servers (connect them): ${mcp.join(", ")}`);
-  const failedList = (r.results as Array<Record<string, unknown>>).filter((x) => x.installed !== true).map((x) => x.name);
-  if (failedList.length) console.log(`Failed: ${failedList.join(", ")}`);
+  const manual = r.skipped_manual as string[];
+  if (manual.length) console.log(`Skipped manual tools (GUI/C2/versioned — install by hand): ${manual.join(", ")}`);
+  const failedList = (r.results as Array<Record<string, unknown>>).filter((x) => x.installed !== true);
+  if (failedList.length) {
+    console.log(`\nFailed (${failedList.length}) — reason per tool:`);
+    for (const f of failedList) {
+      const reason = String(f.output ?? f.note ?? "unknown error")
+        .split("\n").map((s) => s.trim()).filter(Boolean).slice(-2).join(" | ").slice(-160);
+      console.log(`  - ${f.name}: ${reason}`);
+    }
+    console.log(`\nCommon causes: missing toolchain, pip/git network failures, or very heavy builds. ` +
+      `Re-run after installing the missing toolchain — failed tools are skipped, not fatal.`);
+  }
 }

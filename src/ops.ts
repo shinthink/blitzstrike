@@ -4,7 +4,7 @@
  * deterministic functions the LLM calls, instead of host-agent infrastructure.
  * Every function is pure logic: no LLM, no side effects except `worktree`.
  */
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 
 // ---------------------------------------------------------------------------
 // Delegation — decompose a task list into parallel-first batches (named deps).
@@ -71,12 +71,13 @@ export function worktree(action: "add" | "list" | "remove", path?: string, branc
     if (action === "add") {
       if (!path) return { action, ok: false, error: "path is required for worktree add" };
       const b = branch ?? `blitz-${Date.now().toString(36)}`;
-      const out = execSync(`git worktree add -b ${b} "${path}"`, { encoding: "utf8" }).trim();
+      // execFileSync (no shell) — branch + path are literal argv, not shell text.
+      const out = execFileSync("git", ["worktree", "add", "-b", b, path], { encoding: "utf8" }).trim();
       return { action, ok: true, branch: b, path, out };
     }
     if (action === "remove") {
       if (!path) return { action, ok: false, error: "path is required for worktree remove" };
-      execSync(`git worktree remove "${path}" --force`, { encoding: "utf8" });
+      execFileSync("git", ["worktree", "remove", path, "--force"], { encoding: "utf8" });
       return { action, ok: true, path };
     }
     return { action, ok: false, error: "unknown action (use add | list | remove)" };

@@ -8,6 +8,8 @@
  * leaked text, not just Werkzeug.
  */
 
+import { SECRET_FORMATS } from "./secrets.js";
+
 export interface SinkHit {
   type: string; // rce | ssti | sqli | ssrf | lfi | secret | credential | deserialization | xxe
   label: string; // human label, e.g. "eval()"
@@ -57,6 +59,8 @@ const PATTERNS: Pattern[] = [
   { type: "credential", label: "hardcoded cred", regex: /\b(?:admin|root|user(?:name)?)\s*[:=]\s*["'][^"']{3,}["']/i },
   { type: "deserialization", label: "pickle/unserialize/yaml", regex: /\b(?:pickle\.loads|unserialize\s*\(|yaml\.load\s*\(|marshal\.loads|jsonpickle)/i },
   { type: "xxe", label: "XML parse", regex: /\b(?:etree\.(?:parse|fromstring)|lxml\.etree|xml\.(?:dom|sax)|DocumentBuilder|simplexml_load)/i },
+  // Known secret formats (tier 2) — shared with the source detector.
+  ...SECRET_FORMATS.map((f) => ({ type: "secret" as const, label: f.name, regex: f.re })),
 ];
 
 /** Scan leaked text for dangerous sinks. Returns classified hits, deduped. */

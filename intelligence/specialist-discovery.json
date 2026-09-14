@@ -1,0 +1,20 @@
+{
+  "_comment": "Specialist discovery heuristics: per vulnerability class, WHERE to discover the parameters to test and WHAT tool/technique to drive. Derived from public multi-agent scanner methodology (generalized — no source brand).",
+  "classes": [
+    { "id": "xss", "discover": "every reflected param (URL query + form field) + JS template sinks (dangerouslySetInnerHTML, innerHTML)", "test": "blind_oracle (sink detection) + drive_devtools (confirm execution)", "tools": ["blind_oracle", "drive_devtools", "browser_validate"] },
+    { "id": "sqli", "discover": "every query param + hidden form fields + CSRF tokens (SQLi can live in token validation)", "test": "blind_oracle (arithmetic id=1+0 vs id=1+1) + boolean/time inference", "tools": ["blind_oracle", "active_scan"] },
+    { "id": "ssrf", "discover": "URL-typed params (callback, url, redirect, webhook, img, proxy, fetch) + webhook-verification callbacks", "test": "blind_oracle + oob_start (canary URL must arrive)", "tools": ["blind_oracle", "oob_start", "oob_poll"] },
+    { "id": "idor", "discover": "path segments (/users/123) + UUIDs + sequential numeric ids in URLs", "test": "sibling_scan (differential IDOR attacker A → victim B)", "tools": ["sibling_scan", "active_scan"] },
+    { "id": "lfi", "discover": "file/read/path/include params (file, page, template, include, lang, path)", "test": "path traversal ../ sequences + encoding bypass", "tools": ["blind_oracle", "active_scan"] },
+    { "id": "rce", "discover": "command/code params (cmd, exec, ping, host, ip, eval) + deserialization endpoints", "test": "command injection i'''d / brace expansion + deserialization gadgets", "tools": ["blind_oracle", "oob_start"] },
+    { "id": "xxe", "discover": "XML upload endpoints + multipart forms + Content-Type: application/xml", "test": "XXE file disclosure + SSRF via XML parser + blind XXE via oob", "tools": ["oob_start", "oob_poll"] },
+    { "id": "jwt", "discover": "JWT patterns in URL params, body, cookies, localStorage, Authorization header (eyJ…)", "test": "jwt_analyze (parse + vectors) + jwt_forge (alg:none / RS256→HS256) live", "tools": ["jwt_analyze", "jwt_forge"] },
+    { "id": "open_redirect", "discover": "redirect/next/return/url params + OAuth redirect_uri", "test": "redirect to attacker-controlled URL (/%09/ // /\\ @ prefixes)", "tools": ["blind_oracle", "active_scan"] },
+    { "id": "prototype_pollution", "discover": "JSON POST acceptance (Content-Type: application/json) + merge/deep-extend endpoints", "test": "proto_pollution_probe (__proto__ / constructor.prototype canary)", "tools": ["proto_pollution_probe"] },
+    { "id": "csti", "discover": "Angular/Vue/React template sinks + {{ }} interpolation in reflected params", "test": "{{7*7}} / ${7*7} arithmetic reflection", "tools": ["blind_oracle", "drive_devtools"] },
+    { "id": "mass_assignment", "discover": "user-create/update endpoints + profile/payment POST bodies", "test": "inject role/is_admin/permissions/price/total fields", "tools": ["sibling_scan", "active_scan"] },
+    { "id": "header_injection", "discover": "header-reflecting params (host, x-forwarded-for, location, redirect)", "test": "CRLF injection + host-header cache poisoning", "tools": ["param_precedence", "active_scan"] },
+    { "id": "api_security", "discover": "REST/GraphQL routes + method tampering (GET↔POST↔PUT) + GraphQL introspection", "test": "horizontal/vertical privilege + method override", "tools": ["sibling_scan", "active_scan", "discover_api"] },
+    { "id": "file_upload", "discover": "multipart upload endpoints + avatar/import/attachment forms", "test": "extension/content-type bypass → web-reachable .php/.phtml", "tools": ["active_scan", "strike_verify"] }
+  ]
+}

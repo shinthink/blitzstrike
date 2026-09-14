@@ -35,6 +35,7 @@ Usage:
   blitzstrike install-tools --category recon --dry-run   Preview / filter
   blitzstrike sync-data        Fetch heavy datasets (payloads + templates) on-demand
   blitzstrike update           Check for a newer version + refresh the data cache
+  blitzstrike verify           Run every detector against TP/FP fixtures + report
   blitzstrike version          Print version
   blitzstrike --help           This help`;
 }
@@ -50,7 +51,7 @@ async function main(): Promise<void> {
     return;
   }
   if (args[0] === "doctor") {
-    runDoctor();
+    await runDoctor();
     return;
   }
   if (args[0] === "install") {
@@ -85,6 +86,16 @@ async function main(): Promise<void> {
       console.log(`  status:  up to date`);
     }
     console.log(`  data:    payloads ${r.data_sync.payloads.files} files, templates ${r.data_sync.templates.files} files ${r.data_sync.payloads.synced ? "(refreshed)" : ""}`);
+    return;
+  }
+  if (args[0] === "verify") {
+    const { verificationReportText, runVerificationHarness } = await import("./verify-harness.js");
+    const { variantCoverageText, scanVariants } = await import("./variants.js");
+    console.log(verificationReportText());
+    console.log("\n" + variantCoverageText());
+    const r = runVerificationHarness();
+    const v = scanVariants();
+    if (r.failed > 0 || v.missed > 0) process.exit(1);
     return;
   }
   if (args[0] === "serve") {

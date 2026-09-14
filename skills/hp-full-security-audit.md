@@ -49,14 +49,6 @@ In this order, since each informs the next:
 
 [`findings-report`](../findings-report/SKILL.md) — synthesize everything under `findings/` into one ranked report using `templates/finding-report.md`. This is the actual deliverable; nothing before this step should be shown to the user as a final answer on its own.
 
-## Optional — agentic deep pass
-
-For a target that warrants it (pre-launch, handling real user funds/data, or just wanting a second independent pass), [strix](https://github.com/usestrix/strix) is a good complement: an autonomous AI pentesting agent that runs its own recon→exploit→validate loop and produces working PoCs. Not a replacement for the structured pass above, but a useful "have a second, differently-built system try to break it" layer:
-
-```bash
-strix --target <path-or-url>
-```
-
 ## Notes for whichever agent is running this
 
 - Don't run every skill blindly — think about what actually applies, same as a human pentester would scope an engagement before starting.

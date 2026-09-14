@@ -10,7 +10,7 @@
  *     an AI agent assigning a high score.
  *   - Lifecycle is strict and machine-readable.
  */
-import { Evidence, makeEvidence } from "./evidence.js";
+import { Evidence, makeEvidence, type EvidenceType } from "./evidence.js";
 import { assertFindingInvariants } from "./invariants.js";
 import { recordAudit } from "./audit.js";
 
@@ -24,6 +24,10 @@ export type FindingStatus =
   | "hypothesis"
   | "validating"
   | "confirmed"
+  | "retesting"
+  | "fixed"
+  | "still_vulnerable"
+  | "inconclusive"
   | "false_positive"
   | "rejected"
   | "blocked"
@@ -50,6 +54,10 @@ export interface FindingTarget {
   host?: string;
   endpoint?: string;
   path?: string;
+  /** Vulnerable request parameter/field (for the Vulnerability Location block). */
+  param?: string;
+  /** HTTP method (GET/POST/…) for the Vulnerability Location block. */
+  method?: string;
 }
 
 export interface FindingClassification {
@@ -126,7 +134,17 @@ export const LIFECYCLE_TRANSITIONS: Record<FindingStatus, FindingStatus[]> = {
   // "unconfirmed" live there, not in the lifecycle). The lifecycle only moves
   // to a terminal state — confirmed/false_positive/blocked/out_of_scope.
   validating: ["confirmed", "false_positive", "blocked", "out_of_scope"],
-  confirmed: [],
+  // Retest loop (post-confirmation): a confirmed finding can be re-verified to
+  // check whether the vendor patched it. still_vulnerable → retesting re-opens
+  // the loop (re-retest later); fixed is terminal (closed).
+  confirmed: ["retesting"],
+  retesting: ["fixed", "still_vulnerable", "inconclusive", "false_positive"],
+  fixed: [],
+  still_vulnerable: ["retesting"],
+  // inconclusive = could NOT determine (WAF blocked / target down / missing login
+  // / evidence insufficient). NOT a "fixed" — one failed request proves nothing.
+  // Re-openable via retesting once the blocker clears.
+  inconclusive: ["retesting"],
   false_positive: [],
   rejected: [],
   blocked: [],
@@ -214,15 +232,21 @@ export interface MakeFindingInput {
   chainId?: string | null;
   chainName?: string;
   status?: FindingStatus;
+  /** Evidence attached at creation — a finding must never be created empty
+   * when the producer already holds the observed artifact (headers, URL,
+   * response body). Each entry becomes a redacted SHA-256-tagged record. */
+  evidence?: Array<{ type: EvidenceType; description: string; content?: string }>;
 }
 
-/** Create a canonical finding. Default status = detected (hypothesis-pending). */
+/** Create a canonical finding. Default status = detected (hypothesis-pending).
+ * Evidence passed in `input.evidence` is attached immediately so the finding is
+ * never born empty when the producer holds the observed artifact. */
 export function makeFinding(input: MakeFindingInput): Finding {
   const now = new Date().toISOString();
   const status = input.status ?? "detected";
   const factors = confidenceFactorsFor(input);
   const confidence = computeConfidence(factors);
-  const finding: Finding = {
+  let finding: Finding = {
     id: nextFindingId(),
     status,
     title: input.title,
@@ -245,6 +269,16 @@ export function makeFinding(input: MakeFindingInput): Finding {
     remediation: {},
     timestamps: { created: now, updated: now },
   };
+  if (input.evidence?.length) {
+    for (const e of input.evidence) {
+      const ev = makeEvidence({
+        type: e.type,
+        description: e.description,
+        artifacts: e.content ? [{ name: "artifact", kind: "evidence", content: e.content }] : [],
+      });
+      finding = attachEvidence(finding, ev);
+    }
+  }
   recordAudit("finding_created", { tool: "eagle-eye", target: input.target.host ?? input.target.endpoint, result: status, correlationId: finding.id });
   return finding;
 }
@@ -354,5 +388,32 @@ export function rejectFinding(
     remediation: { ...updated.remediation, note: reason },
     evidence: [...updated.evidence, ...ev],
     timestamps: { ...updated.timestamps, updated: new Date().toISOString() },
+  };
+}
+
+/** Re-verify a confirmed finding (retest loop). Advances confirmed/still_vulnerable
+ *  → retesting → fixed (patch applied) | still_vulnerable (still exploitable) |
+ *  inconclusive (could not determine — WAF blocked / target down / missing login /
+ *  evidence insufficient; one failed request proves nothing). A retest records its
+ *  verdict as evidence + audit trail so the retest history is machine-readable and
+ *  re-runnable. */
+export function retestFinding(
+  finding: Finding,
+  opts: {
+    verdict: "fixed" | "still_vulnerable" | "inconclusive";
+    reason: string;
+    evidence?: Array<Parameters<typeof makeEvidence>[0]>;
+  },
+): Finding {
+  // retest only makes sense from a confirmed (or still_vulnerable) finding —
+  // transition() throws "illegal transition" for any other source state.
+  const retesting = transition(finding, "retesting");
+  const ev = opts.evidence?.map((e) => makeEvidence(e)) ?? [];
+  const result = transition(retesting, opts.verdict);
+  return {
+    ...result,
+    remediation: { ...result.remediation, retest_note: opts.reason },
+    evidence: [...result.evidence, ...ev],
+    timestamps: { ...result.timestamps, updated: new Date().toISOString() },
   };
 }
