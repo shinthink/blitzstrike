@@ -57,6 +57,13 @@ const ROUTE_MATCH_RE = /\b(preg_match|preg_match_all|strpos|stripos|str_contains
 /** Normalization helpers whose ABSENCE on a route match suggests a desync gap. */
 const NORMALIZERS = /\b(strtolower|strtoupper|rtrim|urldecode|rawurldecode|parse_url|normalize|canonical)\b/i;
 
+/** Whitelist lookup: `$arr[$userVar]` — the user var is an ARRAY INDEX into a
+ * fixed map, not passed through directly. Safe (fixed allowlist), not injection. */
+const WHITELIST_LOOKUP = /\$[A-Za-z_]\w*\s*\[\s*\$[A-Za-z_]\w*\s*\]/;
+
+/** Canonicalization call nearby — strips traversal/path, a (weak) defense. */
+const CANONICALIZE = /\b(basename|realpath|normalize|canonical|resolve|toRealPath)\s*\(/i;
+
 function detectDynamicDispatch(code: string, file: string, out: RouteFinding[]): void {
   const ls = lines(code);
   DYNAMIC_DISPATCH_RE.lastIndex = 0;
@@ -66,6 +73,7 @@ function detectDynamicDispatch(code: string, file: string, out: RouteFinding[]):
     const l = ls[ln - 1] ?? "";
     const scope = ls.slice(Math.max(0, ln - 4), ln).join("\n");
     if (!userControlled(l) && !userControlled(scope)) continue;
+    if (WHITELIST_LOOKUP.test(l) || WHITELIST_LOOKUP.test(scope)) continue;
     out.push({
       file,
       line: ln,
@@ -88,6 +96,7 @@ function detectDynamicMethod(code: string, file: string, out: RouteFinding[]): v
     // Scope: look a few lines up for a source feeding the method/class var.
     const scope = ls.slice(Math.max(0, ln - 4), ln).join("\n");
     if (!userControlled(l) && !userControlled(scope)) continue;
+    if (WHITELIST_LOOKUP.test(l) || WHITELIST_LOOKUP.test(scope)) continue;
     out.push({
       file,
       line: ln,
@@ -109,6 +118,9 @@ function detectDynamicInclude(code: string, file: string, out: RouteFinding[]): 
     const l = ls[ln - 1] ?? "";
     const scope = ls.slice(Math.max(0, ln - 4), ln).join("\n");
     if (!userControlled(l) && !userControlled(scope)) continue;
+    // Canonicalized ($f = basename($_GET[...])) or whitelist-lookup ($allowed[$p]) — safe.
+    if (CANONICALIZE.test(scope + "\n" + l)) continue;
+    if (WHITELIST_LOOKUP.test(l) || WHITELIST_LOOKUP.test(scope)) continue;
     out.push({
       file,
       line: ln,
@@ -126,21 +138,23 @@ function detectBatchForwarding(code: string, file: string, out: RouteFinding[]):
   let m: RegExpExecArray | null;
   while ((m = BATCH_LOOP_RE.exec(code)) !== null) {
     const ln = lineNo(code, m.index);
-    // Find the loop body (up to ~8 lines) for a forwarding call.
-    const body = lines(code).slice(ln, ln + 8).join("\n");
+    // Find the loop body (up to ~8 lines, INCLUDING the foreach line itself so a
+    // single-line `foreach (...) { forward(...); }` is not missed) for a forwarding call.
+    const body = lines(code).slice(ln - 1, ln + 8).join("\n");
     const forwards = /\b(call_user_func|forward|dispatch|resolve_route|invoke|handle|route)\s*\(/i.test(body);
     if (!forwards) continue;
+    // A visible per-route auth re-check (authorize/current_user_can/…) in the loop body
+    // means the forwarding is authorized — NOT the unprotected-forwarding bug. Skip.
     const rechecks = /\b(current_user_can|permission_callback|check_ajax_referer|authorize|authorise|is_user_logged_in)\b/i.test(body);
+    if (rechecks) continue;
     out.push({
       file,
       line: ln,
       type: "batch_forwarding",
       category: "Route confusion (batch/proxy forwarding)",
-      severity: rechecks ? "medium" : "high",
+      severity: "high",
       evidence: lines(code)[ln - 1]?.trim() ?? "",
-      detail: rechecks
-        ? "Batch/proxy loop forwards to inner handlers — auth is re-checked in scope, but verify it applies per-route."
-        : "Batch/proxy loop forwards to inner handlers with no per-route authorization re-check — an attacker may reach a protected handler.",
+      detail: "Batch/proxy loop forwards to inner handlers with no per-route authorization re-check — an attacker may reach a protected handler.",
     });
   }
 }
@@ -154,6 +168,9 @@ function detectRouteNormalization(code: string, file: string, out: RouteFinding[
     const scope = ls.slice(Math.max(0, i - 3), i + 1).join("\n");
     if (!userControlled(scope)) continue;
     if (NORMALIZERS.test(l) || NORMALIZERS.test(scope)) continue;
+    // An anchored full-match regex (`preg_match('/^[a-z]+$/', ...)`) is a VALIDATION
+    // whitelist, not a route-prefix/contains match — route desync doesn't apply.
+    if (/preg_match\s*\(\s*["'][^"']*\^[^"']*\$[^"']*["']/.test(l)) continue;
     out.push({
       file,
       line: i + 1,

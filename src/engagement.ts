@@ -95,3 +95,56 @@ export function engagementStatus(): Record<string, unknown> {
     next_phase: next,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Engagement scaffolding — the folder + scope + state a hunt needs to start.
+// ---------------------------------------------------------------------------
+
+export interface EngagementScaffold {
+  id: string;
+  target: string;
+  scope: string[];
+  out_of_scope: string[];
+  /** Folder layout the agent should materialize under the engagement dir. */
+  structure: string[];
+  /** Pre-filled scope.md template. */
+  scope_md: string;
+  state: Record<string, unknown>;
+}
+
+/** Scaffold an engagement: open its state, emit a folder layout + a scope.md
+ *  template, and return the initial phase. Deterministic — no guesswork about
+ *  "where do findings/evidence/reports go". */
+export function scaffoldEngagement(target: string, scope: string[] = [], out_of_scope: string[] = []): EngagementScaffold {
+  const state = startEngagement(target, "live");
+  const scopeLines = (scope.length ? scope : [target]).map((s) => `- ${s}`).join("\n");
+  const oosLines = (out_of_scope.length ? out_of_scope : ["(none declared)"]).map((s) => `- ${s}`).join("\n");
+  const scopeMd = [
+    `# Engagement scope`,
+    ``,
+    `**Target:** ${target}`,
+    ``,
+    `## In scope`,
+    scopeLines,
+    ``,
+    `## Out of scope`,
+    oosLines,
+    ``,
+    `## Accepted impact classes`,
+    `- (paste the program's vulnerability-type / accepted-impact list here)`,
+    ``,
+    `## Testing rules`,
+    `- (paste rate limits, prohibited areas, and any special rules here)`,
+    ``,
+  ].join("\n");
+
+  return {
+    id: state.id as string,
+    target,
+    scope,
+    out_of_scope,
+    structure: ["scope.md", "findings/", "evidence/", "reports/", "notes/"],
+    scope_md: scopeMd,
+    state,
+  };
+}

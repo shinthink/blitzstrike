@@ -52,6 +52,13 @@ source analysis, and validation — into three tool tiers executed server-side.
 Reconnaissance → analysis → validation. Nothing is reported until STRIKE
 confirms it.
 
+Beyond the three tiers, Blitz Strike also ships **Web3 audit** (deterministic
+Solidity + executable Foundry proof), a **live logic-bug prober** (sibling
+enumeration + differential IDOR), **hunting intel** (CWE/CVE watchlist + DNS
+sinkhole detection), and **out-of-band proof** — so IDOR/auth logic bugs, blind
+injection, and smart-contract findings are all caught and proven, not just
+pattern-matched.
+
 ---
 
 ## Autonomous, LLM-driven
@@ -220,7 +227,7 @@ MCP servers. With no client detected, it prints the snippet for manual paste.
 | `dedup_findings(findings)` | Collapse findings that share a root cause (sink × source × CWE) into one group per root cause. |
 | `generate_report(findings, format)` | Emit a reproducible markdown/JSON report with summary + SHA-256 integrity hash. |
 | `run_enterprise_benchmark()` | Run the labelled enterprise corpus and report detection rate, false-positive rate, and precision. |
-| `coverage_matrix()` | Enumerate language × sink-class coverage (4 languages × 15 sink classes) + coverage ratio. |
+| `coverage_matrix()` | Enumerate language × sink-class coverage (5 languages) + coverage ratio. |
 
 ### EAGLE-EYE — taint + data-flow
 
@@ -262,6 +269,26 @@ decoration — they are wired into the flow:
 
 - `tool_lookup(name)` auto-attaches the tool's full manual.
 - `run_engagement()` attaches the relevant manual per matched chain's `tools` field.
+
+### WEB3 — smart-contract audit + proof
+
+| Tool | Purpose |
+|---|---|
+| `web3_audit(code, path)` | Deterministic Solidity audit — 13 bug classes (reentrancy incl. ERC721/ERC1155 callbacks, unchecked return/arithmetic, tx.origin auth, signature replay, selfdestruct, delegatecall, missing access control, timestamp dependence, spot-price oracle, unbounded loop, encodePacked collision, missing address(0) check) with CWE + severity + line refs. |
+| `foundry_poc(class, contract)` | Generate an executable Foundry test that PROVES a Web3 finding. |
+| `foundry_run(contract_code, poc_code, class_)` | Actually run the Foundry PoC (`forge test`) — a PASSING test = exploit reproduced (deterministic: forge's own verdict). |
+
+### HUNTING — doctrine + live logic-bug prober + intel
+
+| Tool | Purpose |
+|---|---|
+| `hunting_doctrine()` | High-ROI heuristics — sibling rule, A→B signal, two-account IDOR, PoC escalation, follow-the-money + the always-rejected kill-list. |
+| `kill_list(type)` | Deterministic always-rejected check — missing headers, self-XSS, open-redirect-alone, SSRF-DNS-only, GraphQL-introspection-alone are N/A standalone. |
+| `sibling_scan(base_url, endpoint, token_a, token_b)` | Deterministic LIVE logic-bug prober — sibling enumeration + differential IDOR + auth matrix + mass assignment + rate limit (closes the static-analysis gap on IDOR/auth logic bugs). |
+| `auto_poc(type, base_url, endpoint, param)` | Turn a finding into a copy-paste-ready reproduction recipe (marker + negative control + expected differential + Patchstack-style title). |
+| `watchlist()` | Ranked CWE frequency + high-value CVE watchlist with payout + saturated flag — "what to hunt next". |
+| `resolve_check(host)` | Detect an ISP/country DNS sinkhole (blocking page) before auditing a sensitive-niche domain. |
+| `oob_start()` / `oob_poll(id)` / `oob_stop(id)` | Out-of-band proof — interactsh listener for blind SSRF/XXE/SQLi/command-injection (the canary must actually arrive). |
 
 ### MEMORY — long-term knowledge (self-growing)
 
@@ -325,7 +352,7 @@ See `ATTRIBUTION.md` for full license/copyright notices.
 
 ## Escalation Chains (chains.json)
 
-57 data-driven escalation chains, each with ordered steps carrying:
+58 data-driven escalation chains, each with ordered steps carrying:
 
 - `tool_hint` — which Blitz Strike tool to use
 - `success_criteria` — binary observable for the step
@@ -347,6 +374,9 @@ Edit `chains.json` to add knowledge — never hardcode in source.
 |---|---|---|
 | `FOFA_EMAIL` | For `fofa_search` | FOFA account email |
 | `FOFA_KEY` | For `fofa_search` | FOFA API key |
+| `H1_USERNAME` | Optional | Your HackerOne username. When set, every outbound security-testing request carries `X-HackerOne-Research: <username>` so targets/triagers can identify you (responsible-disclosure convention). |
+| `BLITZSTRIKE_HOME` | Optional | Override the home directory (default `~/.blitzstrike`). |
+| `BLITZSTRIKE_DATA` | Optional | Override the data-cache directory (default `~/.blitzstrike/data`). |
 
 All other tools need no credentials.
 
@@ -358,7 +388,7 @@ All other tools need no credentials.
 bun install          # deps
 bun run typecheck    # tsc --noEmit
 bun run build        # ESM bundle → dist/index.js
-bun run test         # regression + benchmark suite (183 checks)
+bun run test         # regression + benchmark suite (453 checks)
 bun run compile      # single static binary → dist/blitzstrike
 ```
 
@@ -372,14 +402,14 @@ number you can re-run, not a claim.
 - **Benchmark** (`run_enterprise_benchmark`) — a labelled corpus of vulnerable +
   safe fixtures across PHP, JavaScript, Python, and Java. Current result:
   detection rate **1.0**, false-positive rate **0**, precision **1.0**.
-- **Coverage matrix** (`coverage_matrix`) — 4 languages × 15 sink classes =
-  56/60 pairs covered. The four uncovered pairs are legitimately absent from
-  the language (e.g. Java has no `eval`, Python/Java no PHP-style file
-  inclusion, JS no deserialization sink).
+- **Coverage matrix** (`coverage_matrix`) — 5 languages × sink classes = 84%
+  coverage (php, javascript, python, java, rust). Uncovered pairs are
+  legitimately absent from the language (e.g. Java has no `eval`, Python/Java no
+  PHP-style file inclusion, JS no deserialization sink).
 - **Attack-vector taxonomy** (`list_attack_vectors` / `attack_vectors`) — a
   master reference of 34 attack-vector categories (588 vectors) so a driving
   agent can map the *entire* attack surface, not just the obvious sinks.
-- **Regression suite** — `bun run test` runs 183 checks covering finding
+- **Regression suite** — `bun run test` runs 453 checks covering finding
   lifecycle, evidence integrity, CVSS math, taint tracing, dedup, report
   integrity, and benchmark invariants. CI runs it on every push.
 
