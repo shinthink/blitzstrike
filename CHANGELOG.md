@@ -5,6 +5,1869 @@ All notable changes to Blitz Strike are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [2.4.147] — 2026-10-10
+
+### Added — comprehensive WAF/IPS bypass map
+
+- New `waf_bypass` tool + `src/waf-bypass.ts`: full categorized WAF/IPS evasion
+  map — 10 generic categories (comment-space, func-paren-split, keyword-split,
+  whitespace-alt, case-obfuscation, encoding, string-obfuscation, operator-alt,
+  keyword-alt, http-level) + per-DBMS techniques (mysql / postgresql / mssql /
+  oracle / sqlite: /*!50000*/ inline comment, $$ dollar-quote, WAITFOR DELAY,
+  dbms_lock.sleep, randomblob, etc.). blind_sqli's WAF_BYPASS now re-exports this
+  map. 164 tools, 536/536 tests.
+
+## [2.4.146] — 2026-10-10
+
+### Added — blind SQLi metadata engine (playbook)
+
+- New `blind_sqli` tool + `src/blind-sqli.ts`: deterministic metadata-extraction
+  playbook for 5 DBMS (mysql / postgresql / mssql / oracle / sqlite) — oracle
+  confirmation probes (boolean TRUE/FALSE + time), the SUBSTRING/SUBSTR
+  binary-search extraction template, and the metadata targets in order (version →
+  database → user → system vars → tables → columns → data), plus a WAF/IPS bypass
+  map (insert-between-func-and-paren, inline comment, whitespace alternatives,
+  case swap, percent/hex encoding). MySQL system-vars targets expose datadir/log
+  files for file read/write escalation.
+- New doctrine rule `blind_sqli_metadata`: confirm a clean oracle first, then
+  extract metadata in order, never report a blind hit until the oracle is proven.
+  28 doctrine rules, 163 tools, 531/531 tests.
+
+## [2.4.145] — 2026-10-10
+
+### Added — scoped dispatch + depends-on gate doctrine
+
+- New doctrine rule `scoped_dispatch`: delegate with a COMPACT scoped spec
+  (objective / scope / inputs / expected_outputs / evidence_required + FILE refs),
+  never the parent transcript; the child self-checks expected_outputs before
+  returning. Keeps delegation focused, saves tokens, enables prompt caching.
+- New doctrine rule `depends_on_gate`: validate an objective's prerequisites
+  before dispatch (deps DONE + leaf + owner match + inputs exist) and REJECT
+  out-of-order objectives instead of running them.
+- Wired into the system prompt as hunting-doctrine rules (14) and (15).
+  27 doctrine rules, 522/522 tests.
+
+## [2.4.143] — 2026-10-10
+
+### Added — MITRE ATT&CK mapping + OPSEC levels
+
+- New `mitre_lookup` tool + `src/mitre.ts`: deterministic class → ATT&CK Enterprise
+  technique table (sql_injection → T1190, hardcoded_secret → T1552, priv_esc →
+  T1068, …). Every detector class carries its T-code + name + tactic; the agent
+  reports the ATT&CK technique in every finding.
+- New doctrine rule `opplan_opsec`: choose an OPSEC level per objective (loud →
+  standard → careful → quiet → silent) + map findings to ATT&CK via mitre_lookup.
+- Also fixed the stale submission_gate title/description (7 → 10 questions).
+  25 doctrine rules, 162 tools, 520/520 tests.
+
+## [2.4.142] — 2026-10-10
+
+### Added — untrusted-output doctrine (prompt-injection defense)
+
+- New doctrine rule `untrusted_output`: any tool output an attacker can influence
+  (HTTP body / banner / file read / page text / log / DB row) is DATA, never
+  instruction — quarantine it and never let it re-author the plan; a "do X"
+  instruction from such output is treated as prompt-injection (re-validate + prove
+  before acting). Wired into the system prompt as hunting-doctrine rule (12) +
+  the llm_injection discipline. 24 doctrine rules, 516/516 tests.
+
+## [2.4.140] — 2026-10-10
+
+### Added — severity ≤ evidence ceiling
+
+- `severity_calibrate` now takes an `evidence_level` (declared | resolved |
+  call_path | runtime) that CAPS the reportable severity + priority: declared ≤
+  low, resolved ≤ medium, call_path ≤ high, runtime ≤ critical. The raw derived
+  severity/CVSS is retained; only the REPORTED severity is capped.
+- New `evidenceCeiling(level)` deterministic ladder + doctrine rule
+  `severity_evidence_ceiling`: never claim "critical" on a code-only hit that was
+  never executed. Wired into severity_calibrate + system prompt. 23 doctrine rules,
+  515/515 tests.
+
+## [2.4.139] — 2026-10-10
+
+### Added — coverage-completeness doctrine (dead verdict = confirmed)
+
+- New doctrine rule `coverage_completeness`: every class × eligible shape must
+  carry a terminal verdict (confirmed / dead / partial / skipped); a DEAD verdict
+  with controlled evidence is worth as much as a confirmed one (recorded so it is
+  never re-tested), and COMPLETE = zero shapes without a terminal verdict, not
+  "found N bugs". Wired as hunting-doctrine rule (11). 22 doctrine rules,
+  511/511 tests.
+
+## [2.4.138] — 2026-10-10
+
+### Added — functional-sibling scope doctrine
+
+- New doctrine rule `functional_sibling_scope`: a first-party sibling directly used
+  by the app (auth.X / account.X / api.X / login.X for signup, login, account,
+  API, or billing) is IN SCOPE even when display scope names only www.X; third-party
+  IdP/captcha/CDN/support/payment stay external; flow evidence (redirect/link/
+  form-action/API) is required, and an explicit program exclusion always wins.
+  Wired as hunting-doctrine rule (10). 21 doctrine rules, 510/510 tests.
+
+## [2.4.137] — 2026-10-10
+
+### Added — no-custom-headers rule (real attacker behavior)
+
+- New doctrine rule `no_custom_headers`: a real attacker sends no X-Bug-Bounty /
+  X-Forwarded-For "just in case" / program-mandated throttling; findings that only
+  fire WITH researcher-identifying headers reflect known issues, not attack surface
+  (auth + explicit test-payload headers are the payload itself and allowed).
+- submission_gate now asks 10 questions: + no_custom_headers (reproduces without
+  researcher headers). Wired as hunting-doctrine rule (9). 20 doctrine rules,
+  509/509 tests.
+
+## [2.4.136] — 2026-10-10
+
+### Added — access-mode routing doctrine (RICH / PARTIAL / UNAUTH)
+
+- New doctrine rule `access_mode_routing`: derive the lane from ACTUAL auth state
+  (2 accounts = bidirectional IDOR/A→B, 1 = single-account, 0 = UNAUTH). UNAUTH is
+  a productive mode — bundle/APK secrets, exposed APIs, admin/metrics/GraphQL, and
+  supply-chain checks all run unauth; never exit early on account failure alone.
+  Wired into the system prompt as hunting-doctrine rule (8). 19 doctrine rules,
+  508/508 tests.
+
+## [2.4.135] — 2026-10-02
+
+### Added — triage-honesty doctrine + submission floors
+
+- submission_gate now asks 9 questions (was 7): + impact_demonstrated (the actual
+  attacker outcome / credential authority was probed, not just "the mechanism
+  works") and + production_delivery (the complete external-attacker path, not a
+  harness-only primitive with victim values).
+- Hunting doctrine + kill-list gained the triage-honesty layer: credential
+  liveness ≠ impact (probe authority), harness proof ≠ attacker delivery,
+  severity = max DEMONSTRATED not hypothetical ceiling, and business-intent
+  classification (DOCUMENTED AND MATCHES / EXCEEDED / CONTRADICTED / NOT
+  DOCUMENTED).
+- kill_list submission floors: pure_dos, ssrf_below_high, session_swap,
+  low_sensitivity_read_only, self_only_state are now always-rejected standalone.
+- 18 doctrine rules, 14 always-rejected classes, 507/507 tests.
+
+## [2.4.134] — 2026-10-02
+
+### Changed — impact-first escalation doctrine (never stop at a confirmed finding)
+
+- The system prompt now enforces IMPACT-FIRST ESCALATION: a confirmed finding is a
+  NEW FOOTHOLD, not the deliverable — the moment the agent holds a valid
+  token/credential/session it must USE it to demonstrate the real impact (records
+  read, admin reached, PII exfiltrated), not just "the token works". Proof = impact,
+  not mechanism. It must NEVER stop at one block ("unreplayable / 520") — pivot to
+  the dev host, direct-to-origin, sibling endpoint, or reuse the token elsewhere —
+  and must chain LOW/INFO findings too (leaked IDs → enumerate, feature flags →
+  flip). COMPLETE only when every foothold is exploited to real impact or genuinely
+  exhausted.
+
+## [2.4.133] — 2026-10-02
+
+### Changed — report writing is also no-babysitting
+
+- The system prompt now makes report writing automatic: once findings are
+  verified (or blocked), the agent calls generate_report immediately and never
+  asks "should I write the report now?" — the report is the automatic end-state
+  of the engagement, not a permission-gated step.
+
+## [2.4.132] — 2026-10-02
+
+### Changed — chain exploration still gated by validation
+
+- The system prompt now makes the discipline explicit: the agent explores chain
+  possibilities freely ("maybe it works this way? or like that?") but EVERY "maybe"
+  is a HYPOTHESIS that must pass validation (marker + negative control via
+  strike_verify, or the OOB canary) before it becomes a finding — speculation is
+  never reported as confirmed.
+
+## [2.4.131] — 2026-10-02
+
+### Changed — no-babysitting: write files freely
+
+- The system prompt now explicitly authorizes the agent to WRITE FILES FREELY —
+  scratch PoC, payload lists, engagement state, report drafts, evidence, notes —
+  with no permission gate; only destructive/DoS actions need consent. Reinforces
+  the no-babysitting mandate (the agent executes the full chain autonomously and
+  persists work to disk as it goes).
+
+## [2.4.130] — 2026-10-02
+
+### Fixed — full interconnection audit (grounding gaps closed)
+
+- Cross-check of every data layer → pattern → chain → synonym → auto-poc →
+  specialist-discovery found two orphan aliases and closed them: `csti` /
+  "client-side template injection" → `ssti`, and "api security" → `missing_authz`.
+  Every ComplexBugType (34), pattern (37), synonym alias, auto-poc template key,
+  and specialist-discovery class now resolves to a grounded pattern.
+
+## [2.4.129] — 2026-10-02
+
+### Added — 4 deterministic detectors (open_redirect, missing_nonce/CSRF, toctou, second_order)
+
+- `open_redirect` (CWE-601): user input into a redirect/Location sink (header
+  Location, wp_redirect, window.location), with a 2-line lookback so `$url =
+  $_GET["url"]; header("Location: " . $url)` is caught; `wp_safe_redirect` suppressed.
+- `missing_nonce` / CSRF (CWE-352): a file with a state-changing surface (wp_ajax_,
+  admin_post, Express post/put/delete, update_/delete_/insert_/… mutation) and no
+  nonce/CSRF token anywhere. REST routes are excluded (permission_callback is
+  `missing_authz`'s job, not CSRF).
+- `toctou` (CWE-367): a check-then-act gap (file_exists→unlink, is_admin→delete,
+  balance-check→withdraw) within a 3-line window, same-line included.
+- `second_order` (CWE-79/89): a DB read assigned to a variable then reaching
+  echo/query/eval without escaping — the stored XSS / second-order SQLi shape
+  single-pass source→sink misses.
+- 8 corpus fixtures + 4 regression tests + patterns/synonyms/CWE/VRT grounding.
+  (37 patterns; 505/505 tests; 161 MCP tools.)
+
+## [2.4.128] — 2026-10-02
+
+### Changed — API recon doctrine (LLM reasons OpenAPI/OAuth, not a new tool)
+
+- The system prompt now instructs the agent to FETCH + PARSE OpenAPI/Swagger
+  specs itself (plain JSON/YAML) when discoverApi/live_recon surfaces one —
+  extract every endpoint/method/parameter/auth requirement, map the object-level
+  paths to BOLA/IDOR candidates, then test with sibling_scan. OAuth/SSO flows are
+  also the agent's reasoning job. This is a reasoning task, so it lives in the
+  prompt — no new tool.
+
+## [2.4.127] — 2026-10-02
+
+### Added — asset discovery + screenshot + authenticated session
+
+- New `asset_discovery(domain, include_ports?)`: full passive asset enumeration —
+  crt.sh subdomains + common-prefix DNS brute + A-record resolution + optional
+  port scan of the main host, returned as a clean asset map.
+- New `screenshot(url, path?)`: headless-browser screenshot for vision-based proof
+  (gracefully degrades to "browser unavailable" when chromium is absent).
+- New `auth_login(login_url, user, pass, …)`: HTTP form login → session cookie +
+  access/refresh/JWT token extraction, with optional TOTP field for 2FA. (161 MCP tools.)
+
+## [2.4.126] — 2026-09-29
+
+### Added — TOTP/HOTP generation + WET/DRY traceability
+
+- New `totp(secret, …)` — deterministic RFC 6238 TOTP / RFC 4226 HOTP
+  generation (base32 or raw ASCII key) so the agent can fill a 2FA field itself
+  during authenticated scanning instead of stalling on a prompt.
+- New `wet_dry(type, wet, dry)` — save the RAW output (WET) and PARSED result
+  (DRY) of an enrichment step separately and diagnose WHERE a bad deliverable
+  broke: WET (model/prompt/timeout) vs DRY (parser) vs template. (158 MCP tools.)
+
+## [2.4.123] — 2026-09-29
+
+### Added — circuit breaker (`target_health` + `circuit_status`)
+
+- New `target_health(target, limit?)`: probe a target (10s timeout) and track
+  consecutive failures in a persisted circuit-breaker state; after 5 consecutive
+  timeouts/5xx the circuit OPENS (PAUSE) and auto-closes on the next successful
+  probe. `circuit_status()` lists every tracked target's state. Tells the agent
+  to stop hammering an unresponsive target instead of burning requests. (156 MCP tools.)
+
+## [2.4.122] — 2026-09-29
+
+### Added — `param_surface` (autonomous parameter discovery + specialist hints)
+
+- New `param_surface(target, class?)`: fetch a target and extract EVERY testable
+  parameter — URL query params, HTML form fields, path-segment identifiers
+  (/users/123 + UUIDs), and JS-referenced endpoints — then attach per-class
+  discovery + test hints so the agent tests the DISCOVERED params, not just the
+  hinted one. New `intelligence/specialist-discovery.json` maps 15 vuln classes
+  (xss/sqli/ssrf/idor/lfi/rce/xxe/jwt/open_redirect/prototype_pollution/csti/
+  mass_assignment/header_injection/api_security/file_upload) to where to look +
+  which tool to drive. (154 MCP tools.)
+
+## [2.4.121] — 2026-09-29
+
+### Added — empirical ledger auto-feed + benchmark coverage 30/30
+
+- The live probers now auto-record their VERIFIED verdicts into the empirical
+  ledger (`intelligence()`): `cve_verify`/`nuclei_scan` (vector "cve"),
+  `jwt_forge` (jwt_alg_confusion), `proto_pollution_probe`
+  (prototype_pollution), `smuggling_test` (http_request_smuggling) — so a
+  confirmed hit feeds attack_plan's Bayesian hit-rates cross-target.
+- Updated the Hackbot-Arena VECTOR_MAP with the new detectors + live probers
+  (cache_deception, client_trusted_flag, jwt_alg_confusion, prototype_pollution,
+  request-smuggling, password-reset) → detector coverage 26/30 → 30/30 (the 4
+  previously-unmapped labs — CacheKey, PasswordResetHarm, StaffDirectory,
+  NoteLock — are now covered).
+
+## [2.4.120] — 2026-09-29
+
+### Added — `nuclei_scan` (fingerprint-driven full DAST) + corpus precision fix
+
+- New `nuclei_scan(target, tech?, tags?, broad?)`: fingerprint the stack (or use
+  the tech you pass), select the fingerprint-matched CVE templates + (broad mode)
+  tech-tag templates, run nuclei rate-limited (critical/high/medium), and return
+  deduped severity-ranked findings — the "scan this target" automation that
+  completes corpus → cve_verify → full DAST. (153 MCP tools.)
+- Tightened the CVE-corpus GENERIC token filter (server/and/domain/check/…) so a
+  generic stack (plain PHP, bare `Server:` header, "Example Domain" page) yields
+  ZERO false CVE matches — regression-tested (example.com → 0).
+
+## [2.4.119] — 2026-09-29
+
+### Security — lodash / lodash-es dependency vulnerabilities fixed
+
+- `java-parser` transitively pulled `lodash@4.17.21` + `lodash-es@4.17.21`
+  (code-injection via `_.template` + prototype pollution in `_.unset`/`_.omit`).
+  Added an npm `overrides` block pinning `lodash` + `lodash-es` to `4.18.1`;
+  `npm audit` now reports 0 vulnerabilities and the full test suite still passes.
+
+## [2.4.118] — 2026-09-29
+
+### Added — three logic-bug live probers (FN=18 gap)
+
+- `jwt_forge(token, endpoint, …)` — forges JWT confusion tokens (alg:none,
+  HS256-with-empty-key, HS256-with-public-key = RS256→HS256 key confusion,
+  plus kid/jku/x5u hints) and, when an endpoint is given, sends each one to
+  prove which is ACCEPTED (status < 400).
+- `proto_pollution_probe(target, endpoint)` — sends __proto__ /
+  constructor.prototype JSON canaries and reports VERIFIED only on reflection.
+- `smuggling_test(target)` — sends CL.TE / TE.CL desync probes over a raw
+  connection and flags a desync only on a specific corrupted-method signal
+  (405 / GGET-GPOST), never a generic 400. (152 MCP tools.)
+
+## [2.4.117] — 2026-09-29
+
+### Added — `cve_verify` (fingerprint-first → live nuclei confirmation)
+
+- New `cve_verify(cve, target)` tool closes the fingerprint-first loop: when
+  `live_recon` / the nuclei corpus SUGGESTS a CVE, `cve_verify` locates the
+  matching nuclei template, runs it against the target, and returns VERIFIED /
+  UNVERIFIED / no_template / error from nuclei's own JSONL output. A suggested
+  CVE is only report-ready after `cve_verify` confirms it — never from the
+  fingerprint alone. (149 MCP tools.)
+
+## [2.4.116] — 2026-09-29
+
+### Changed — system prompt tells the LLM about the new tooling
+
+- The LLM-facing system prompt now documents the new tools/features added this
+  cycle: `review_harness` (full-coverage 5-signal per-file rubric — run it FIRST
+  on any source repo), `broken_link_scan` (expired-domain takeover via DNS/RDAP),
+  `surface_map` (surface-first targeting), `sync_cve_corpus` (refresh the 4,000+
+  CVE fingerprint corpus), and the nuclei-derived CVE corpus behind
+  `live_recon`'s `suggested_cves`.
+
+## [2.4.113] — 2026-09-29
+
+### Added — auto-updating nuclei CVE corpus (live-read + sync tool)
+
+- New `src/nuclei-corpus.ts`: the CVE fingerprint corpus is now read LIVE from
+  the canonical `nuclei-templates` `http/cves/**` tree whenever it is present
+  on disk (so it auto-stays current after `nuclei -update-templates`), with the
+  bundled `cve-corpus.json` as a fallback when nuclei-templates isn't installed.
+  The parsed corpus is cached; `sync_cve_corpus` invalidates it.
+- New `sync_cve_corpus` tool: runs `nuclei -update-templates` (best-effort),
+  reloads the corpus, and reports the fresh count + whether the source is live
+  or the bundled snapshot — call it before a large recon pass to pick up
+  newly-disclosed CVEs.
+
+## [2.4.112] — 2026-09-29
+
+### Added — nuclei-templates CVE corpus (watchlist 35 → 4,100+ fingerprints)
+
+- New `intelligence/cve-corpus.json` (4,113 CVEs) derived from the canonical
+  `projectdiscovery/nuclei-templates` `http/cves/**` tree via
+  `scripts/sync-cve-corpus.py` (re-runnable after `nuclei -update-templates`).
+  Each entry carries product name + severity + EPSS + CWE + a word-boundary
+  `match` regex built from product-name tokens + fofa/shodan query keywords
+  (NOT matcher payload words, which are too generic).
+- `watchlistCveMatches` / `live_recon` now match against the hand-curated
+  watchlist (version-precise) AND the corpus (long-tail), ranked by EPSS then
+  severity, capped at 20, with the hand-curated entry overriding the corpus for
+  the same CVE. Generic infra tokens (php/apache/mysql/powered/…) are excluded
+  so a plain PHP/HTML target yields ZERO false matches — regression-tested
+  (plain php → 0; vite/gradio/ollama/n8n → their specific CVEs).
+
+## [2.4.111] — 2026-09-29
+
+### Added — CVE watchlist expanded 18 → 35 (2025-2026 fingerprints)
+
+- Added 17 actively-exploited 2025-2026 CVEs to `intelligence/watchlist.json`
+  with fingerprints + fixed versions, wired into `watchlistCveMatches` /
+  `live_recon` fingerprint-first: n8n unauth/auth RCE (CVE-2026-21858/21877),
+  D-Link DSL RCE (CVE-2026-0625), Veeam RCE (CVE-2025-59470), Cisco SD-WAN
+  auth bypass (CVE-2026-20127), Gradio path-traversal + SSRF
+  (CVE-2026-28414/28416), FortiOS LDAP leak (CVE-2026-25815), Dell
+  RecoverPoint hardcoded creds (CVE-2026-22769), Statamic XSS
+  (CVE-2026-28426), Chartbrew SQLi + MongoDB RCE (CVE-2026-27005/25887),
+  Apache Camel header injection (CVE-2026-31650), Jenkins script-console RCE
+  (CVE-2026-30170), GraphQL introspection leak (CVE-2026-29812), Ollama path
+  traversal (CVE-2026-32154), Spring Boot actuator env leak (CVE-2026-33001).
+- Tightened two over-broad fingerprint regexes (dropped the standalone
+  "workflow" keyword that false-positived n8n↔Kibana); regression-tested
+  fingerprint precision (n8n ≠ kibana).
+
+## [2.4.110] — 2026-09-29
+
+### Added — hash length extension + concrete payload enrichment
+
+- New `length_extension` technique class (CWE-328): a MAC computed as
+  H(secret+message) with a Merkle–Damgård hash (MD5/SHA-1/SHA-256) lets an
+  attacker append data and forge a valid hash without the secret — with the
+  hash_extender tool + the ?file=...&mac=... append/path-traversal pattern.
+- Enriched five technique classes with concrete copy-paste payloads:
+  `open_redirect` (/%09/, /%5c, //, /\, @ prefixes + param list),
+  `crlf_injection` (encoding variants + CRLF→XSS + 301/302 response-splitting +
+  Unicode U+2028/U+2029), `ssrf` (octal/hex/decimal/IPv6 IP obfuscation,
+  xip.io/nip.io, gopher/dict/php/jar/tftp handlers, cloud metadata),
+  `sql_injection` (Kona-style WAF bypass: MID/LIKE//**//double-quote),
+  `command_injection` (i'''d, brace expansion, Shellshock, Werkzeug debugger PIN).
+
+## [2.4.109] — 2026-09-29
+
+### Changed — follow-the-money doctrine rule with concrete proven patterns
+
+- Extended the `follow_money` doctrine rule with the two proven business-logic
+  shapes behind real payouts: (1) a password-reset logic flaw that resets an
+  arbitrary account → account takeover; (2) a credit/invite business-logic flaw
+  that lets the client mint its own credits/quota → free money without payment.
+  Reinforces "if the client can add credits, apply a discount, or reset a
+  credential client-side, that is the highest-value test in the program."
+
+## [2.4.108] — 2026-09-29
+
+### Added — surface-first map (attack surface → high-value tests)
+
+- New `surface_map(hint)` tool + `intelligence/surface-map.json`: maps 8 attack
+  surfaces to their highest-value test cases, derived from public target-recon
+  dossiers (image proxy → SSRF/URL-bypass/XSS; redirect proxy → open-redirect/
+  SSRF/bypass; edge cache → IDOR/cache-poisoning; payment portal →
+  price-manipulation/IDOR/subscription; AI agent → prompt-injection→SSRF-RCE/
+  deser/stored-XSS; file service → XSS-via-content/SSRF/upload-RCE; Electron →
+  HTML-injection→BrowserWindow-RCE/IPC; SSO → OAuth-redirect/JWT/2FA).
+- `matchSurfaces(techs, headers, body)` fingerprints the detected stack against
+  the map; `live_recon` now emits `suggested_surfaces` + a SURFACE-FIRST next
+  step. Added doctrine rule `surface_first` ("map surfaces before spraying
+  payloads").
+
+## [2.4.107] — 2026-09-29
+
+### Added — `review_harness` (per-file review, full-coverage deterministic rubric)
+
+- New `review_harness(path)` tool implementing the "harness beats model"
+  discipline: applies a FIXED 5-signal rubric (entry_points / auth_gates /
+  sinks / secrets / logic_bugs) to EVERY enumerated source file and emits a
+  structured per-file verdict + a full-coverage report (files reviewed, clean vs
+  with-findings, per-class signal frequency). Guarantees no file is skipped and
+  every file is reviewed the same way — a COMPLETE map of the codebase, not a
+  partial scan. Most signal-dense files are sorted first.
+
+### Fixed — scanner endpoint detection blanked string-embedded hooks
+
+- `scanFile` matched endpoint hooks against `stripComments`, which blanks string
+  literals as well as comments — so `add_action('wp_ajax_nopriv_…')` /
+  `register_rest_route('…')` (always quoted) were never detected. Added
+  `stripCommentsOnly` (comments only, strings preserved) and matched endpoint
+  hooks against it; sinks still use the string-blanking strip. Regression-tested:
+  `wp_ajax_nopriv_` now detected.
+
+## [2.4.106] — 2026-09-29
+
+### Added — report assembly (metadata + vulnerability-location block)
+
+- `reportMarkdown` now emits a `## 0. Report Metadata` table (Report ID,
+  Program/Scope, tool version, optional timestamp). The Report ID is DERIVED
+  deterministically (djb2 of title+scope → `BS-XXXXXX`) unless overridden via
+  `report_id`, so reports stay byte-reproducible.
+- Added `param` + `method` to `FindingTarget`; each detailed finding now renders
+  a Vulnerability Location block (Affected URL, Endpoint, Parameter, Method)
+  alongside the existing Severity/CWE/Status/Confidence/Source/Sink/CVSS table —
+  matching the report-template structure (Executive Summary → Location →
+  Description → numbered Steps → Impact → Remediation → References).
+
+## [2.4.105] — 2026-09-29
+
+### Added — technique depth (concrete tools + payloads in the technique base)
+
+- Enriched five technique classes with concrete, copy-paste-able tools and
+  payloads (a `tools` array + additional `techniques` steps), derived from
+  public per-class references:
+  - `padding_oracle` — padbuster/padre commands, block sizes (DES=8/AES=16),
+    oracle indicators, CVE-2021-43074 / CVE-2025-34091.
+  - `broken_link_hijacking` — blc / wget --spider / whois commands,
+    CVE-2017-1000107 + link-rot → RCE cases.
+  - `dns_rebinding` — rbndr.us / sslip.io / rebinder harness, Jenkins
+    CVE-2016-0788 + cloud-metadata exfil.
+  - `jwt` — jwt_tool -M at, hashcat -m 16500, jwt2john, header attacks
+    (alg:none / key confusion / jku-x5u / kid traversal / CVE-2022-21449).
+  - `nosql_injection` — $ne/$gt/$regex/$where payloads (form + JSON) + $where RCE.
+
+## [2.4.104] — 2026-09-29
+
+### Added — two client-side detectors (postMessage + client-trusted flag)
+
+- `postmessage_no_origin_check` (CWE-345, medium): a `window.addEventListener
+  ("message")` / `onmessage` handler that reads `event.data` but never validates
+  `event.origin` — any site can drive the handler. Detector fires only when the
+  handler reads `.data` with no `.origin` check anywhere in scope.
+- `client_trusted_flag` (CWE-807/639, high): a privilege/entitlement flag
+  (isAdmin / withVip / premium / hidden / …) read from request input and used in
+  a security decision — the client asserts its own privilege. Detector requires a
+  flag-like key from a request source PLUS a decision context (if/where/role/
+  permission). Both grounded (pattern + CWE + severity + synonym + chain) and
+  covered by fire-vs-clean regression checks.
+
+## [2.4.103] — 2026-09-29
+
+### Added — version-precise fingerprint-first (semver narrowing)
+
+- `watchlistCveMatches` / `live_recon` now narrow the suggested CVEs by the
+  detected VERSION, not just the product. Each version-aware CVE carries a
+  `fixed_in` (semver boundary) + `version_key`; a detected version >= `fixed_in`
+  is excluded as patched, so `live_recon` names the EXACT CVE for the running
+  version instead of the whole product family. Verified: Next.js 14.2.5 →
+  CVE-2025-29927 (affected) but not CVE-2024-34351 (patched 14.1.1); Next.js
+  15.3.0 → both excluded; unknown version → full product list (fallback).
+
+## [2.4.102] — 2026-09-29
+
+### Added — `broken_link_scan` (broken-link hijacking live detector)
+
+- New `broken_link_scan(url)` tool: crawls the target's outbound references
+  (script/link/img/src + inline JS URLs), then checks each referenced hostname's
+  DNS + RDAP registration status. Unregistered (RDAP 404) or in-drop-cycle
+  (pendingDelete/redemptionPeriod) domains are flagged CLAIMABLE — register the
+  expired domain and inherit the trust of every page that still loads it.
+  Verdict is derived live from DNS + RDAP, never a static list. Distinct from
+  `subdomain_takeover` (dangling CNAME); this is a fully-expired registrable
+  domain. Verified live: example.com → registered (not claimable), a
+  nonexistent domain → RDAP 404 → claimable.
+
+## [2.4.101] — 2026-09-29
+
+### Added — three new hunting classes (techniques + attack vectors)
+
+- Added `broken_link_hijacking` (expired-domain takeover), `padding_oracle`
+  (CBC PKCS#7 cookie/token decryption), and `dns_rebinding` (hostname
+  re-resolution to internal IP) to the technique base (53 → 56 classes) and the
+  attack-vector taxonomy (588 → 591 vectors). Each carries summary, objectives,
+  how-to-test steps, concrete techniques, and verify (marker + negative
+  control) — matching the existing per-class methodology shape.
+
+## [2.4.100] — 2026-09-29
+
+### Fixed — data-file resolution was `process.cwd()`-dependent (broke under npx)
+
+- `watchlist()` / `watchlistCveMatches()` resolved `intelligence/watchlist.json`
+  via `process.cwd()`; `run_enterprise_benchmark()` resolved `bench/enterprise`
+  fixtures the same way. When the MCP server / compiled binary runs from any
+  directory other than the package root (the `npx blitzstrike` case), both threw
+  `ENOENT`. Now both resolve via `import.meta.url` (module-relative), matching
+  every other data loader (`patterns.ts`, `chains.json`, `tools-catalog.json`).
+  Verified: `watchlist()` and the enterprise fixtures load from an arbitrary cwd.
+
+## [2.4.99] — 2026-09-29
+
+### Fixed — grounding completeness for the CVE watchlist class tags
+
+- The CVE watchlist's `class` tags (`auth_bypass`, `infoleak`) did not resolve
+  to a detector pattern. Added synonyms (`auth bypass`/`authentication bypass`
+  → `type_juggling`; `infoleak`/`info|information disclosure|exposure|leak` →
+  `hardcoded_secret`). Every one of the 18 CVE class tags now resolves to a
+  grounded pattern (locked by a regression check).
+
+## [2.4.98] — 2026-09-29
+
+### Added — fingerprint-first CVE matching wired into live_recon
+
+- `live_recon()` now cross-references the detected stack (tech + headers +
+  body) against the CVE watchlist and returns `suggested_cves` + a
+  "FINGERPRINT MATCH" next-step: when the target matches a high-value
+  watchlist product (Next.js, Kibana, Langflow, Confluence/Jira, PAN-OS,
+  Grafana, Keycloak, …) it names the specific CVEs to test first (with EPSS)
+  instead of relying on generic scanning.
+
+## [2.4.97] — 2026-09-29
+
+### Added — hunting-intel upgrade (Hacktivity-ranked CVE watchlist + dedup doctrine)
+
+- Upgraded `watchlist()` CVE data from a generic 9-CVE list to the 18
+  Hacktivity-ranked CVEs with EPSS, report counts, and per-CVE fingerprint
+  hints (Confluence OGNL RCE, Next.js middleware/RSC auth-bypass/RCE, Kibana
+  SSRF/authz, Langflow RCE, PAN-OS GlobalProtect, Grafana, Keycloak, Jira).
+  `watchlist()` now emits a "fingerprint-first" recommendation: if the target
+  stack matches a watchlist product, test that specific CVE instead of relying
+  on generic scanning.
+- Added a `dedup_before_report` doctrine rule — search Hacktivity (and prior
+  public reports) for the same endpoint/tech/vuln class before writing the
+  report; the #1 cause of "Duplicate"/"N/A" rejections is not searching first.
+
+## [2.4.96] — 2026-09-29
+
+### Security — self-audit (command injection + path traversal fixed)
+
+- `resolve_check(host)` interpolated the user-controlled host into a `curl` shell
+  string (`execSync`), allowing command injection (`host = "x.com; id"`). Now
+  validates the host against a strict hostname regex BEFORE any subprocess/DNS and
+  calls curl via `execFileSync` (array argv, no shell) — defense in depth.
+- `foundry_run(contract_name=...)` used the name as a filename under the temp
+  project without validation, allowing path traversal (`"../../evil"`). Now
+  sanitizes to a valid Solidity identifier (`[A-Za-z_][A-Za-z0-9_]*`), defaulting
+  to `Vulnerable` otherwise.
+- Added regression checks: `isValidHostname` rejects shell metacharacters
+  (`;`, backticks, `$()`, `|`, `../`, newlines); the identifier regex is shared.
+
+## [2.4.95] — 2026-09-29
+
+### Fixed — full interconnection audit (unreachable template + 2 ungrounded classes)
+
+- `auto_poc` `open_redirect` template was UNREACHABLE: `canonicalId("open_redirect")`
+  resolves to `oauth_misconfig`, but the template key was `open_redirect`, so the
+  lookup fell back to the `missing_authz` recipe. Renamed the key to the canonical
+  `oauth_misconfig` + added an interconn invariant that every auto-poc key IS its
+  own canonical id.
+- `nosql_injection` and `host_header` were referenced across intel/orchestrator/
+  writeup/technique-lookup but had no pattern, severity, or synonym (ungrounded).
+  Added full patterns (CWE-943 / CWE-644), severity VRT entries (P1 critical /
+  P3 medium), and synonyms (nosql/mongo injection; host-header poisoning /
+  password-reset poisoning). cwe_map already carried both CWEs.
+- `SINK_TO_VECTOR` mapped the `code_execution` sink to a non-pattern vector name;
+  now maps to `command_injection` (consistent with the "code execution" synonym).
+
+## [2.4.94] — 2026-09-29
+
+### Added — Hunting intel (DNS sinkhole detection + CWE/CVE watchlist)
+
+- `resolve_check(host)` — detects when an ISP/country redirects a domain to a
+  blocking/sinkhole page (gambling/adult/streaming niches). Compares the local
+  resolver against public DNS (8.8.8.8/1.1.1.1) and probes the local IP for
+  blocking-page content — the CONTENT is the signal (a differing IP set alone is
+  normal for CDN/anycast). A sinkhole verdict tells the agent to audit the PUBLIC
+  IP, never the sinkhole.
+- `watchlist()` — the ranked bug-bounty CWE frequency (17 classes) + high-value
+  CVE watchlist (9 CVEs), each with payout range + a saturated flag, joined to a
+  Blitz Strike detector pattern for grounding. Prioritizes high-frequency /
+  high-payout / not-yet-saturated classes (missing-authz, SQLi, SSRF,
+  deserialization) and flags saturated low-value ones (XSS/CSRF/open-redirect).
+  Data: intelligence/watchlist.json.
+
+## [2.4.93] — 2026-09-29
+
+### Fixed — reproducible verify harness (flaky wordlist test)
+
+- The `crack: wordlist autoload` check depended on rockyou.txt/seclists being
+  installed at `/usr/share/wordlists/` (absent on minimal hosts), so `blitzstrike
+  verify` was not reproducible. Now uses a bundled `test/fixtures/wordlist.txt` via
+  the `opts.wordlist` argument — deterministic, no external wordlist required.
+
+## [2.4.92] — 2026-09-29
+
+### Fixed — interconnection audit (grounding gaps + reversed PoC semantics)
+
+- `command_injection` was UNGROUNDED: emitted by the taint engine + used in auto-poc
+  and attack_plan, but had no pattern/CWE/severity/alias. Added the full pattern
+  (CWE-78, chain `command_injection_os_cmd`, payout $1K–$15K, bypass + crown-jewels),
+  a severity VRT entry (P1/critical), and synonyms (command injection / os command
+  injection / command execution / cmd injection / rce / code execution / code
+  injection / eval injection).
+- Foundry PoC templates now use consistent POSITIVE semantics (a passing PoC = the
+  bug is PRESENT): `missing_access_control` asserted the secure outcome (backwards) —
+  now `assertGt(balanceOf(attacker), 0)`; `address_zero_check` now asserts the zero
+  address IS accepted; `signature_replay` / `delegatecall_user_input` /
+  `unchecked_arithmetic` / `timestamp_dependence` flipped from `vm.expectRevert()`
+  (secure-behavior) to asserting the exploit outcome.
+- verify.ts: pattern-grounding check changed from exact count equality (patterns ==
+  detector types) to a subset invariant (every detector type grounded), so extra
+  classes like command_injection don't fail it.
+
+## [2.4.91] — 2026-09-29
+
+### Added — Foundry runner (execute Web3 PoC to PROVE a finding)
+
+- New `foundry_run(contract_code, poc_code|class_, contract_name)` tool — actually
+  executes a Foundry PoC test against a vulnerable contract: scaffolds a temp
+  Foundry project (forge init → forge-std), runs `forge test`, and reports the
+  verdict from forge's own test result. A PASSING PoC test = the exploit reproduced
+  = the finding PROVEN; a failing PoC = not reproduced; a compile error = error.
+  Deterministic differential (passes on the vulnerable contract, fails on the fixed
+  one). Requires forge installed.
+
+## [2.4.90] — 2026-09-29
+
+### Added — Auto-PoC (reproduction recipe generator)
+
+- New `auto_poc(type, base_url, endpoint, param, …)` tool — turns a finding into a
+  copy-paste-ready reproduction recipe, making the "reproducible" gate question
+  executable. Emits the exact request (with a MARKER), a NEGATIVE CONTROL, and the
+  expected differential that PROVES the bug, plus a Patchstack-style title, derived
+  severity, and the fix. 18 classes: sql_injection, missing_authz/idor, ssrf, xss,
+  ssti, command_injection, file_upload, mass_assignment, jwt_alg_confusion, crlf,
+  open_redirect, xxe, prototype_pollution, deserialization, hardcoded_secret,
+  cache_deception, cors_misconfiguration, subdomain_takeover.
+
+## [2.4.89] — 2026-09-29
+
+### Added — Sibling Rule Engine (deterministic live logic-bug prober)
+
+- New `sibling_scan(base_url, endpoint, token_a, token_b, object_id_b)` tool — a
+  deterministic, evidence-first live prober that closes the gap static detectors
+  cannot cover (the 18 logic-bug FNs): (1) enumerates sibling paths (/export /delete
+  /share /{id} /list /settings …), (2) differential IDOR — the victim's object
+  fetched with the ATTACKER's token (a 200 with A's token + B's id = IDOR proven),
+  (3) auth matrix — each sibling probed with no token (a 2xx/3xx = missing auth),
+  (4) mass assignment — role/admin field injection on POST/PUT, (5) rate limit —
+  15 rapid requests. Hits-only, differential (status + body), real-time append.
+
+## [2.4.88] — 2026-09-29
+
+### Changed — XSS detector precision (local taint flow)
+
+- `xss` no longer flags a DOM sink merely because a source exists somewhere in the
+  same file. It now builds a tainted-variable set via assignment flow (transitive,
+  ≤3 hops) and flags a sink only when its argument references a tainted variable or
+  is a direct source expression. Removes the "source + sink co-occurrence" false
+  positives (4 FPs on the 30-lab benchmark) with zero recall loss.
+
+## [2.4.87] — 2026-09-29
+
+### Fixed — web3 class naming consistency + jwt grounding
+
+- Renamed the web3 class `encodePacked_collision` → `encode_packed_collision`
+  (snake_case, matching the other classes; fixes resolution through canonical id).
+- Added the `jwt` → `jwt_alg_confusion` synonym so the `jwt` attack-vector resolves
+  to its pattern grounding + payout (previously returned no bounty signal).
+
+## [2.4.86] — 2026-09-29
+
+### Added — Web3 audit extended to 13 bug classes
+
+- Reentrancy detector now also catches ERC721/ERC1155 callback reentrancy
+  (`safeTransferFrom` / `safeTransfer` invoke `onERC721Received`/`onERC1155Received`
+  hooks).
+- Oracle-manipulation detector now also catches Uniswap V3 `slot0()` and stale
+  Chainlink `latestRoundData()`/`latestAnswer()` (no `updatedAt` staleness check).
+- New `encodePacked_collision` detector — `keccak256(abi.encodePacked(...))` over
+  dynamic types is not injective (CWE-701).
+- New `address_zero_check` detector — a privileged `setOwner`/`constructor`/
+  `initialize` assigning an address param without `!= address(0)` (CWE-20).
+- Foundry PoC templates added for both new classes; web3 severity now supports `low`.
+
+## [2.4.85] — 2026-09-29
+
+### Added — CORS, XSS (DOM sinks), and subdomain-takeover detectors
+
+- New `cors_misconfiguration` detector — Access-Control-Allow-Origin reflects the
+  request Origin (or is `*`) while credentials are allowed (CWE-942); handles the
+  `setHeader('…', …)` comma shape and raw-header/wildcard shapes.
+- New `xss` detector — user-controlled input reaching a DOM/JS sink (innerHTML,
+  dangerouslySetInnerHTML, document.write, .html(), eval, insertAdjacentHTML),
+  fired only when a source (req/location/URLSearchParams/…) is in the same file and
+  the sink value is not a constant string (CWE-79).
+- New `subdomain_takeover` detector — a DNS CNAME/AliasTarget/DNSName/route53 record
+  pointing at a claimable service (github.io / herokuapp.com / amazonaws.com / …)
+  (CWE-404). 24 takeover-able fingerprints.
+- Wired into patterns.json (29), cwe_map (69), severity VRT_MAP, synonyms, and the
+  verify harness (now 28/28 TP+TN). Complex-bug scan description + system prompt
+  updated.
+
+
+## [2.4.84] — 2026-09-29
+
+### Added — hunting doctrine + always-rejected kill-list (LLM-facing methodology)
+
+- New `hunting_doctrine()` tool — the high-ROI heuristics the agent applies while
+  choosing targets/endpoints/classes: the Sibling Rule (check every sibling
+  endpoint — ~30% of paid IDOR/auth bugs), A→B Signal Method, impact-first,
+  follow-the-money, less-saturated classes, new==unreviewed, two-account IDOR test,
+  PoC escalation, credential-proof, CI/CD + SAML/SSO attack surface, 20-minute
+  rotation.
+- New `kill_list(type)` tool — a deterministic always-rejected classifier: missing
+  headers, self-XSS, open-redirect-alone, SSRF-DNS-only, GraphQL-introspection-alone,
+  logout CSRF, missing cookie flags, rate-limit-on-non-critical, version disclosure
+  are N/A standalone (chain to real impact first). Run BEFORE submission_gate.
+- System prompt now carries the compressed doctrine inline; `missing_authz` pattern's
+  validation mandates the two-account IDOR test (attacker A → victim B).
+
+reporting.md).
+
+## [2.4.83] — 2026-09-29
+
+### Added — Web3 / Solidity audit (10 bug classes + Foundry PoC)
+
+- New `web3_audit(code|path)` — a deterministic, pattern-based Solidity auditor for
+  the 10 highest-value smart-contract bug classes: reentrancy, unchecked return
+  value, unchecked arithmetic, tx.origin auth, signature replay, unprotected
+  selfdestruct, delegatecall-to-user-input, missing access control, timestamp
+  dependence, spot-price oracle manipulation, and unbounded loops. Returns ranked
+  findings (class / CWE / severity / line / evidence).
+- New `foundry_poc(class, contract)` — generates an executable Foundry (forge) test
+  template that proves a finding class. A web3 hit is a HYPOTHESIS until the
+  Foundry PoC reproduces it.
+- `.sol` added to the scan extensions.
+
+
+## [2.4.82] — 2026-09-29
+
+### Added — out-of-band (OOB) listener for blind vuln proof
+
+- New `oob_start` / `oob_poll` / `oob_stop` / `oob_list` tools give deterministic
+  proof for BLIND SSRF/XXE/SQLi/command-injection that never reflect in the HTTP
+  response. `oob_start` prefers the installed `interactsh-client` (unique *.oast.*
+  domain streaming DNS/HTTP interactions — the standard for public targets) and
+  falls back to a local HTTP listener for local labs. `oob_poll(id)` reports a hit
+  ONLY when an interaction for the session's unique id actually arrives. Handles
+  interactsh's ANSI-colored `[INF]` banner + JSONL interaction parsing.
+
+
+## [2.4.81] — 2026-09-29
+
+### Added — impact-first prioritization via typical bounty payout
+
+- Every pattern in `patterns.json` now carries `payout_min` / `payout_max` /
+  `typical_payout` (e.g. sql_injection `$1K–$15K`, ssrf `$1K–$15K`, deserialization
+  `$5K–$30K`, idor `$1K–$10K`). `pattern_lookup` returns the range so a raw detector
+  hit is grounded with its bounty value.
+- `attack_plan` now emits `typical_payout` + `expected_value_usd`
+  (`success_probability × payout midpoint`) per vector, so the driving agent can
+  prioritize impact-first (highest expected bounty) instead of relevance-only.
+  Non-detector vectors (xss / business_logic / open_redirect / …) fall back to a
+  curated PAYOUT_FALLBACK table.
+
+
+## [2.4.80] — 2026-09-29
+
+### Changed — LLM-facing wiring for the two new web-class detectors
+
+- The system prompt ("NEWEST DETECTORS" block) now documents `jwt_alg_confusion`
+  and `cache_deception` — what they detect, the CWE, and a concrete TO TRY recipe
+  for each — so the LLM knows these detectors exist and how to act on a hit.
+- `orchestrator.ts` escalation map now routes `jwt_alg_confusion` →
+  `jwt_alg_confusion_forgery` and `cache_deception` → `cache_deception` chains.
+- Added a dedicated `cache_deception` escalation chain (chains.json) — request an
+  authenticated path with a static extension, then re-fetch anonymously — and
+  pointed the cache_deception pattern's chain_templates at it.
+
+Full end-to-end ground: synonym_lookup → pattern_lookup (CWE + chains + bypass)
+→ severity_calibrate (P1/P2) → list_chains → coverage_matrix.
+
+## [2.4.79] — 2026-09-29
+
+### Changed — precision pass (FP reduction, benchmark-driven)
+
+- Removed the bare `exec(` sink (sqlite `db.exec(...)` / `stmt.exec(...)` was
+  flagged as command execution in Node apps). Command injection is still covered
+  by `child_process.exec/spawn`, `system`, `shell_exec`, `subprocess.*`,
+  `os.system`, `popen`.
+- `detectRouteAuthz`: added `requireAdmin`/`requireRole`/`requirePermission`/
+  `isAdmin`/`checkRole`/`bearer`/`apiAuth`/`getApiKeyFromRequest`/`verifyApiKey`
+  to the express auth model + widened the window to ±3, and added a public-path
+  SEGMENT matcher for multi-segment public routes (`/api/system/version`,
+  `/.well-known/jwks.json`, `/v1/metrics`).
+- `detectHardcodedSecret`: skip values that are function calls
+  (`getApiKeyFromRequest(req)`, `fs.readFileSync(...)`, `make_token(...)`) or DOM
+  reads (`document.getElementById(...).value`) — those are computed at runtime.
+
+FP labs on the 30-lab benchmark dropped 16 → 8 (TP 12 unchanged).
+
+## [2.4.78] — 2026-09-29
+
+### Fixed — taint-engine sanitizer name collision (whole-class FN)
+
+- The Python taint adapter neutralized every identifier inside a sanitizer call
+  (e.g. `int(os.environ.get("PORT", "5000"))` neutralized the method name `get`
+  for sql_execution/command_execution). Because taint state is keyed by name, that
+  polluted the `get` in `request.args.get(...)` elsewhere and wrongly suppressed
+  real findings (labs20 f-string SQLi went undetected). Sanitizers now only
+  neutralize VALUE arguments, skipping dotted-chain receiver/method names and
+  string literals. Python f-string SQLi (`request.args.get -> f"{var}" -> execute`)
+  is now caught.
+
+## [2.4.77] — 2026-09-29
+
+### Changed — SQLi Node/Python coverage + missing_authz root-path precision
+
+- `detectSqlInjection` now matches Node/Python sinks (`pool.query`, `client.query`,
+  `connection.query`, `db.query`, `pg.query`, `sequelize.query`, `knex.raw`,
+  `sqlx::query(&format!`, `cursor.execute` / `.execute`) and recognizes Node
+  template-literal `${var}`, Python f-string `{var}`, and JS `+ var` interpolation
+  as string-built queries (cross-file case).
+- `detectRouteAuthz` now skips root/empty paths (`@app.get("/")`) as public-by-design
+  (was flagging the index route), plus `home`/`index`/`root` route segments.
+
+## [2.4.76] — 2026-09-29
+
+### Fixed — config/manifest files were not scanned (whole-class FN)
+
+- `iterSourceFiles` only walked code extensions (php/py/js/ts/...), so the
+  detectors never saw nginx configs, manifests, or other-language sources.
+  Added `.conf/.config/.nginx`, `.json/.yaml/.yml/.toml/.xml/.properties/.gradle/.proto`,
+  `.env/.txt`, and `.rb/.go/.rs/.cs/.c/.h/.cpp/.cc/.hpp/.sh/.bash`. This unblocks
+  `cache_deception` (nginx.conf — caught labs01) and `dependency_confusion` /
+  `oauth_misconfig` / `grpc_reflection` (package.json / requirements.txt / yaml).
+
+## [2.4.75] — 2026-09-29
+
+### Fixed — detection FP/FN remediation (Hackbot Arena benchmark-driven)
+
+Four fixes driven by the 30-lab detection benchmark (TP/FP/FN):
+
+1. **`detectRouteAuthz` decorator/middleware auth + public-route skip.**
+   Recognizes `require_auth` / `auth_required` / `jwt_required` / `token_required` /
+   `verify_token` / `current_user` / `before_request` as auth enforcement; skips
+   public-by-design routes (register/login/health/status/static/docs/...). Also
+   fixed a cross-framework FP: the express detector was matching Flask
+   `@app.get/post` decorators (no `@` exclusion) — added `(?<!@)` and expanded the
+   flask entry to `@app.(route|get|post|put|delete|patch)`. `missing_authz` FP
+   dropped ~23 → 19 labs.
+2. **Node/Python sinks.** Added `subprocess.run/call/Popen/check_output`,
+   `os.system/popen`, `child_process.exec/spawn/execSync`, `sqlx::query(&format!`,
+   `sequelize.query`, `knex.raw`, `requests.get/post/put`, `urllib.request.urlopen`,
+   `httpx.get`, `render_template_string`/`Template` to the sink scanner — so Python
+   command injection (labs24), SSRF (labs07/10/15), and Node SQLi now register.
+3. **Two new detectors.** `jwt_alg_confusion` (verifier accepting RS256 + HS256
+   with public-key HMAC — CWE-347, caught labs03) and `cache_deception`
+   (cookie-less static cache key over a session-authenticated backend — CWE-525,
+   caught labs01). Also enhanced `ssti` to catch Liquid `Template(var)` from stored
+   input (labs23). Both wired through cwe_map/patterns/severity/synonyms/harness.
+4. **`hardcoded_secret` flag suppression.** Suppresses `FLAG{...}` literals, the
+   bare `FLAG` env marker, and quoted-prefix concatenations (`'usr_' + random`) so
+   seeded CTF flags and runtime-built values aren't reported as CWE-798.
+
+## [2.4.74] — 2026-09-29
+
+### Fixed — live_recon tech fingerprint false-positive (benchmark-driven)
+
+- Tech detection now uses header + cookie signals FIRST (authoritative), then
+  body regex as fallback, via a new `detectTech(headers, body)`:
+  - `x-powered-by: Express` / `connect.sid` cookie → nodejs (was missed).
+  - `laravel_session` / `XSRF-TOKEN` cookie → laravel.
+  - `PHPSESSID` → php, `csrftoken`+`sessionid` → django, `rack.session` → rails.
+- Removed the over-broad `_token` / `csrf-token` → laravel body signature (those
+  are generic CSRF tokens, present in Node/Express apps too) — this caused the
+  Hackbot Arena labs03 (Node/Express) to be mis-flagged as "laravel".
+- `gunicorn` no longer implies "flask" (it's a generic WSGI server shared by
+  Flask/Django/FastAPI); only `werkzeug` maps to flask.
+
+## [2.4.73] — 2026-09-29
+
+### Changed — crack_hash wordlist support (benchmark-driven fix)
+
+- `crack_hash` gained a `wordlist` arg (comma-separated paths) + `maxCandidates`
+  arg, and `crackHash()` now STREAMS any supplied wordlist and AUTOLOADS the
+  standard seclists/rockyou locations (`/usr/share/wordlists/rockyou.txt`,
+  `/opt/seclists/.../rockyou-*.txt`, Common-Credentials) when present. Cracking
+  is line-streamed (no full-file load), so a 14M-line rockyou won't OOM.
+- Added a pure-JS MD4 (NTLM) implementation so NTLM hashes also crack offline.
+- Result now reports `source` (common/wordlist) + `candidates_checked`.
+- Root cause: the Hackbot Arena labs04 run found the built-in common list was too
+  small (missed `md5("xNnWo6272k7x")`, only present in the full rockyou) — the
+  tool now reaches whatever wordlist is available on the box.
+
+## [2.4.72] — 2026-09-14
+
+### Added — Hackbot Arena benchmark integration
+
+- New `intelligence/hackbot-arena.json` (schema blitzstrike-hackbot-arena-v1): the
+  30 NusaSec Hackbot Arena web-security labs (id/name/difficulty/port/stack/
+  vuln_class/flag_location/judge success-when) — a local benchmark of realistic
+  Dockerized vulnerability chains with deterministic flags.
+- New `src/hackbot-arena.ts` + three MCP tools:
+  - `hackbot_arena_list` — the 30 labs (evaluator view, no flags/solutions).
+  - `hackbot_arena_brief(labId)` — the AGENT brief: target URL, vuln class, stack,
+    flag FORMAT, and a DERIVED attack plan (vectors/detectors/chains/tools) mapped
+    from the vuln class. Never leaks the flag, judge criteria, or solution.
+  - `hackbot_arena_coverage` — maps all 30 labs against Blitz Strike's
+    detector/vector coverage (currently ~27/30 labs have deterministic tooling).
+- Verified live against labs03 (JWTea): the brief maps it to the jwt vector +
+  jwt_analyze tool, and live_recon fingerprints the running lab (nginx + the
+  JWKS/docs endpoints) — the agent then drives the JWT alg-confusion chain.
+
+## [2.4.71] — 2026-09-14
+
+### Added — Rust language support (adapter + detectors)
+
+- Rust is now the 5th taint-engine language (php/javascript/python/java/rust): a new
+  regex/line-oriented adapter maps Rust sources (env::args, stdin, axum/actix
+  Query/Form/Json/Path extractors, env::var) and sinks (std::process::Command,
+  sqlx/diesel/rusqlite, reqwest/hyper, std::fs, serde/bincode) onto the existing
+  sink classes. The sqlx `query!`/`query_as!` compile-time macro + `canonicalize()`
+  are treated as safe (suppressed), so runtime `sqlx::query(&format!(...))` is the
+  signal that fires.
+- Two Rust-specific detectors: `rust_unsafe` (transmute / assume_init /
+  from_raw_parts / ptr::* — memory-unsafety surface, CWE-119) and
+  `rust_format_string` (println!/format! with a VARIABLE as the format string —
+  CWE-134, distinct from the safe `println!("{}", v)`).
+- Full pipeline wired: CWE map (66), patterns (24, grounded in RustSec / OWASP
+  WSTG-INPV-13 / Rust Foundation "Unsafe Rust in the Wild" / rust-security-handbook),
+  variants (78), synonyms, severity VRT, coverage matrix (5 languages), and the
+  verification harness (23/23 detectors TP+TN).
+
+## [2.4.70] — 2026-09-14
+
+### Added — Per-finding per-scope reports (HackerOne-grade)
+
+- `generate_report` gains `mode=per_finding`: writes ONE HackerOne-grade report
+  PER finding into a per-scope directory (bug-bounty convention — one submission
+  per vulnerability):
+  ```
+  reports/<scope_slug>/
+    findings/<severity>_<vuln_slug>.md   (Summary / Root Cause / Steps to
+                                          Reproduce / Impact / Remediation /
+                                          References / Evidence + severity tier)
+    SUMMARY.md                             (index + severity counts)
+    metadata.json                          (structured, automation-friendly)
+  ```
+- `findingReport(f)` + `perFindingReports(findings, opts)` exported from report.ts;
+  the aggregate mode stays the default. Each per-finding report carries the
+  severity→priority tier (critical=P1 … informational=P5), CWE, status, target, and
+  attack chain in a metadata table.
+
+## [2.4.69] — 2026-09-14
+
+### Added — Supply-chain detectors (dependency confusion + ML model loading)
+
+- New `dependency_confusion` detector (CWE-427): flags a manifest/build file that
+  resolves a package from a PUBLIC registry (--index-url/--extra-index-url to
+  pypi.org/npmjs.org/rubygems.org), or references a scoped internal package
+  (@company/pkg) with no private registry pinned — the squattable-name confusion
+  vector. Manifest-gated by file name.
+- New `ml_supply_chain` detector (CWE-502): flags untrusted AI/ML model loading —
+  `torch.load` without `weights_only=True`, `joblib.load`, `keras.models.load_model`,
+  and `np.load(allow_pickle=True)` (source-agnostic, the flag IS the signal) —
+  pickle RCE on load. Complementary to the deserialization detector.
+- Wired into the full pipeline: CWE map (now 64), patterns (22), variants (74, all
+  fired), synonyms (69 aliases), severity VRT map, verification harness (now 21/21
+  detectors TP+TN).
+- FIXED a severity gap the interconnection audit exposed: the VRT map was missing
+  the 4 modern detectors added earlier (llm_injection, graphql_exposure,
+  oauth_misconfig, grpc_reflection) — they now carry proper VRT tiers, and a new
+  regression test asserts every detector type has a non-"unclassified" severity.
+
+## [2.4.68] — 2026-09-14
+
+### Added — Git-history secret mining + leaked-key validation
+
+- New `scan_git_history` tool: mine a repo's HISTORY (not just HEAD) for secrets in
+  files that were DELETED — the "removed later != fixed" trap. Runs
+  `git log --diff-filter=D` + `git show <sha>^:<path>` (read-only) and feeds every
+  recovered pre-deletion blob through the hardcoded_secret detector, with the
+  deletion commit + message attached. Also a pickaxe mode (git log -S) to trace one
+  specific token through all commits.
+- New `validate_leaked_key` tool: prove a recovered credential is still ACTIVE on a
+  live API with a READ-ONLY differential test — the same endpoint is fetched
+  without the key (expect 401/403) and with the key (expect 200); the contrast is
+  proof of auth bypass. Accepts a raw key or a blobUrl + varName to fetch/parse it.
+- Secret severity now ESCALATES: when a secret-field literal also matches a known
+  format (e.g. a Stripe live key under a SECRET_KEY field), the finding takes the
+  format's more precise severity (critical) instead of the generic field tier.
+
+## [2.4.67] — 2026-09-14
+
+### Fixed — Whole-code interconnection audit (2 bugs)
+
+- `submission_gate` is now FAIL-CLOSED: a question passes only when EXPLICITLY
+  asserted true (`=== true`, not `!== false`), so an empty/unset finding fails the
+  gate instead of passing 7/7 by default. One false = kill, and a missing field is
+  a false.
+- Redaction now covers detection end-to-end: 6 secret formats the detector found
+  but the redactor did not strip (Slack webhook URL, Firebase URL, basic-auth URL,
+  Sentry DSN, ngrok auth token, Discord bot token) now redact — the invariant
+  "every secret the detector finds is stripped from reports/logs" is restored.
+- Added a whole-code interconnection audit (detectors ↔ CWE ↔ patterns ↔ chains ↔
+  variants ↔ synonyms ↔ severity ↔ secrets + edge cases) + regression tests for
+  both fixes.
+
+## [2.4.66] — 2026-09-14
+
+### Added — Per-engagement pattern recall (intelligence ledger)
+
+- New `recall(tech, target)` in the empirical intelligence ledger + an
+  `intelligence(action=recall)` path: given a tech (and/or a specific target),
+  returns which patterns historically CONFIRMED on it (prioritize these on a new
+  target) versus which only ever produced false positives (avoid those). A new
+  engagement now inherits the empirical playbook of past ones — the "pattern
+  recall across targets" layer that compounds with every verified verdict.
+
+## [2.4.65] — 2026-09-14
+
+### Added — Synonym resolution + LLM-injection validation SOP
+
+- New `src/synonyms.ts` — a data-driven alias map resolving free-form vuln
+  terminology (IDOR/BOLA/broken-object → missing_authz, CSRF/XSRF → missing_nonce,
+  SQLi, path-traversal/LFI, prompt-injection/LLM01 → llm_injection, …) to the
+  canonical detector id. `pattern_lookup` now accepts free-form terms, and a new
+  `synonym_lookup` MCP tool lists every alias that resolves to a class.
+- `llm_injection` now carries a validation SOP (a `validation` field in its
+  pattern): the RUN-TWICE RULE (reproduce token-for-token across two fresh
+  sessions), NON-GUESSABLE ANCHOR (must leak a real key/URL, not a plausible
+  guess), and OOB PROOF (verifiable callback log) — so an LLM finding is verified
+  the same way as any other, not just flagged.
+
+## [2.4.64] — 2026-09-14
+
+### Added — 47-pattern secret format taxonomy (severity + category)
+
+- Expanded `SECRET_FORMATS` from ~12 to 47 known secret formats, each now carrying
+  a severity (critical/high/medium/low) + category (aws, gcp, github, stripe, slack,
+  email_svc, twilio, paas, firebase, jwt, bearer, basic_auth, private_key, generic,
+  ai_api, infra_api, package_registry, saas_api, observability, tunneling, bot_token).
+- New formats: AWS session tokens, GCP service accounts, GitHub OAuth/server-to-server,
+  Stripe live/test/publishable, Slack webhooks, Heroku, Firebase, bearer/basic-auth,
+  RSA/EC/OpenSSH private keys, Anthropic/OpenAI/HuggingFace, Cloudflare/DigitalOcean,
+  npm/PyPI/Docker, Atlassian/Linear, NewRelic/Datadog/Sentry, ngrok, Discord/Telegram.
+- `detectHardcodedSecret` Tier 2 now reports the format's own severity + category,
+  so a hardcoded secret hit is classified (e.g. Stripe live = critical, Stripe test
+  = low) instead of uniformly "high". Redaction patterns expanded to match.
+
+## [2.4.63] — 2026-09-14
+
+### Added — Variant corpus + detector coverage sweep (data-driven scaling)
+
+- New `intelligence/variants.json` — a corpus of 65 concrete real-world code
+  shapes (3-4 per class, multi-language: PHP/JS/Python/Java/Node) that each MUST
+  fire its class's detector. This is how the empirical grounding scales: more
+  shapes → more coverage, tested reproducibly.
+- New `scan_variants` MCP tool + `blitzstrike verify` now also sweeps the variant
+  corpus and reports per-class coverage, surfacing false negatives (a detector
+  missing a real shape) as a hard failure.
+- Detector coverage raised from 54% to 100% across the corpus, fixing real gaps:
+  multi-language sinks (pickle/yaml/readObject, jinja2/twig, axios/requests,
+  DocumentBuilderFactory), `$.extend`/`$twig->render` word-boundary bugs, JS `+`
+  concatenation in SQLi, `setcookie` CRLF, `mysqli_query`/`whereRaw` SQLi sinks,
+  dynamic field binding + `Model.create` mass-assignment, and a double-paren bug
+  in the upload sink regex. The corpus is the proof: every shape now fires.
+
+## [2.4.62] — 2026-09-14
+
+### Added — Deep empirical corpus (per-class bypass + crown jewels)
+
+- Enriched every pattern in `intelligence/patterns.json` with `bypass_techniques`
+  (the per-class bypass methods a senior hunter uses to defeat the class's
+  protections) and `crown_jewels` (the high-value assets/endpoints that class
+  typically hits). `pattern_lookup` now returns the full operator-depth record —
+  CWE + signature + chains + references + bypass + crown jewels — so a detector
+  hit is grounded in "what actually gets past the defenses and pays".
+
+## [2.4.61] — 2026-09-14
+
+### Added — Automated verification harness (`blitzstrike verify`)
+
+- New `src/verify-harness.ts`: exercises every detector against a POSITIVE fixture
+  (must fire) + a NEGATIVE fixture (must stay silent) and reports TP/FP/FN per
+  detector. Turns "battle-tested" from a claim into a command anyone can run.
+- New `blitzstrike verify` CLI command (exits non-zero on any FN/FP) + a
+  `run_verification` MCP tool — the reproducible, regression-grade proof that all
+  19 single-file detectors still pass after any change (cross-file priv_esc is
+  covered by the verification corpus + cross-file regression).
+
+## [2.4.60] — 2026-09-14
+
+### Added — Modern attack-surface detectors + verification corpus
+
+- Four new detector classes (the "next-gen" 2026 surface beyond classic web):
+  `llm_injection` (request input reaches an LLM call — OWASP LLM01), `graphql_exposure`
+  (introspection/playground left on), `oauth_misconfig` (redirect_uri fed by request
+  input with no allowlist), and `grpc_reflection` (reflection enabled). Each carries
+  CWE mapping + empirical pattern grounding.
+- New `bench/verification/` — an auditable verification corpus: every detector that
+  was verified against a real vulnerable target gets a writeup (detector → ground
+  truth → result → evidence). "Battle-tested" is now a claim with an audit trail,
+  not an assertion.
+
+## [2.4.59] — 2026-09-14
+
+### Added — Severity calibration + engagement scaffold + data health
+
+- New `severity_calibrate` MCP tool (src/severity.ts): maps a detector type to a
+  platform-neutral priority tier (P1–P5) + a VRT-style category + rationale, with
+  an optional CVSS cross-reference — a finding is reported at the severity a triager
+  would assign, not the detector's raw default.
+- New `engagement_scaffold` MCP tool: opens an engagement and emits a deterministic
+  folder layout (scope.md, findings/, evidence/, reports/, notes/) + a pre-filled
+  scope.md template, so a hunt starts with structure instead of improvisation.
+- New `data_refresh` MCP tool (src/datarefresh.ts): re-loads every data layer
+  (chains, patterns, CWE map) and verifies cross-references, surfacing stale/broken
+  data instead of silently producing bad grounding.
+- System prompt updated to drive the full grounding→gate→calibrate→scaffold flow.
+
+## [2.4.58] — 2026-09-14
+
+### Added — Empirical grounding v1 (pattern library + submission gate)
+
+- New `intelligence/patterns.json` — the empirical grounding layer: all 16 detector
+  types are traced to their CWE, real-world signature, the escalation chains they
+  compose into (cross-ref chains.json), and citable references (CWE/OWASP). Detection
+  is now derived from disclosed-report-class knowledge, not abstract heuristics alone.
+- New `src/patterns.ts` + `pattern_lookup` MCP tool — returns a detector hit's empirical
+  grounding (CWE, real-world signature, chains, references) to turn a raw hit into a
+  class-aware finding.
+- New `submission_gate` MCP tool — a deterministic 7-question gate (reproducible,
+  in-scope, real-impact, no-privileged-assumption, verified-live, evidence-redacted,
+  severity-derived); one false = the finding does not ship. Formally enforces
+  "never report unverified".
+- Inventory self-test extended: every detector type must be empirically grounded in
+  patterns.json AND CWE-mapped (drift fails at build time).
+
+## [2.4.57] — 2026-09-14
+
+### Added — Secret detection v2 (single taxonomy + format + entropy tiers)
+
+- New `src/secrets.ts` — the single source of truth for secret field names,
+  known-format signatures, and redaction patterns. `sinks.scanSinks`,
+  `complex-bugs.detectHardcodedSecret`, and the evidence redactor all import
+  from it (previously three divergent copies).
+- `hardcoded_secret` now detects in THREE tiers: (1) a known secret FIELD
+  assigned a literal (HIGH), (2) a known secret FORMAT — JWT/AWS/GitHub/Slack/
+  Google/Twilio/SendGrid/Mailgun/PEM — regardless of variable name (HIGH), and
+  (3) a high-entropy token (Shannon ≥ 4.5 bits/char, ≥32 chars, mixed case+digit)
+  under a non-obvious name (MEDIUM, suspect). Entropy skips minified/bundled files.
+- CWE map completed: added `type_juggling` (CWE-697), `path_confusion` (CWE-22),
+  `wrong_sanitizer` (CWE-20) — the compliance tool now maps all 16 detector types.
+- Added a detector-inventory self-test: every ComplexBugType must have a CWE
+  mapping (fails at build time if a new detector forgets its mapping).
+
+## [2.4.56] — 2026-09-14
+
+### Added — Hardcoded-secret detector (CWE-798)
+
+- New `detectHardcodedSecret`: flags a secret field (api_key, db_password,
+  access_token, aws_*_key, client_secret, jwt_secret, …) assigned a hardcoded
+  literal value in source — CWE-798 Use of Hard-coded Credentials. Skips
+  placeholders, environment lookups (`getenv`/`process.env`), variable references,
+  and comment mentions. CWE mapping added; the LLM system prompt now directs
+  live verification of frontend/JS secrets via chrome-devtools (drive_devtools).
+
+## [2.4.55] — 2026-09-14
+
+### Changed — universal framing (no vendor-specific references)
+
+- Removed every vendor/plugin-specific name from source comments, test fixtures,
+  action-heuristic example data, and the changelog — the tool is framework-agnostic
+  and must not embed third-party product names. Detection logic is unchanged; only
+  identifiers/examples/comments were generalized.
+
+## [2.4.54] — 2026-09-14
+
+### Changed — file-upload scope widened + antiscript-not-a-defense regression
+
+- Widened the file-upload defense scope from 6 to 30 lines so a nearby
+  extension whitelist / wp_check_filetype is still seen.
+- Regression test: an antiscript filename helper (extension-strip) is NOT a
+  defense signal — a filename special-char vuln is not extension-based and the
+  vulnerable version also calls it; treating antiscript as a defense caused a
+  false negative. Remaining file-upload FPs (2/19 clean plugins) are cross-file
+  validation or admin-only context — inherent to per-file detection.
+
+## [2.4.53] — 2026-09-14
+
+### Changed — file-upload precision (FP-reduction from a 19-plugin clean corpus)
+
+- Removed `wp_handle_upload` from the file-upload sink list — it is the WP-safe
+  upload helper (validates mime by default), so flagging it was a false positive
+  on every well-behaved plugin.
+- Added `stripCommentsOnly` (comment-only stripping, preserving string literals)
+  to `detectFileUploadRce` so a `move_uploaded_file()` mention inside a PSR-interface
+  docblock is no longer reported. FP test on 19 latest plugins: file_upload 6 → 2;
+  priv_esc and unrestricted-upload stay at 0 false positives.
+
+## [2.4.52] — 2026-09-14
+
+### Added — Unrestricted-upload config detection (file-manager RCE)
+
+- New `detectUnrestrictedUpload`: flags a file-manager/connector config that sets
+  `uploadAllow => array('all')` (especially with `uploadOrder => deny,allow`),
+  i.e. ANY mimetype — including `.php` — is uploadable. This is the classic
+  file-manager connector misconfiguration (CVE-2020-25213); now surfaces
+  `file_upload @ connector.minimal.php:157`.
+- System prompt updated so the LLM agent understands AND can try the newest
+  detectors: `priv_esc` (role/capability change from request input, cross-file)
+  and `file_upload` unrestricted-upload — with concrete verification steps
+  (submit role='administrator' / POST a .php shell and confirm execution).
+
+## [2.4.51] — 2026-09-14
+
+### Added — Cross-file privilege-escalation detector (priv_esc)
+
+- New `cross-file.ts` + `priv_esc` type: reverse call-graph trace that flags a
+  privileged sink (role/capability/user change) reachable from a public entry
+  point with no capability check on the chain. Plus a DIRECT pass that flags a
+  role/capability sink whose ARGUMENTS are themselves request input — the
+  precise `set_role($id, sanitize_key($_POST['role']))` shape (CVE-2023-3460).
+  Now surfaces the privilege-escalation sink (was 0).
+
+### Changed — precision fixes for role/escalation bugs
+
+- Added `set_role`/`add_role`/`remove_role`/`add_cap`/`remove_cap` to the
+  state-changing sink gate (DANGEROUS_OP_RE) so authz/nonce detection covers
+  role-changing operations.
+- `sanitize_key` downgraded from "validated" to "sanitized" in the security-state
+  lattice — it is a FORMAT sanitizer, not a whitelist (`sanitize_key('administrator')`
+  is still 'administrator').
+- `stripComments` now exported + applied in cross-file scanning (no comment false
+  positives). Added CWE-862/352/269 mappings for missing_authz/missing_nonce/priv_esc.
+
+## [2.4.50] — 2026-09-14
+
+### Fixed — lib/ directory is no longer skipped (whole-plugin false-negative)
+
+- `iterSourceFiles` previously skipped `lib`/`libraries`/`libs` dirs, which
+  silently MISSED entire plugins that keep their own code under `lib/`
+  (a migration plugin: 7→150 files scanned; a file-manager plugin's bundled
+  library: 17→329 files, now surfacing SQLi + SSRF + path-confusion). Only
+  genuinely third-party dirs (`third-party`, `third_party`, `vendor`,
+  `node_modules`) are skipped now — a false-negative is worse than any false
+  positive.
+
+## [2.4.49] — 2026-09-14
+
+### Changed — REST permission_callback precision (traced to WP_REST_Server)
+
+- Traced WP core `class-wp-rest-server.php` dispatch: `permission_callback` is
+  OPTIONAL and defaults to PUBLIC when absent. Now distinguishes three cases:
+  missing (HIGH — forgot, defaults public), `__return_true` (MEDIUM — explicitly
+  public, the classic "commented out check_admin_permission" pattern), and a
+  real callback (skip — function/method/current_user_can).
+- Sanitizer table widened to the full `formatting.php` surface: `esc_textarea`,
+  `esc_js`, `sanitize_url`, `sanitize_title`, `sanitize_title_with_dashes`,
+  `sanitize_user`, `wp_validate_boolean`.
+
+## [2.4.48] — 2026-09-14
+
+### Changed — Precision + consistency (traced to WP core dispatch)
+
+- Grounded the authz/nonce rules in the WordPress core dispatch: `wp_ajax_*` and
+  `admin_post_*` fire ONLY when `is_user_logged_in()`, while `*_nopriv_*` fire
+  unauthenticated. `missing_authz` is now scoped to nopriv handlers that perform
+  a state-changing/privileged operation.
+- Added a DANGEROUS_OP_RE gate: `missing_nonce`/`missing_authz` only fire when
+  the handler actually performs a WRITE (option/meta/user/post/comment writes,
+  file upload/write, `$wpdb->query/insert/update/delete`, `wp_mail`, `wp_redirect`).
+  Read-only handlers (list/search/get) are no longer flagged — removes the CSRF/
+  authz false-positive storm (a forms plugin 90→16, a page builder 11→4, a cache
+  plugin 15→1).
+- Removed `is_admin()` / `wp_doing_ajax()` from the auth surface — they are
+  request-context checks, not authorization (treating them as auth caused false
+  negatives).
+
+## [2.4.47] — 2026-09-14
+
+### Changed — WordPress integration coverage is now COMPLETE (class-method + direct handlers)
+
+- The WP authz/nonce detector previously only matched STRING handlers
+  (`add_action('wp_ajax_x','fn')`), missing the `array($this,'method')` /
+  `array('Class','method')` form that dominates modern class-based plugins.
+  Now resolves any handler form via `handlerName()` + `functionBody()`.
+- Added raw request-handler detection: `add_action('init'|'admin_init'|
+  'wp_loaded'|'template_redirect', ...)` that reads request input directly —
+  flagged for missing nonce (CSRF) and missing capability (privileged ops).
+- Auth surface widened (`is_admin`, `is_super_admin`, `current_user_can_edit_post`,
+  `wp_doing_ajax`). Benchmark: a page builder 0→11, a forms plugin ~3→90, an LMS
+  plugin 1→11 authz/nonce findings (class-method handlers now visible).
+
+## [2.4.46] — 2026-09-14
+
+### Added — SQL injection (raw string-interpolated query) detector
+
+- `detectSqlInjection` (in complex-bugs.ts): flags a SQL sink (`$wpdb->get_results/
+  get_col/get_var/get_row/query`, `->query`, `DB::unprepared`, `->whereRaw`,
+  `->selectRaw`) whose query is built by string concatenation (`. $var`) and NOT
+  `->prepare()`d — targeting the CROSS-FILE case the per-file taint engine cannot
+  see (source in a caller). Surfaces the raw-concat sink as a lead to trace back.
+- Enterprise fixture `wp-batch-route` corrected to 2 vulns (route confusion +
+  the raw SQLi in `get_users`) — the new detector surfaced a real, previously
+  uncounted vuln.
+
+## [2.4.45] — 2026-09-14
+
+### Added — File Upload → RCE detector (from plugin benchmark)
+
+- `detectFileUploadRce` (in complex-bugs.ts): flags `move_uploaded_file` /
+  `wp_upload_bits` / `wp_handle_upload` / `->move()` / `storeAs()` where the
+  written file's name/extension is attacker-controlled and no filetype/extension
+  validation is present nearby — the classic upload-a-.php-shell → RCE.
+- Benchmark-driven: a blind scan of 10 real vulnerable plugins found this was
+  the biggest detection gap (missed in 3 plugins). Now caught in a forms plugin
+  + a contact-form plugin; the bundled-library case remains gated by the
+  lib/vendor skip policy.
+
+## [2.4.44] — 2026-09-14
+
+### Added — JWT Forgeability Analyzer (identity token oracle)
+
+- New `src/jwt-analyze.ts`: parse a JWT and enumerate forge vectors
+  DETERMINISTICALLY — alg:none, missing signature, RS256→HS256 key confusion,
+  kid/jku header injection, weak HS secret (brute-forced against a wordlist),
+  missing expiry, sensitive claims.
+- New `jwt_analyze` tool + pure `decodeJwt` / `analyzeJwt` / `forgeAlgNone`
+  helpers. Confirmation is a forge-and-replay against the live verifier.
+
+## [2.4.43] — 2026-09-14
+
+### Added — Race Condition / TOCTOU Tester (concurrency oracle)
+
+- New `src/race-test.ts`: detect TOCTOU races + idempotency violations — fire
+  a CONCURRENT BURST of N identical requests and count how many succeed. If
+  more than `expected_max` (default 1) succeed, the operation is not atomic
+  under concurrency (double-spend, duplicate orders, discount abuse).
+- New `race_test` tool: success criterion is a caller-supplied regex (the
+  "marker" of a committed side effect). Pure `classifyRace` + `requestSignature`
+  for deterministic, testable logic.
+
+## [2.4.42] — 2026-09-14
+
+### Added — Duplicate Parameter Precedence Fuzzer (WAF-bypass oracle)
+
+- New `src/param-precedence.ts`: determine how the app resolves duplicate
+  parameters + alternate delimiters (`;` `,` `%26` `%3b` `|` `[]` `%00` `+`),
+  and classify first-wins / last-wins / mixed precedence.
+- New `param_precedence` tool: baseline A/B + differential per variant, with a
+  DERIVED waf_bypass_hint (inject via the WAF/app disagreement).
+- System prompt: added a "LIVE PENTEST + TARGETING" directive wiring the new
+  black-box tools (cache_gap / blind_oracle / param_precedence) and source
+  targeting tools (action_surface / security_state / framework_knowledge /
+  variant_scan / patch_analyze) into a coherent, evidence-first workflow.
+
+## [2.4.41] — 2026-09-14
+
+### Added — Blind Differential Oracle (calibration-based sink detection)
+
+- New `src/blind-oracle.ts`: detect which sink a request parameter reaches
+  WITHOUT a malicious payload — calibration + differential. Arithmetic
+  identities (`id=1` vs `id=1+0`/`id=2-1`) reveal SQL/expression context; SSTI
+  arithmetic (`test${7*7}`) reveals template engines; a unique marker reveals
+  XSS reflection. Benign probes (numbers + operators), deterministic inference.
+- New `blind_oracle` tool: WAF-safe blind detection for sql/ssti/xss.
+
+## [2.4.40] — 2026-09-14
+
+### Added — Web Cache Key Normalization Gap Fuzzer (live, black-box)
+
+- New `src/cache-gap.ts`: fuzz an endpoint's path-normalization + static-
+  extension variants (`.css`, `..;/`, `%2f`, `%00`, `;`, case, …) to detect
+  web-cache deception / poisoning — where a cache keys on a static-looking path
+  but the origin serves private content.
+- New `cache_gap` tool: fetch a baseline, compare body hash + cache headers per
+  variant, and flag only evidence-backed gaps (cache_deception / normalization_gap).
+- Pure helpers `generateCacheVariants` + `classifyCacheResponse` for deterministic,
+  testable detection logic.
+
+## [2.4.39] — 2026-09-14
+
+### Added — Patch Reversal (1-day weaponization engine)
+
+- `analyzePatch` (in differential.ts): read a security patch (old vs new code)
+  and REVERSE it — detect what the patch ADDED (sanitizer, auth/nonce gate,
+  parameterized query, input validation) or REMOVED (a dangerous sink fed by
+  attacker input), and reconstruct the vulnerability in the OLD version.
+- New `patch_analyze` tool: each reversal carries a DERIVED `mine_signature` to
+  sweep unpatched installs via `variant_scan(root, { signature })`.
+- A cosmetic-only change (no security delta) correctly yields no reversal.
+
+## [2.4.38] — 2026-09-14
+
+### Added — Action-Name Heuristic Engine (what to look for WHERE)
+
+- New `src/action-heuristics.ts`: maps WordPress AJAX action-name patterns to
+  their likely vulnerability class (upload/import→AFU/RCE, delete/write→
+  file-write, load/download→LFI, login/reset→auth-bypass, exec/run→command
+  injection, settings/update→unauth options change, …) — as DATA, with real
+  examples (backup_import, slider_upload, backup_download, …).
+- New `action_surface` tool: extract every `wp_ajax_*` action, cross-reference
+  the hook (nopriv?) + authz gap (nonce/capability), and return a DERIVED
+  priority so the scanner targets the most dangerous action first.
+
+## [2.4.37] — 2026-09-14
+
+### Fixed — benchmark top-level recall/f1 (self-audit)
+
+- `run_benchmark` now returns top-level `recall` and `f1` (previously only
+  `detection_rate` held the recall value, and no top-level f1). Matches the
+  per-detector shape for consistency. No functional change.
+
+## [2.4.36] — 2026-09-14
+
+### Changed — Framework Knowledge Graph is now MULTI-framework (not WordPress-only)
+
+- `framework-security.ts` now covers 9 frameworks: WordPress, Laravel, Django,
+  Flask, Express, Spring, Symfony, ASP.NET Core, Ruby on Rails — each with its
+  auth / nonce / entry-point / sanitizer primitives as data.
+- `detectMissingAuthz` now detects missing authorization across ALL frameworks
+  (route middleware, decorators, annotations), not just WP AJAX/REST hooks.
+- `framework_knowledge` tool returns the framework list on an unknown id.
+
+## [2.4.35] — 2026-09-14
+
+### Added — Variant Mining (confirm once, weaponize everywhere)
+
+- New `src/variant-scan.ts`: mass-scan an install base (plugin/theme/repo tree)
+  with ALL detectors (taint, complex-bugs incl. wrong-context sanitization +
+  missing authz/nonce, route-confusion) and report hits grouped by a DERIVED
+  signature (`<detector>:<type>`).
+- New `variant_scan` tool: pass `signature` to mine for ONE bug family — the
+  pattern that turns one confirmed CVE into hundreds of variants across 10k+
+  files.
+
+## [2.4.34] — 2026-09-14
+
+### Added — Framework Security Knowledge Graph (WordPress authz/nonce)
+
+- New `src/framework-security.ts`: WordPress security primitives encoded as DATA
+  (auth, nonce, entry-point hooks, sanitizers), exposed via `framework_knowledge`.
+- `detectMissingAuthz` (wired into `complex_scan`) finds missing capability /
+  nonce checks on WP entry points — `wp_ajax_*` / `wp_ajax_nopriv_*` /
+  `admin_post_*` / `register_rest_route` without `current_user_can`,
+  `wp_verify_nonce`, or `permission_callback` (auth bypass + CSRF + privesc,
+  the class that dominates real WordPress CVE reports).
+
+## [2.4.33] — 2026-09-14
+
+### Added — Security-State Lattice (beyond binary taint)
+
+- New `src/security-state.ts`: models each value's SECURITY STATE
+  (clean < whitelisted < validated < sanitized(context) < tainted) instead of
+  binary tainted/not. A sink declares the minimum context it accepts.
+- `detectWrongSanitizer` (wired into `complex_scan`/`blitz_file`) finds the
+  complex bug class binary taint misses: a value sanitized for context X
+  reaching a sink that needs Y (e.g. `sanitize_text_field()` into a SQL query),
+  and pseudo-sanitizers (`base64_encode()`/`trim()` misused as escaping).
+- New `security_state` tool: deterministic verdict for a sanitizer flow.
+- Data-driven tables (sanitizers, pseudo-sanitizers, sink requirements) —
+  the lattice is data, not guesses.
+
+## [2.4.32] — 2026-09-14
+
+### Removed
+
+- Dropped a vendor-specific detection template and genericized planning
+  wording in the changelog so no third-party product name appears in public
+  artifacts (repo, changelog, or npm tarball).
+
+## [2.4.31] — 2026-09-14
+
+### Fixed — full CWE coverage in the compliance table (self-audit)
+
+- Added 6 CWEs that detectors/writeups can emit but were missing from the
+  compliance mapping: CWE-90 (LDAP), CWE-93 (CRLF/response-splitting), CWE-98
+  (PHP RFI), CWE-347 (JWT signature), CWE-643 (XPath), CWE-644 (header
+  injection). Every CWE the codebase references now maps to a framework.
+
+## [2.4.30] — 2026-09-14
+
+### Added — Proof-Obligation Engine (structure by construction)
+
+- New `src/obligations.ts`: append-only obligation ledger — every hypothesis
+  is an OPEN proof debt that must be discharged (verified/refuted/blocked).
+- New tools: `next_obligation` (single-decision loop: return the top open
+  obligation + the exact test), `discharge_obligation` (verified/refuted/
+  blocked), `obligations` (ledger + deterministic `complete` gate).
+- `engagement_track` (pending) now auto-creates an obligation; `generate_report`
+  is GATED — it warns while open proof debt remains.
+- System prompt: the LLM drives the engagement as a single-decision loop; it
+  holds no plan in its head — the ledger is the single source of truth.
+
+## [2.4.29] — 2026-09-14
+
+### Added — Enterprise compliance mapping (CWE -> frameworks)
+
+- New `src/compliance.ts`: data-driven mapping of 25 web/app CWEs to OWASP
+  Top 10 (2021), OWASP ASVS v4.0, PCI DSS v4.0, ISO 27001:2022 Annex A, and
+  NIST SP 800-53.
+- New `compliance` tool: map a single CWE or an aggregate list.
+- `generate_report` now emits a "## 6. Compliance Mapping" section — a CISO/
+  auditor can see which controls every finding violates, not just a CVSS.
+
+## [2.4.28] — 2026-09-14
+
+### Added — Enterprise Empirical Intelligence Ledger (LOOP 2, cross-target)
+
+- New `src/intelligence.ts`: append-only JSONL ledger
+  (`~/.blitzstrike/intelligence.jsonl`) that records VERIFIED verdicts
+  (confirmed/false_positive) as (vector, tech) outcomes — the enterprise
+  layer that makes Blitz Strike COMPOUND across engagements.
+- `strike_resolve` now auto-records every confirmed/false_positive verdict
+  into the ledger (sink type -> attack-vector name via sinkToVector).
+- `attack_plan`'s success_probability is now a Bayesian posterior: the formula
+  prior is upgraded by the empirical hit-rate (Beta-binomial, prior strength
+  K=5), falling back tech-specific -> any-tech -> formula. A new Laravel target
+  inherits the hit-rates of past Laravel engagements.
+- New `intelligence` tool: query hit-rates / top-vectors / raw ledger.
+- System prompt: cross-target intelligence directive.
+
+## [2.4.27] — 2026-09-14
+
+### Added — SELF-HARDENING loop (false-positives -> corpus -> benchmark)
+
+- New `capture_false_positive` tool: records a VERIFIED false positive (code +
+  language + detector + note) into a writable corpus (`~/.blitzstrike/corpus/`,
+  override `BLITZSTRIKE_CORPUS_DIR`). Every engagement makes the detector more
+  precise — never just discard a refuted lead.
+- `loadCorpus` now merges the package corpus (read-only) + the captured
+  corpus (writable), so the next `run_benchmark` measures whether a captured
+  FP is fixed (tn) or still_flagged (fp).
+- `run_benchmark` reports a `captured_false_positives` section: total /
+  still_flagged / fixed + per-entry outcome.
+- System prompt: verified false positives must be captured for self-hardening.
+
+## [2.4.26] — 2026-09-14
+
+### Added — derived success_probability + estimated_time + plan modes
+
+- `attack_plan` now returns, per vector, a DERIVED success_probability
+  (relevance prior: clamp(0.85 - 0.15*(priority-1), 0.25, 0.85) — priority 1 =
+  0.85 down to priority 4 = 0.40) and estimated_time_sec (from an
+  operation-class table: passive/config < injection < deep/manual), plus a
+  total_estimated_time_sec.
+- New `mode` param: full (all vectors) / quick (priority<=2) / stealth
+  (passive/config vectors only) — objective-based planning, DERIVED (not
+  hardcoded 0.8/0.9 guesses).
+- success_probability is a PLANNING prior, deliberately distinct from the
+  evidence-backed confidence (computeConfidence) — documented in the tool.
+
+## [2.4.25] — 2026-09-14
+
+### Doctrine — "if you can continue, why not? if possible, why not try?"
+
+- Added an explicit chain-execution DOCTRINE to the system prompt: a chain
+  step you CAN execute is one you MUST execute now. A PREREQUISITE (e.g. a
+  CORS->session-theft chain needing "a foothold on any subdomain") is a chain
+  step, NOT a "next engagement" — check for dangling DNS / XSS now, don't
+  defer it.
+- Tightened the completion rule: COMPLETE means every lead verified/blocked
+  AND every reachable chain step executed or blocked (no deferred
+  escalations); declaring COMPLETE with a reachable chain step deferred is a
+  violation.
+
+## [2.4.24] — 2026-09-14
+
+### Fixed — LLM finding-lifecycle loop (opencode "repeated failures")
+
+- `finding_transition` was STATELESS (returned `{legal: bool}` for a status
+  string), so an agent calling it to "advance a finding" saw no state change
+  and looped, tripping opencode's "Continue after repeated failures" gate.
+- Now STATEFUL: pass the full finding JSON + target status and it returns the
+  UPDATED finding (detected->triaged->hypothesis->validating->confirmed),
+  with the legal next states, a clear "illegal transition" error, and an
+  explicit TERMINAL-state hint.
+- `confidence_score` response now carries a "deterministic — do not retry"
+  note and points to strike_resolve for stateful advancement.
+- Added a FINDING LIFECYCLE directive to the system prompt (finding_create ->
+  strike_verify -> strike_resolve; never loop stateless tools).
+
+## [2.4.23] — 2026-09-14
+
+### Precision — false-positive reduction + per-detector benchmark
+
+- Fixed 6 false-positive patterns in the heuristic detectors (complex-bugs +
+  route-confusion): canonicalized include (`basename`/`realpath`), whitelist
+  lookup (`$allowed[$p]`), batch-forwarding WITH an auth re-check, anchored
+  validation regex (`preg_match('/^[a-z]+$/')`), constrained SSRF (fixed
+  `scheme://` host literal), and URL literals in the path-confusion detector.
+- Extended the benchmark to measure per-detector precision/recall/F1 (taint +
+  complex_bugs + route_confusion) with 28 new labelled fixtures.
+- Corpus now at 137 cases: **precision 1.0 / recall 1.0 / F1 1.0, 0 FP, 0 FN**
+  across all three detectors.
+
+## [2.4.22] — 2026-09-14
+
+### Added — on-disk report persistence (reports/ folder)
+
+- `generate_report` now WRITES the HackerOne-grade markdown/JSON report to
+  `~/.blitzstrike/reports/<scope-slug>-<timestamp>.md` (override via
+  `BLITZSTRIKE_REPORT_DIR`) and returns the saved path — an engagement now
+  produces an on-disk deliverable, not just an in-memory string.
+- `run_engagement` / `run_autonomous` also persist their inline report to the
+  same folder (report.report.saved).
+
+## [2.4.21] — 2026-09-14
+
+### Security — eliminate the last shell-interpolation sites
+
+- `hasCommand` (catalog) + `which` (cli) checked `command -v ${cmd}` with
+  `shell: true`. Hardened: the command is now passed as a positional `$1` to
+  `sh -c 'command -v "$1"'` — zero user-controlled shell text anywhere.
+- Full re-audit: 0 remaining `shell: true` + dynamic/interpolated argument.
+  The 8 remaining `shell: true` calls all run STATIC, trusted commands
+  (catalog install/check strings), never user input.
+
+## [2.4.20] — 2026-09-14
+
+### Security — command-injection fixes (self-audit)
+
+- CRITICAL: `run_catalog_tool` built a shell string (`args.join(" ")` + `shell: true`)
+  from the target — an attacker-controlled target with shell metacharacters
+  (`evil.com; rm -rf /`) executed arbitrary commands. Now runs the tool directly
+  (`spawnSync(args[0], args.slice(1))`, no shell) — the target is a literal argv.
+- MEDIUM: `diff_analyze` / `incremental_scan` / `worktree` interpolated
+  user-controlled git refs + branch/path into `execSync` (shell). Now use
+  `execFileSync("git", [...])` — no shell interpretation.
+
+## [2.4.19] — 2026-09-14
+
+### Added — unit tests for 5 deep modules + off-by-one fix
+
+- 25 new hermetic checks: chain-executor dispatch (scan/crack/defer), memory
+  lifecycle (remember/dedup/lookup/forget), complex-bugs (deserialization /
+  type-juggling / mass-assignment / prototype-pollution / SSRF / SSTI / XXE),
+  route-confusion (dynamic dispatch/method/include/batch), universal-taint
+  (PHP command-injection + sanitizer suppression + language detection).
+- Fixed an off-by-one in `detectBatchForwarding`: a single-line
+  `foreach (...) { forward(...); }` was missed because the body scan skipped the
+  `foreach` line itself.
+
+## [2.4.18] — 2026-09-14
+
+### Fixed — catalog placeholder installs (full audit)
+
+- 3 Go tools that had a placeholder install now install for real:
+  cloudfox / ligolo-ng (`go install …@latest`), gophish (`go build`).
+- 4 GUI/C2/versioned tools (havoc, ghidra, cutter, velociraptor) + burp-suite-mcp
+  are now flagged `installable: false` — bulk-install reports them as "manual
+  (install by hand)" instead of failing on a fake "download from github releases".
+- `ensureTool` / `ensure_tool` now return `action: manual` + the note for these
+  tools instead of attempting the placeholder command.
+
+## [2.4.17] — 2026-09-14
+
+### Added — auto-provision toolchains + non-interactive installs
+
+- Preflight now AUTO-PROVISIONS missing build toolchains (go, cargo, meson, ninja)
+  instead of only warning — `install-tools` installs them via apt before the
+  mass install, so `go install` / `meson build` / `ninja` no longer fail.
+- All install commands now run with stdin closed (non-interactive) — prompts like
+  metasploit's "Overwrite? (y/N)" can no longer hang the run; `yes |` is piped
+  where an interactive confirm is required.
+
+## [2.4.16] — 2026-09-14
+
+### Added — auto-fallback install (toolchain provision + pip fallback)
+
+- `go install` / `cargo install` tools now auto-provision the missing toolchain
+  (`apt-get install golang-go` / `cargo`) before installing — no more
+  "go: not found" / "cargo: not found" failures (provisioned once per run).
+- `pip install --break-system-packages` now falls back to `pip install --user`
+  when the flag is unsupported (pip < 23.0 on older distros) — no more
+  "no such option: --break-system-packages".
+
+## [2.4.15] — 2026-09-14
+
+### Fixed — detection → verification loop now unmissable
+
+- `run_engagement` / `run_autonomous` now return `status: DETECTED` (was
+  `COMPLETE`), signalling that verification is the NEXT mandatory step instead
+  of implying the job is done with unverified hypotheses.
+- System prompt adds a hard rule: after detection you MUST `strike_verify` /
+  `verify_file_read` / `drive_devtools` each finding before `generate_report`.
+- New generic `verify-phase` playbook (read_playbook) — verdict recipe
+  (confirmed/false-positive/unconfirmed/blocked), tool mapping, no-babysitting
+  rules — so any engagement can load the verify doctrine on demand.
+
+## [2.4.14] — 2026-09-14
+
+### Added — mandatory devtools-MCP precision directive
+
+- System prompt now mandates: when a lead needs DOM/JS precision (DOM-XSS sink
+  execution, AJAX interception, JS runtime errors, redirect chains, SSO/token
+  flow), the LLM MUST call `drive_devtools` (spawns chrome-devtools-mcp + drives
+  a real headless browser) instead of eyeballing static HTML — the precision +
+  consistency layer. Includes a `check_mcp` preflight step.
+
+## [2.4.13] — 2026-09-14
+
+### Improved — live install progress
+
+- `install-tools` streams a real-time `[done/total]` counter per tool completion,
+  so a long bulk install is visibly progressing instead of appearing stuck.
+
+## [2.4.12] — 2026-09-14
+
+### Improved — install-tools failure diagnostics
+
+- `install-tools` now reports the REASON for every failed tool (last stderr/stdout
+  lines) instead of a bare `Failed: …` list.
+- Preflight reports missing toolchains (go/java/python/cargo/meson/ninja/make/gcc)
+  + the `apt install` line to fix them before the mass install.
+- Per-tool install budget raised 120s → 300s so cold-cache `go install` /
+  `pip install` of large tools (nuclei, amass, httpx, metasploit, …) no longer
+  time out.
+
+## [2.4.11] — 2026-09-14
+
+### Fixed — bulk-install no longer pollutes the caller's cwd
+
+- `install-tools` / `install_all_tools` now run every install command in a fixed
+  tools directory (`~/.blitzstrike/tools`, override `BLITZSTRIKE_TOOLS_DIR`), so
+  `git clone`-style tools (massdns, phpggc, radare2, testssl.sh, …) no longer
+  land in whatever directory you happened to run from.
+- Added those cloned tool dirs to `.gitignore`.
+- `blitzstrike install` now prints a hint pointing to `blitzstrike install-tools`
+  for the full 140-tool catalog.
+
+## [2.4.10] — 2026-09-14
+
+### Added — auto-install external MCP servers to every agent
+
+- chrome-devtools-mcp is now flagged `installable` in the catalog: `install-tools`
+  / `install_all_tools` provision it (npm i -g) instead of skipping all MCP
+  servers. burp-suite-mcp stays skipped (GUI/daemon — build + run manually).
+- `blitzstrike install` (register to every agent) now also auto-installs
+  chrome-devtools-mcp so all agents can drive a real browser immediately.
+
+### Fixed — doctor git stderr leak
+
+- `validateRelease` suppresses git/npm stderr, so `blitzstrike doctor` no longer
+  prints a stray `fatal: not a git repository` / `No tags can describe` line when
+  run outside a git checkout.
+
+## [2.4.9] — 2026-09-14
+
+### Added — evidence-first enforcement (findings are never born empty)
+
+- `makeFinding` + `finding_create` now accept `evidence` at creation — a finding
+  can carry its observed artifact (headers/URL/response) the moment it is
+  created, instead of relying on a separate attach call that gets skipped.
+- `finding_create` warns when a finding is created with no evidence.
+- `reportMarkdown` now flags evidence-less findings with an explicit
+  "Evidence-first violation" block (ids listed) — detection without proof is
+  surfaced instead of silently shipped.
+
+## [2.4.8] — 2026-09-14
+
+### Added — MCP integration health checks
+
+- New `checkMcpServers` (`src/mcp-status.ts`): verifies external MCP
+  integrations are actually present/connected — chrome-devtools-mcp (stdio:
+  binary or npx auto-install) and burp-suite-mcp (SSE: alive only when Burp is
+  running with the extension loaded).
+- `blitzstrike doctor` now reports both MCP servers with availability + fix hints.
+- New MCP tool `check_mcp` to probe MCP integration status on demand.
+
+## [2.4.7] — 2026-09-14
+
+### Added — deterministic arbitrary-file-read verification (no bare hypotheses)
+
+- New `verifyFileRead` (STRIKE): verifies a CWE-22 / path-traversal / LFI
+  hypothesis by reading a marker file (`/etc/passwd`) vs a non-existent
+  negative-control path, then comparing. Confirmed only when the marker returns
+  file content and the control does not — never from reasoning alone.
+- Supports raw POST body (`bodyRaw`) and named query/body param injection.
+- New MCP tool `verify_file_read` + chain hints `verify_file_read` /
+  `path_traversal` / `lfi` / `file_read` route to it; `strike_verify` now
+  auto-routes file-read findings to the file-read verifier.
+- A gated endpoint (e.g. identical 500 auth wall) now returns an explicit
+  `unconfirmed` verdict with reason instead of leaving a bare hypothesis.
+
+## [2.4.6] — 2026-09-14
+
+### Added — chrome-devtools-mcp auto-install (npx zero-install fallback)
+
+- `drive_devtools` / `browser_devtools` now auto-fetch chrome-devtools-mcp via
+  `npx -y chrome-devtools-mcp@latest` when no global binary is present — no
+  manual `npm i -g` required. (burp-suite-mcp still can't be auto-installed:
+  it's a Java/GUI app that must be built + run manually.)
+
+## [2.4.5] — 2026-09-14
+
+### Added — responsible-disclosure header (X-HackerOne-Research)
+
+- New `H1_USERNAME` env var: when set, every outbound security-testing request
+  (STRIKE verification, live recon, active scan, advanced checks, leak-source
+  fetch) carries `X-HackerOne-Research: <username>` so targets/triagers can
+  identify the researcher.
+- `src/http.ts` central helper (`researchHeaders` / `withResearchHeaders` /
+  `h1Username`); injected across strike, live-recon, active, orchestrator, server.
+- `blitzstrike doctor` now reports the HackerOne research-header status.
+
 ## [2.4.4] — 2026-09-14
 
 ### Added — automated publishing via npm trusted publishing (OIDC)

@@ -15,6 +15,7 @@ import { recordAudit } from "./audit.js";
 import { makeFinding, type Finding, type Severity } from "./finding.js";
 import { scanSinks, detectSourceLeak, type SinkHit } from "./sinks.js";
 import { executeChainSteps } from "./chain-executor.js";
+import { researchHeaders } from "./http.js";
 
 /** The canonical engagement pipeline — the ordered stages of a BLITZ audit. */
 export const ENGAGEMENT_STAGES = ["scope", "recon", "analyze", "verify", "review", "report"] as const;
@@ -91,7 +92,7 @@ export function classifyTarget(target: string): { kind: "source" | "live"; targe
 
 import { makeEvidence } from "./evidence.js";
 import { buildPlan, computeGuidance, stateDefinition, type EngagementState } from "./orchestration.js";
-import { reportMarkdown, reportJson, type ReportSummary } from "./report.js";
+import { reportMarkdown, reportJson, saveReport, type ReportSummary } from "./report.js";
 import { toSarif, sarifLevel } from "./sarif.js";
 import { VERSION } from "./version.js";
 import { strikeVerify, resolveFinding, isWafBlock, bypassVariants } from "./strike.js";
@@ -424,12 +425,15 @@ export function runEngagement(
     markdown: reportMarkdownText,
     json: reportJsonText,
     sarif: sarifDoc,
+    saved: saveReport(reportMarkdownText, { title: reportTitle, scope: target, version: VERSION, format: "markdown" }).path,
   };
 
-  report.status = "COMPLETE";
+  report.status = "DETECTED";
   report.note =
-    "All findings are HYPOTHESES until verified live with strike_verify. " +
-    "Apply each chain's negative_control before reporting. Confidence reflects static evidence only.";
+    "Detection complete — verification is the NEXT mandatory step (do not stop here). " +
+    "Every finding is a HYPOTHESIS until verified: strike_verify (HTTP reflection, marker + negative control), " +
+    "verify_file_read (CWE-22 / path traversal), or drive_devtools (DOM/JS precision). " +
+    "Verify each finding NOW, then generate_report. Never deliver a report with unverified findings.";
 
   // Phase 7 orchestration: state machine + plan + guidance.
   // Server-side execution reaches select_chain (chains matched); validate +
@@ -510,7 +514,7 @@ const EVIL_HOST = "evil-blitz.example.com";
 
 async function httpGet(u: string, extraHeaders?: Record<string, string>): Promise<{ status: number; headers: Record<string, string>; body: string } | null> {
   try {
-    const res = await fetch(u, { redirect: "manual", headers: extraHeaders, signal: AbortSignal.timeout(10000) });
+    const res = await fetch(u, { redirect: "manual", headers: { ...researchHeaders(), ...(extraHeaders ?? {}) }, signal: AbortSignal.timeout(10000) });
     const body = await res.text();
     const h: Record<string, string> = {};
     res.headers.forEach((v, k) => { h[k.toLowerCase()] = v; });
@@ -660,7 +664,7 @@ async function checkCrlf(base: string, p: string): Promise<{ detected: boolean; 
 async function checkHostHeader(url: string): Promise<{ detected: boolean; evidence: string }> {
   try {
     const u = new URL(url);
-    const res = await fetch(u, { redirect: "manual", headers: { Host: HOST_HEADER_MARKER } });
+    const res = await fetch(u, { redirect: "manual", headers: { ...researchHeaders(), Host: HOST_HEADER_MARKER } });
     const body = await res.text();
     const loc = res.headers.get("location") ?? "";
     const setCookie = res.headers.get("set-cookie") ?? "";
@@ -675,7 +679,7 @@ async function checkHostHeader(url: string): Promise<{ detected: boolean; eviden
 async function checkJwt(url: string): Promise<Array<{ type: string; token: string; accepted: boolean }>> {
   const out: Array<{ type: string; token: string; accepted: boolean }> = [];
   try {
-    const res = await fetch(url, { redirect: "follow" });
+    const res = await fetch(url, { redirect: "follow", headers: researchHeaders() });
     const body = await res.text();
     const setCookie = res.headers.get("set-cookie") ?? "";
     // Find JWTs in cookies, headers, or body (authorization / token params).
@@ -687,7 +691,7 @@ async function checkJwt(url: string): Promise<Array<{ type: string; token: strin
       const header = JSON.parse(Buffer.from(h, "base64url").toString());
       // alg:none test — strip signature.
       const noneToken = `${h}.${p}.`;
-      const noneRes = await fetch(url, { headers: { Authorization: `Bearer ${noneToken}` } });
+      const noneRes = await fetch(url, { headers: { ...researchHeaders(), Authorization: `Bearer ${noneToken}` } });
       if (noneRes.status !== 401 && noneRes.status !== 403) {
         out.push({ type: `alg:none accepted (${header.alg})`, token: noneToken.slice(0, 40), accepted: true });
       } else if (header.alg?.toUpperCase().startsWith("RS") || header.alg?.toUpperCase().startsWith("ES")) {
@@ -1021,14 +1025,11 @@ export async function runLiveEngagement(url: string, scope = "", mode = "bug-bou
     ),
   };
 
-  report.status = "COMPLETE";
+  report.status = "DETECTED";
   report.note =
-    "Autonomous live engagement — full recon + deterministic security checks (reflected " +
-    "input, security headers, open redirect, path traversal, CORS, SSTI, SSRF, SQLi, " +
-    "command injection, XSS) + inline report, all in one call. A hit is reported ONLY when " +
-    "confirmed live (negative controls are tracked in `tested`, not findings). Header/" +
-    "redirect/traversal/CORS/SSTI/SSRF/SQLi/command-injection/XSS checks are deterministic " +
-    "observations — a hit is a HYPOTHESIS until strike_verify confirms it.";
+    "Live sweep complete — findings are HYPOTHESES until verified. " +
+    "Verify each with strike_verify (marker + negative control) / drive_devtools, then generate_report. " +
+    "A hit here is a LEAD, not a confirmed vulnerability — proof of impact is the next mandatory step.";
 
   return report;
 }
@@ -1052,6 +1053,9 @@ const CHAIN_ID_TO_ESCALATION: Record<string, string> = {
   xxe: "xxe_to_ssrf_and_file_read",
   deserialization: "deserialization_to_rce",
   jwt: "jwt_alg_confusion_forgery",
+  jwt_alg_confusion: "jwt_alg_confusion_forgery",
+  cache_deception: "cache_deception",
+  cache_poisoning: "cache_poisoning_xss",
   nosql_injection: "nosql_injection_to_data_theft",
   mass_assignment: "mass_assignment_to_admin_takeover",
   prototype_pollution: "prototype_pollution_to_rce",

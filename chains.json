@@ -1,7 +1,7 @@
 {
   "$schema": "blitzstrike-chains-v1",
   "version": "1.0.0",
-  "_comment": "Escalation chains. Each chain links a confirmed primitive into a higher-impact outcome. BlitzStrike edge vs other catalogs: every step carries an invariant_check (what MUST hold) and a negative_control (how to refute). Never hardcode in Python \u2014 edit here.",
+  "_comment": "Escalation chains. Each chain links a confirmed primitive into a higher-impact outcome. BlitzStrike edge vs other catalogs: every step carries an invariant_check (what MUST hold) and a negative_control (how to refute). Never hardcode in Python — edit here.",
   "min_severity": "medium",
   "chains": [
     {
@@ -603,7 +603,7 @@
       "steps": [
         {
           "order": 1,
-          "action": "Test alg=none / RS256\u2192HS256 confusion",
+          "action": "Test alg=none / RS256→HS256 confusion",
           "tool_hint": "strike_verify",
           "success_criteria": "forged token accepted",
           "invariant_check": "server does not pin algorithm / reuses public key as HMAC secret",
@@ -1190,7 +1190,7 @@
         },
         {
           "order": 4,
-          "action": "Test RS256\u2192HS256: sign with public key as HMAC secret",
+          "action": "Test RS256→HS256: sign with public key as HMAC secret",
           "tool_hint": "jwt_tool",
           "success_criteria": "Server accepts HS256 token",
           "invariant_check": "",
@@ -2099,7 +2099,7 @@
       "steps": [
         {
           "order": 1,
-          "action": "Find dangling CNAME: shop.target.com \u2192 shops.myshopify.com (404)",
+          "action": "Find dangling CNAME: shop.target.com → shops.myshopify.com (404)",
           "tool_hint": "subzy",
           "success_criteria": "Claimable subdomain found",
           "invariant_check": "",
@@ -2585,7 +2585,7 @@
         },
         {
           "order": 4,
-          "action": "Blind extraction: {\"password\":{\"$regex\":\"^a\"}} \u2014 iterate chars",
+          "action": "Blind extraction: {\"password\":{\"$regex\":\"^a\"}} — iterate chars",
           "tool_hint": "nosqlmap",
           "success_criteria": "Full DB dumped",
           "invariant_check": "",
@@ -2621,7 +2621,7 @@
         },
         {
           "order": 2,
-          "action": "Enumerate users: admin*)(uid=*))(|(uid=*a*) \u2014 check response delta",
+          "action": "Enumerate users: admin*)(uid=*))(|(uid=*a*) — check response delta",
           "tool_hint": "manual",
           "success_criteria": "User list built",
           "invariant_check": "",
@@ -2753,6 +2753,42 @@
       "tools": [
         "curl",
         "swaks"
+      ]
+    },
+    {
+      "id": "cache_deception",
+      "name": "Web Cache Deception",
+      "triggers": [
+        "cache deception",
+        "cache key",
+        "static extension",
+        "cookie-less cache"
+      ],
+      "required_findings": [
+        "cache_deception"
+      ],
+      "severity": "high",
+      "steps": [
+        {
+          "order": 1,
+          "action": "Request an authenticated path with a static extension appended (.css/.js/.png)",
+          "tool_hint": "cache_gap / strike_verify",
+          "success_criteria": "the private response is cached under the static URL",
+          "invariant_check": "cache key omits the session cookie while the backend serves per-session data",
+          "negative_control": "cookie included in cache key = victim response not cached"
+        },
+        {
+          "order": 2,
+          "action": "Re-fetch the same URL anonymously and confirm the victim's private body is returned",
+          "tool_hint": "curl / strike_verify",
+          "success_criteria": "victim-session data disclosed to an anonymous caller",
+          "invariant_check": "cache serves the cached body regardless of the requester's session",
+          "negative_control": "cache bypassed or auth required on re-fetch = no disclosure"
+        }
+      ],
+      "tools": [
+        "curl",
+        "cache_gap"
       ]
     }
   ]
